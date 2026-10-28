@@ -1,0 +1,10 @@
+{
+  "name": "@aios/config",
+  "version": "0.1.0",
+  "private": true,
+  "files": [
+    "tsconfig.*.json",
+    "eslint.*.js"
+  ],
+  "type": "module"
+}

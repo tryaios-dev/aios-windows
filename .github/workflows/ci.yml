@@ -1,0 +1,124 @@
+# CI for the Windows desktop app (B-02, B-05).
+#   lint + unit tests on Linux AND Windows   (B-02 step one; M-23: never Windows-only Python)
+#   backend.exe + installer on Windows       (B-02 step two)
+#   dependency scan                          (B-05)
+# A red run blocks the merge once `main` has a ruleset requiring these checks
+# (docs/github-setup.md). Signing happens only in release.yml.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 5 * * 1"        # weekly dependency scan against new advisories
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  py-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv lock --check                       # pyproject changed without relocking -> fail
+      - run: uv sync --frozen --all-packages --all-extras
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy packages/py/aios-common/src services/backend/src
+      - run: uv run lint-imports
+      - run: uv run aios-backend --profile test migrate   # SQLCipher opens, migrations apply
+      - run: uv run aios-backend --profile test check     # at head, models match migrations
+      - run: uv run aios-backend openapi --check
+
+  py-unit:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen --all-packages --all-extras
+      - run: uv run python tools/run_tests.py
+
+  ts-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4                 # version from package.json "packageManager"
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile        # unlocked dependency -> fail
+      - run: pnpm typecheck
+      - run: pnpm lint
+
+  ts-unit:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm --filter @aios/desktop test:security
+
+  package-windows:
+    needs: [py-lint, py-unit, ts-lint, ts-unit]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: uv sync --frozen --all-packages --all-extras
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm fetch:llama                      # pinned llama-server builds, SHA-256 checked
+      - run: pnpm build:backend                    # backend.exe (PyInstaller)
+      - run: pnpm build
+      - run: pnpm --filter @aios/desktop package   # unsigned: AIOS_SIGN is set only in release.yml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aios-windows-unsigned
+          path: |
+            apps/desktop/release/*.exe
+            build/out/backend/
+          retention-days: 14                       # artefact retention (B-02)
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: uv sync --frozen --all-packages --all-extras
+      - run: pnpm install --frozen-lockfile
+      - name: Python dependency scan (exceptions record applies)
+        run: uv run python tools/release/dependency_scan.py
+      - name: Node dependency scan (exceptions record applies)
+        run: |
+          pnpm audit --prod --json > pnpm-audit.json || true
+          node tools/release/check-npm-audit.mjs pnpm-audit.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-scan
+          path: |
+            build/out/scan/
+            pnpm-audit.json
+          retention-days: 14

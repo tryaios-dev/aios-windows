@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tryaios.com/contracts/recovery-package/v1/recovery-package",
+  "title": "recovery-package/v1/recovery-package",
+  "description": "recovery.pkg: JCS-serialised. AAD = SHA-256('aios/recovery/v1/header' || 0x00 || JCS(object without ciphertext)). Readers accept unknown fields (they are covered by the AAD).",
+  "x-status": "draft",
+  "type": "object",
+  "required": ["format", "v", "package_id", "created_at", "stream_id", "signing_key_id", "kdf", "aead", "ciphertext"],
+  "properties": {
+    "format": { "const": "aios-recovery-package" },
+    "v": { "const": 1 },
+    "package_id": { "$ref": "#/$defs/uuid" },
+    "created_at": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$" },
+    "stream_id": { "$ref": "#/$defs/uuid" },
+    "signing_key_id": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "kdf": {
+      "type": "object",
+      "required": ["alg", "version", "memory_kib", "iterations", "parallelism", "salt"],
+      "properties": {
+        "alg": { "const": "argon2id" },
+        "version": { "const": 19 },
+        "memory_kib": { "type": "integer", "minimum": 65536, "maximum": 1048576 },
+        "iterations": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "parallelism": { "type": "integer", "minimum": 1, "maximum": 16 },
+        "salt": { "type": "string", "pattern": "^[A-Za-z0-9_-]{22}$", "description": "16 bytes, base64url without padding" }
+      }
+    },
+    "aead": {
+      "type": "object",
+      "required": ["alg", "nonce"],
+      "properties": {
+        "alg": { "const": "aes-256-gcm" },
+        "nonce": { "type": "string", "pattern": "^[A-Za-z0-9_-]{16}$", "description": "12 bytes, base64url without padding" }
+      }
+    },
+    "ciphertext": { "type": "string", "pattern": "^[A-Za-z0-9_-]+$", "maxLength": 4096, "description": "ciphertext || 16-byte GCM tag, base64url without padding" }
+  },
+  "$defs": {
+    "uuid": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" }
+  }
+}

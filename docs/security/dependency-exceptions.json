@@ -1,0 +1,4 @@
+{
+  "_readme": "B-05 exceptions record. A dependency-scan finding listed here does not fail the build. Each entry needs: id (GHSA-/CVE-/PYSEC- id as reported), package, reason, approved_by, review_by (YYYY-MM-DD). Expired entries fail the build again.",
+  "exceptions": []
+}

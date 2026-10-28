@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tryaios.com/contracts/process-ipc/v1/ready-line",
+  "title": "process-ipc/v1/ready-line",
+  "description": "JSON payload of the READY line. The line on stdout is the 6 bytes 'READY ' followed by this object and LF. Readers ignore unknown fields.",
+  "x-status": "draft",
+  "type": "object",
+  "required": ["api_port"],
+  "properties": {
+    "api_port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "gateway_port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+  },
+  "additionalProperties": true
+}

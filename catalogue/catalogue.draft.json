@@ -1,0 +1,143 @@
+{
+  "catalogue_version": 1,
+  "issued_at": null,
+  "status": "draft — unsigned",
+  "entries": [
+    {
+      "id": "qwen3-4b-q4_k_m",
+      "tier": "small",
+      "display_name": "Qwen3 4B (Q4_K_M)",
+      "upstream": {
+        "repo": "Qwen/Qwen3-4B",
+        "revision": "1cfa9a7208912126459214e8b04321603b3df60c"
+      },
+      "source_weights_digest": "cf184c46cb944158a4339c8b4b3a2334620d0f9b719d3f09737364816c1f8611",
+      "conversion": {
+        "tool": "llama.cpp convert_hf_to_gguf.py + llama-quantize",
+        "version": "b11960"
+      },
+      "quantisation": {
+        "method": "Q4_K_M"
+      },
+      "artefact": {
+        "filename": "Qwen3-4B-Q4_K_M.aios.gguf",
+        "size_bytes": null,
+        "sha256": null,
+        "mirror_url": "https://models.example.eu/catalogue/v1/Qwen3-4B-Q4_K_M.aios.gguf"
+      },
+      "licence": {
+        "spdx": "Apache-2.0",
+        "reference": "licenses/models/Qwen3-4B-LICENSE.txt"
+      },
+      "publisher": "AIOS",
+      "pipeline": "own",
+      "deviation_review": null,
+      "min_ram_gb": 8,
+      "context_length": 32768
+    },
+    {
+      "id": "qwen3-8b-q4_k_m",
+      "tier": "medium",
+      "display_name": "Qwen3 8B (Q4_K_M)",
+      "upstream": {
+        "repo": "Qwen/Qwen3-8B",
+        "revision": "b968826d9c46dd6066d109eabc6255188de91218"
+      },
+      "source_weights_digest": "8f51132290852a4ab4070da7e075f9a6e14f2e14553663e25211fdd99c170222",
+      "conversion": {
+        "tool": "llama.cpp convert_hf_to_gguf.py + llama-quantize",
+        "version": "b11960"
+      },
+      "quantisation": {
+        "method": "Q4_K_M"
+      },
+      "artefact": {
+        "filename": "Qwen3-8B-Q4_K_M.aios.gguf",
+        "size_bytes": null,
+        "sha256": null,
+        "mirror_url": "https://models.example.eu/catalogue/v1/Qwen3-8B-Q4_K_M.aios.gguf"
+      },
+      "licence": {
+        "spdx": "Apache-2.0",
+        "reference": "licenses/models/Qwen3-8B-LICENSE.txt"
+      },
+      "publisher": "AIOS",
+      "pipeline": "own",
+      "deviation_review": null,
+      "min_ram_gb": 16,
+      "context_length": 32768
+    },
+    {
+      "id": "qwen3-4b-q4_k_m-qwen-gguf",
+      "tier": "small",
+      "display_name": "Qwen3 4B (Q4_K_M, Qwen GGUF — fallback)",
+      "upstream": {
+        "repo": "Qwen/Qwen3-4B-GGUF",
+        "revision": "bc640142c66e1fdd12af0bd68f40445458f3869b"
+      },
+      "source_weights_digest": null,
+      "conversion": {
+        "tool": "llama.cpp (as published by Qwen; exact build not disclosed upstream)",
+        "version": "unknown — not stated in upstream repo"
+      },
+      "quantisation": {
+        "method": "Q4_K_M"
+      },
+      "artefact": {
+        "filename": "Qwen3-4B-Q4_K_M.gguf",
+        "size_bytes": 2497280256,
+        "sha256": "7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5",
+        "mirror_url": "https://models.example.eu/catalogue/v1/Qwen3-4B-Q4_K_M.gguf"
+      },
+      "licence": {
+        "spdx": "Apache-2.0",
+        "reference": "licenses/models/Qwen3-4B-GGUF-LICENSE.txt"
+      },
+      "publisher": "Qwen",
+      "pipeline": "third-party",
+      "deviation_review": {
+        "reviewer": "TBD (technical reviewer, A-02)",
+        "date": null,
+        "quality_threshold_result": "pending"
+      },
+      "min_ram_gb": 8,
+      "context_length": 32768
+    },
+    {
+      "id": "qwen3-8b-q4_k_m-qwen-gguf",
+      "tier": "medium",
+      "display_name": "Qwen3 8B (Q4_K_M, Qwen GGUF — fallback)",
+      "upstream": {
+        "repo": "Qwen/Qwen3-8B-GGUF",
+        "revision": "7c41481f57cb95916b40956ab2f0b139b296d974"
+      },
+      "source_weights_digest": null,
+      "conversion": {
+        "tool": "llama.cpp (as published by Qwen; exact build not disclosed upstream)",
+        "version": "unknown — not stated in upstream repo"
+      },
+      "quantisation": {
+        "method": "Q4_K_M"
+      },
+      "artefact": {
+        "filename": "Qwen3-8B-Q4_K_M.gguf",
+        "size_bytes": 5027783488,
+        "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
+        "mirror_url": "https://models.example.eu/catalogue/v1/Qwen3-8B-Q4_K_M.gguf"
+      },
+      "licence": {
+        "spdx": "Apache-2.0",
+        "reference": "licenses/models/Qwen3-8B-GGUF-LICENSE.txt"
+      },
+      "publisher": "Qwen",
+      "pipeline": "third-party",
+      "deviation_review": {
+        "reviewer": "TBD (technical reviewer, A-02)",
+        "date": null,
+        "quality_threshold_result": "pending"
+      },
+      "min_ram_gb": 16,
+      "context_length": 32768
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "name": "@aios/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/main/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "pnpm --filter @aios/bridge-contract build && pnpm --filter @aios/ui build && tsc -p tsconfig.json && node scripts/start-electron.mjs",
+    "lint": "echo ok",
+    "test": "vitest run tests/unit",
+    "test:security": "vitest run tests/security",
+    "package": "electron-builder --win --config electron-builder.yml --publish never"
+  },
+  "dependencies": {
+    "@aios/bridge-contract": "workspace:*",
+    "electron-updater": "^6.3.9",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  }
+}

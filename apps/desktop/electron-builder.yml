@@ -1,0 +1,35 @@
+appId: com.tryaios.aios
+productName: AIOS
+directories:
+  output: release
+files:
+  - dist/**
+  - package.json
+extraResources:
+  - from: ../ui/dist
+    to: ui
+  - from: ../../build/out/backend
+    to: backend
+  # llama-server CPU + Vulkan builds pinned in build/llama/manifest.json (fetched by build/llama/fetch.py)
+  - from: ../../build/out/llama/cpu
+    to: llama/cpu
+  - from: ../../build/out/llama/vulkan
+    to: llama/vulkan
+  # licence texts for bundled binaries and models (licenses/README.md)
+  - from: ../../licenses
+    to: licenses
+win:
+  target: [nsis]
+  # Every .exe/.dll is signed through build/signing/azure-sign.js (B-04); credentials come
+  # from masked CI variables only.
+  signtoolOptions:
+    sign: ../../build/signing/azure-sign.js
+    publisherName: "PLACEHOLDER - legal entity name"
+nsis:
+  oneClick: false
+  perMachine: false          # per-user install, no admin
+  allowElevation: false
+  deleteAppDataOnUninstall: false
+publish:
+  provider: generic
+  url: https://updates.example.eu/aios   # B-06: real update-feed host from A-05

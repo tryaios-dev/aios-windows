@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tryaios.com/contracts/model-catalogue/v1/signature",
+  "title": "model-catalogue/v1/signature",
+  "description": "catalogue.json.sig (JCS). sig = Ed25519(key, SHA-256('aios/model-catalogue/v1' || 0x00 || catalogue.json bytes)).",
+  "x-status": "draft",
+  "type": "object",
+  "required": ["alg", "key_id", "sig"],
+  "properties": {
+    "alg": { "const": "ed25519" },
+    "key_id": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "SHA-256('aios/key/v1/ed25519' || 0x00 || raw public key)" },
+    "sig": { "type": "string", "pattern": "^[A-Za-z0-9_-]{86}$" }
+  }
+}

@@ -1,0 +1,27 @@
+# python
+__pycache__/
+*.pyc
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+# node
+node_modules/
+.turbo/
+coverage/
+playwright-report/
+test-results/
+# build output
+dist/
+out/
+release/
+build/out/
+# runtime data
+.dev/
+*.db
+*.db-journal
+*.pkg
+!contracts/**/*.pkg
+*.log
+.env
+.import_linter_cache/

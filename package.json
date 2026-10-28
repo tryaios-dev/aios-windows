@@ -1,0 +1,29 @@
+{
+  "name": "aios",
+  "private": true,
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "check": "turbo run typecheck lint test",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "package:win": "pnpm fetch:llama && pnpm build:backend && turbo run build && pnpm --filter @aios/desktop package",
+    "fetch:llama": "uv run python build/llama/fetch.py",
+    "check:py": "uv run ruff check . && uv run lint-imports && uv run mypy packages/py/aios-common/src services/backend/src && uv run python tools/run_tests.py",
+    "check:all": "pnpm check:py && pnpm check",
+    "build:backend": "uv run pyinstaller build/pyinstaller/backend.spec --distpath build/out --workpath build/out/work --noconfirm",
+    "dev:backend": "uv run aios-backend serve",
+    "dev:ui": "pnpm --filter @aios/bridge-contract build && pnpm --filter @aios/ui dev",
+    "dev:desktop": "pnpm --filter @aios/desktop dev",
+    "sbom": "uv run python tools/release/sbom.py"
+  },
+  "devDependencies": {
+    "turbo": "^2.2.3",
+    "typescript": "^5.6.3",
+    "prettier": "^3.3.3"
+  }
+}

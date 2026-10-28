@@ -1,0 +1,31 @@
+{
+  "$schema": "./allowlist.schema.json",
+  "version": 1,
+  "flows": [
+    {
+      "id": "model-mirror",
+      "host": "models.example.eu",
+      "port": 443,
+      "scheme": "https",
+      "client": "backend-net",
+      "when": "first run, user install"
+    },
+    {
+      "id": "update-feed",
+      "host": "updates.example.eu",
+      "port": 443,
+      "scheme": "https",
+      "client": "electron-updater",
+      "when": "start + max once/day, switchable"
+    },
+    {
+      "id": "company-server",
+      "host": "configured",
+      "port": 443,
+      "scheme": "https",
+      "client": "backend-net",
+      "when": "only if flag enabled (lab)"
+    }
+  ],
+  "x-status": "draft - B-06 records the real model-mirror and update-feed hostnames here (they must also pass the corporate proxy)"
+}

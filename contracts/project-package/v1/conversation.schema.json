@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tryaios.com/contracts/project-package/v1/conversation",
+  "title": "project-package/v1/conversation",
+  "description": "conversations/<id>.json of a Project Package. Readers ignore unknown fields.",
+  "x-status": "draft",
+  "type": "object",
+  "required": ["id", "project_id", "title", "classification", "created_at", "updated_at", "messages", "summaries"],
+  "properties": {
+    "id": { "$ref": "#/$defs/uuid" },
+    "project_id": { "$ref": "#/$defs/uuid" },
+    "title": { "type": "string", "maxLength": 500 },
+    "classification": { "$ref": "#/$defs/classification" },
+    "created_at": { "$ref": "#/$defs/time" },
+    "updated_at": { "$ref": "#/$defs/time" },
+    "messages": { "type": "array", "items": { "$ref": "#/$defs/message" } },
+    "summaries": { "type": "array", "items": { "$ref": "#/$defs/summary" } }
+  },
+  "$defs": {
+    "uuid": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+    "time": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$" },
+    "classification": { "enum": ["restricted", "internal", "public"] },
+    "message": {
+      "type": "object",
+      "required": ["id", "role", "content", "classification", "created_at"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "role": { "enum": ["user", "assistant", "system"] },
+        "content": { "type": "string" },
+        "classification": { "$ref": "#/$defs/classification" },
+        "created_at": { "$ref": "#/$defs/time" },
+        "provider": { "enum": ["local", "company"] },
+        "model_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{1,63}$" },
+        "status": { "enum": ["ok", "cancelled", "error"] },
+        "tokens_in": { "type": "integer", "minimum": 0 },
+        "tokens_out": { "type": "integer", "minimum": 0 }
+      },
+      "if": { "properties": { "role": { "const": "assistant" } }, "required": ["role"] },
+      "then": { "required": ["provider", "model_id", "status", "tokens_in", "tokens_out"] }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["id", "covers_to_message_id", "content", "classification", "created_at"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "covers_to_message_id": { "$ref": "#/$defs/uuid" },
+        "content": { "type": "string" },
+        "classification": { "$ref": "#/$defs/classification" },
+        "created_at": { "$ref": "#/$defs/time" }
+      }
+    }
+  }
+}

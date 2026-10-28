@@ -1,0 +1,46 @@
+# B-01: security-relevant paths need the technical reviewer or the deputy (named in A-02).
+# Both are members of the GitHub team @tryaios-dev/security-reviewers (the team needs write access).
+# Enforced by the `main` ruleset: "Require review from Code Owners" (docs/github-setup.md).
+# Paths that do not exist yet are listed so the rule is in place when the code lands.
+# Later lines win in CODEOWNERS, so keep the catch-all (none) out of this file.
+
+# process manager (backend start, token handshake)
+/apps/desktop/src/main/backend/                              @tryaios-dev/security-reviewers
+/packages/py/aios-common/src/aios_common/handshake.py        @tryaios-dev/security-reviewers
+/packages/py/aios-common/src/aios_common/asgi_auth.py        @tryaios-dev/security-reviewers
+/services/backend/src/aios_backend/__main__.py               @tryaios-dev/security-reviewers
+/services/backend/src/aios_backend/main.py                   @tryaios-dev/security-reviewers
+/services/backend/src/aios_backend/config.py                 @tryaios-dev/security-reviewers
+
+# storage encryption and recovery
+/services/backend/src/aios_backend/db/                       @tryaios-dev/security-reviewers
+/packages/py/aios-common/src/aios_common/keystore.py         @tryaios-dev/security-reviewers
+/services/backend/src/aios_backend/recovery/                 @tryaios-dev/security-reviewers
+
+# gateway (model requests)
+/services/backend/src/aios_backend/gateway/                  @tryaios-dev/security-reviewers
+
+# evidence writer and verifier
+/services/evidence-writer/                                   @tryaios-dev/security-reviewers
+/apps/verifier-cli/                                          @tryaios-dev/security-reviewers
+
+# contracts (frozen formats)
+/contracts/                                                  @tryaios-dev/security-reviewers
+
+# installer, signing, update feed, pinned binaries
+/apps/desktop/electron-builder.yml                           @tryaios-dev/security-reviewers
+/build/                                                      @tryaios-dev/security-reviewers
+/tools/release/                                              @tryaios-dev/security-reviewers
+
+# renderer bridge
+/apps/desktop/src/preload/                                   @tryaios-dev/security-reviewers
+/apps/desktop/src/main/ipc/                                  @tryaios-dev/security-reviewers
+/apps/desktop/src/main/window.ts                             @tryaios-dev/security-reviewers
+/packages/ts/bridge-contract/                                @tryaios-dev/security-reviewers
+/apps/ui/vite.config.ts                                      @tryaios-dev/security-reviewers
+/packages/ts/config/                                         @tryaios-dev/security-reviewers
+
+# pipeline and rules themselves
+/.github/                                                    @tryaios-dev/security-reviewers
+/CLAUDE.md                                                   @tryaios-dev/security-reviewers
+/docs/security/dependency-exceptions.json                    @tryaios-dev/security-reviewers

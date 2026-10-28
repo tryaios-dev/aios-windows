@@ -1,0 +1,91 @@
+[project]
+name = "aios-workspace"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = ["aios-common", "aios-backend"]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/py/*", "services/*"]
+
+[tool.uv.sources]
+aios-common = { workspace = true }
+aios-backend = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "httpx>=0.27",        # FastAPI TestClient
+    "ruff>=0.7",
+    "mypy>=1.13",
+    "import-linter>=2.1",
+    "pip-audit>=2.7",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["node_modules", "apps", "packages/ts", "build/out", "venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "T20", "FAST"]
+ignore = ["S101", "E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["aios_backend", "aios_common"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header", "fastapi.Path"]
+
+[tool.ruff.lint.per-file-ignores]
+"tools/**" = ["T201", "S603", "S607"]
+"build/**" = ["T201", "S603", "S607", "S310"]
+"**/cli.py" = ["T201"]
+"**/db/migrations/**" = ["E501"]
+"**/tests/**" = ["S105", "S106"]
+
+[tool.mypy]
+strict = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["sqlcipher3", "sqlcipher3.*"]   # ships no type information
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------- import boundaries
+[tool.importlinter]
+root_packages = ["aios_backend", "aios_common"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Shared package never imports the backend"
+type = "forbidden"
+source_modules = ["aios_common"]
+forbidden_modules = ["aios_backend"]
+
+[[tool.importlinter.contracts]]
+name = "Only db.sqlcipher imports sqlcipher3"
+type = "forbidden"
+source_modules = [
+    "aios_backend.main", "aios_backend.cli", "aios_backend.config", "aios_backend.routes",
+    "aios_backend.db.session", "aios_backend.db.migrate", "aios_backend.db.base",
+    "aios_backend.db.models",
+]
+forbidden_modules = ["sqlcipher3"]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "Only aios_common.keystore imports keyring"
+type = "forbidden"
+source_modules = ["aios_backend", "aios_common.handshake", "aios_common.asgi_auth", "aios_common.logging", "aios_common.paths"]
+forbidden_modules = ["keyring"]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "Routes stay thin: no ORM, DB driver, processes or raw network"
+type = "forbidden"
+source_modules = ["aios_backend.routes"]
+forbidden_modules = ["sqlalchemy", "sqlcipher3", "subprocess", "httpx", "socket"]
+allow_indirect_imports = true

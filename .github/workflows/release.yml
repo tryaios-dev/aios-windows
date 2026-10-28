@@ -1,0 +1,84 @@
+# Signed release build (B-04, B-05, B-06). Runs when a version tag is pushed: git tag v0.1.0 && git push origin v0.1.0
+#
+# Signing uses Azure Artifact Signing (A-01). Repository secrets (Settings > Secrets and variables > Actions):
+#   AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AIOS_SIGN_ENDPOINT, AIOS_SIGN_ACCOUNT,
+#   AIOS_SIGN_PROFILE, and optionally AIOS_FEED_UPLOAD_CMD (B-06).
+# GitHub masks secrets in logs; the scripts print only file names. Without the secrets sign.ps1 fails,
+# so an unsigned release cannot be produced by accident.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write          # create the draft GitHub release
+
+jobs:
+  release-windows:
+    runs-on: windows-latest
+    env:
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AIOS_SIGN_ENDPOINT: ${{ secrets.AIOS_SIGN_ENDPOINT }}
+      AIOS_SIGN_ACCOUNT: ${{ secrets.AIOS_SIGN_ACCOUNT }}
+      AIOS_SIGN_PROFILE: ${{ secrets.AIOS_SIGN_PROFILE }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: uv sync --frozen --all-packages --all-extras
+      - run: pnpm install --frozen-lockfile
+
+      - name: Signing tools (signtool + Azure Artifact Signing dlib)
+        shell: pwsh
+        run: |
+          nuget install Microsoft.Trusted.Signing.Client -OutputDirectory "$env:RUNNER_TEMP\signing" -NonInteractive | Out-Null
+          $dlib = Get-ChildItem "$env:RUNNER_TEMP\signing" -Recurse -Filter Azure.CodeSigning.Dlib.dll | Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Where-Object { $_.FullName -match '\\x64\\' } | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $dlib -or -not $signtool) { throw "signing tools not found" }
+          "AIOS_SIGN_DLIB=$($dlib.FullName)" >> $env:GITHUB_ENV
+          "AIOS_SIGNTOOL=$($signtool.FullName)" >> $env:GITHUB_ENV
+
+      - run: pnpm fetch:llama
+      - run: pnpm build:backend
+      - name: Sign backend.exe and both llama-server builds (+ their DLLs)
+        run: |
+          powershell -File build/signing/sign.ps1 build/out/backend
+          powershell -File build/signing/sign.ps1 build/out/llama/cpu
+          powershell -File build/signing/sign.ps1 build/out/llama/vulkan
+      - run: pnpm build
+      - name: Package (azure-sign.js signs the Electron files and the NSIS installer)
+        run: pnpm --filter @aios/desktop package
+        env:
+          AIOS_SIGN: "1"
+      - name: Fail on any unsigned PE file
+        run: powershell -File build/signing/verify-signatures.ps1 apps/desktop/release
+      - name: SBOM for this exact build (B-05)
+        run: uv run python tools/release/sbom.py
+      - name: Stage (and upload, if configured) the update feed (B-06)
+        run: node tools/release/publish-update-feed.mjs apps/desktop/release
+        env:
+          AIOS_FEED_UPLOAD_CMD: ${{ secrets.AIOS_FEED_UPLOAD_CMD }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aios-windows-signed
+          path: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.blockmap
+            apps/desktop/release/latest.yml
+            build/out/sbom/
+          retention-days: 90
+      - name: Draft GitHub release (keeps installer + SBOM beyond artefact retention)
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $files = @(Get-ChildItem apps/desktop/release/*.exe) + @(Get-Item apps/desktop/release/latest.yml) + @(Get-Item build/out/sbom/aios-sbom.cdx.json)
+          gh release create "$env:GITHUB_REF_NAME" --draft --title "AIOS $env:GITHUB_REF_NAME" --notes "Signed build. SBOM attached." @($files.FullName)

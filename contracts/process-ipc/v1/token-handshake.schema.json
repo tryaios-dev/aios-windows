@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tryaios.com/contracts/process-ipc/v1/token-handshake",
+  "title": "process-ipc/v1/token-handshake",
+  "description": "The single JSON line a parent writes to a child's stdin before closing it. Serialised form is this object + LF, at most 4096 bytes.",
+  "x-status": "draft",
+  "type": "object",
+  "required": ["token"],
+  "properties": {
+    "token": {
+      "description": "Launch token (Electron main -> backend: 32 random bytes, base64url, no padding) or a derived token (backend -> evidence writer: 64 lowercase hex).",
+      "oneOf": [
+        { "type": "string", "pattern": "^[A-Za-z0-9_-]{43}$" },
+        { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      ]
+    },
+    "api_port": {
+      "description": "Port to bind on 127.0.0.1; 0 or absent = the child picks a free port.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65535,
+      "default": 0
+    }
+  },
+  "additionalProperties": false
+}

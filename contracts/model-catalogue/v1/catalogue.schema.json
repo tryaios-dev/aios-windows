@@ -1,0 +1,272 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tryaios.com/contracts/model-catalogue/v1/catalogue",
+  "title": "model-catalogue/v1/catalogue",
+  "description": "catalogue.json. File bytes are JCS; signed by catalogue.json.sig. Readers ignore unknown fields (extension rule).",
+  "x-status": "draft",
+  "type": "object",
+  "required": [
+    "catalogue_version",
+    "issued_at",
+    "entries"
+  ],
+  "properties": {
+    "catalogue_version": {
+      "const": 1
+    },
+    "issued_at": {
+      "$ref": "#/$defs/time"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    }
+  },
+  "$defs": {
+    "time": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "nonempty": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "entry": {
+      "type": "object",
+      "required": [
+        "id",
+        "tier",
+        "display_name",
+        "upstream",
+        "source_weights_digest",
+        "conversion",
+        "quantisation",
+        "artefact",
+        "licence",
+        "publisher",
+        "pipeline",
+        "deviation_review",
+        "min_ram_gb",
+        "context_length"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{1,63}$"
+        },
+        "tier": {
+          "enum": [
+            "small",
+            "medium"
+          ]
+        },
+        "display_name": {
+          "$ref": "#/$defs/nonempty"
+        },
+        "upstream": {
+          "type": "object",
+          "required": [
+            "repo",
+            "revision"
+          ],
+          "properties": {
+            "repo": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$"
+            },
+            "revision": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            }
+          }
+        },
+        "source_weights_digest": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Required (hex) for pipeline = own. May be null only for pipeline = third-party when the upstream repository publishes no safetensors (e.g. a GGUF-only repo); the deviation review then covers provenance."
+        },
+        "conversion": {
+          "type": "object",
+          "required": [
+            "tool",
+            "version"
+          ],
+          "properties": {
+            "tool": {
+              "$ref": "#/$defs/nonempty"
+            },
+            "version": {
+              "$ref": "#/$defs/nonempty"
+            }
+          }
+        },
+        "quantisation": {
+          "type": "object",
+          "required": [
+            "method"
+          ],
+          "properties": {
+            "method": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_]{1,32}$"
+            }
+          }
+        },
+        "artefact": {
+          "type": "object",
+          "required": [
+            "filename",
+            "size_bytes",
+            "sha256",
+            "mirror_url"
+          ],
+          "properties": {
+            "filename": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._-]+\\.gguf$",
+              "maxLength": 128
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "mirror_url": {
+              "type": "string",
+              "pattern": "^https://[a-z0-9.-]+(:[0-9]{1,5})?/[^\\s?#]*$",
+              "maxLength": 2048
+            }
+          }
+        },
+        "licence": {
+          "type": "object",
+          "required": [
+            "spdx",
+            "reference"
+          ],
+          "properties": {
+            "spdx": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9.+-]+( (AND|OR|WITH) [A-Za-z0-9.+-]+)*$"
+            },
+            "reference": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._/-]+$",
+              "not": {
+                "pattern": "(^/|\\.\\.)"
+              }
+            }
+          }
+        },
+        "publisher": {
+          "$ref": "#/$defs/nonempty"
+        },
+        "pipeline": {
+          "enum": [
+            "own",
+            "third-party"
+          ]
+        },
+        "deviation_review": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "required": [
+                "reviewer",
+                "date",
+                "quality_threshold_result"
+              ],
+              "properties": {
+                "reviewer": {
+                  "$ref": "#/$defs/nonempty"
+                },
+                "date": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                "quality_threshold_result": {
+                  "enum": [
+                    "pass",
+                    "fail"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "min_ram_gb": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1024
+        },
+        "context_length": {
+          "type": "integer",
+          "minimum": 512,
+          "maximum": 1048576
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "pipeline": {
+                "const": "own"
+              }
+            },
+            "required": [
+              "pipeline"
+            ]
+          },
+          "then": {
+            "properties": {
+              "deviation_review": {
+                "type": "null"
+              },
+              "source_weights_digest": {
+                "$ref": "#/$defs/sha256"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "pipeline": {
+                "const": "third-party"
+              }
+            },
+            "required": [
+              "pipeline"
+            ]
+          },
+          "then": {
+            "properties": {
+              "deviation_review": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

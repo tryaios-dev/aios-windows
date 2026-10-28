@@ -1,0 +1,5 @@
+{
+  "_readme": "B-02: pinned SQLCipher build. services/backend/tests/test_database.py fails if the installed build differs. B-05: tools/release/sbom.py lists it. Changing it is a reviewed change (CODEOWNERS) together with uv.lock.",
+  "win32": { "package": "sqlcipher3", "version": "0.6.4", "cipher_version": "4.19.0 community", "ships": true },
+  "linux": { "package": "sqlcipher3-binary", "version": "0.6.0", "cipher_version": null, "ships": false }
+}

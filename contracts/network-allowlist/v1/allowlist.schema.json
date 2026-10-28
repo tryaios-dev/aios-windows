@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tryaios.com/contracts/network-allowlist/v1/allowlist",
+  "title": "network-allowlist/v1/allowlist",
+  "description": "Every outbound flow AIOS may open. Anything not listed is refused.",
+  "x-status": "draft",
+  "type": "object",
+  "required": ["version", "flows"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "const": 1 },
+    "flows": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "host", "port", "when"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,63}$" },
+          "host": {
+            "description": "Lowercase DNS name (no IP literal, no wildcard), or the literal 'configured' for the single host taken from settings (company-server only).",
+            "type": "string",
+            "anyOf": [
+              { "const": "configured" },
+              { "pattern": "^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$" }
+            ]
+          },
+          "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+          "scheme": { "const": "https", "default": "https" },
+          "client": {
+            "description": "Which component opens the flow.",
+            "enum": ["backend-net", "electron-updater"]
+          },
+          "when": { "type": "string", "minLength": 1, "maxLength": 200 }
+        },
+        "if": { "properties": { "host": { "const": "configured" } }, "required": ["host"] },
+        "then": { "properties": { "id": { "const": "company-server" } } }
+      }
+    }
+  },
+  "patternProperties": { "^x-": {} },
+  "additionalProperties": false
+}
