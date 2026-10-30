@@ -76,8 +76,11 @@ pnpm install --frozen-lockfile                  # Node packages exactly from pnp
 pnpm check:all                                  # must end green
 ```
 
-`pnpm check:all` runs: ruff, import rules, mypy, Python tests (17 backend + shared), TypeScript
-typecheck, eslint and vitest. Expected ending: `Tasks: 10 successful, 10 total`.
+`pnpm check:all` runs the same checks as CI: lock-file check, ruff lint and format, import rules,
+mypy, `openapi.json` up to date, Python tests (17 backend + shared, including a check that every
+file CI runs is committed), TypeScript typecheck, eslint and vitest. Expected ending:
+`Tasks: 10 successful, 10 total`. Run it before every push; if it is green, CI's lint and test
+jobs should be too.
 
 ## 3. Run and verify
 
