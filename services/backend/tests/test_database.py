@@ -9,10 +9,10 @@ import pytest
 from sqlalchemy import text
 
 from aios_backend.config import Settings
-from aios_backend.db import migrate, session
-from aios_backend.db.models import Preference
-from aios_backend.db.session import Database
-from aios_backend.db.sqlcipher import DatabaseKeyMissing
+from db import migrate, session
+from db.models import Preference
+from db.session import Database
+from db.sqlcipher import DatabaseKeyMissing
 
 PIN = json.loads((Path(__file__).resolve().parents[3] / "build/sqlcipher/pin.json").read_text())
 

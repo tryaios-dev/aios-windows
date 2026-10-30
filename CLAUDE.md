@@ -30,9 +30,11 @@ TypeScript (eslint, `packages/ts/config`):
 
 - Tests first (MVP 14.4): every AC-xx is a failing test before the feature (`test_ac_XX_*` in
   Python, `ac-XX` in the test name in TypeScript).
-- Backend: `services/backend/src/aios_backend/` = `__main__.py` (backend.exe), `main.py` (app
-  factory), `config.py`, `cli.py`, `routes.py`, and `db/` (chats.db on SQLCipher). A new feature
-  gets its own router module and is included in `main.py`. Keep routes thin.
+- Backend: `services/backend/aios_backend/` = `__main__.py` (backend.exe), `main.py` (app
+  factory), `config.py`, `cli.py`, `routes.py`, and `apps/` (one package per UI feature:
+  router, schemas, service, repository, models). `services/backend/db/` is the separate `db`
+  package (chats.db on SQLCipher, imported as `db.*`). A new app's router is included in
+  `main.py`. Keep routes thin.
 - Schema changes only through numbered Alembic migrations (`aios-backend makemigrations`);
   never edit an applied migration. New model modules are imported in `db/registry.py`.
 - The SQLCipher build is pinned in `services/backend/pyproject.toml` and `build/sqlcipher/pin.json`;
@@ -40,7 +42,8 @@ TypeScript (eslint, `packages/ts/config`):
 - A backend API change, the regenerated `contracts/local-api/openapi.json`
   (`uv run aios-backend openapi`) and the UI change land in the same pull request.
 - Every IPC handler in `apps/desktop/src/main/ipc/` zod-validates before calling the backend.
-- One UI feature = one folder in `apps/ui/src/features/`.
+- One UI feature = one folder in `apps/ui/src/features/`, with a backend package of the same
+  name in `services/backend/aios_backend/apps/`.
 - New dependency = lock file updated in the same PR (`uv lock`, `pnpm install`); CI installs
   with `--frozen` and fails otherwise.
 - Security-relevant paths (see `.github/CODEOWNERS`) need the technical reviewer.

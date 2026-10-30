@@ -6,7 +6,7 @@
 | Status | draft |
 | Extension rule | Later versions add optional fields only; semantics never change. |
 | Freezes | week 1, by ticket D-02 (golden vectors + `FROZEN`) |
-| Owner of the code | Electron main (`apps/desktop/src/main/backend/`, `apps/desktop/src/main/ipc/`), backend (`packages/py/aios-common/src/aios_common/handshake.py`, `asgi_auth.py`, `services/backend/src/aios_backend/__main__.py`), evidence writer (start-up) |
+| Owner of the code | Electron main (`apps/desktop/src/main/backend/`, `apps/desktop/src/main/ipc/`), backend (`packages/py/aios-common/src/aios_common/handshake.py`, `asgi_auth.py`, `services/backend/aios_backend/__main__.py`), evidence writer (start-up) |
 | Schemas | `token-handshake.schema.json` (stdin frame), `ready-line.schema.json` (READY payload) |
 
 ## 1 Purpose

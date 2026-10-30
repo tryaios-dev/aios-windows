@@ -6,7 +6,7 @@
 | Status | draft |
 | Extension rule | Later versions add optional fields only; semantics never change. |
 | Freezes | week 6, by ticket J-01 (golden packages + `FROZEN`) |
-| Owner of the code | Backend portability app (`services/backend/src/aios_backend/apps/portability/`) |
+| Owner of the code | Backend portability app (`services/backend/aios_backend/apps/portability/`) |
 | Schemas | `manifest.schema.json`, `project.schema.json`, `conversation.schema.json` |
 
 ## 1 Purpose

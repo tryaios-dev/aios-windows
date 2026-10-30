@@ -6,7 +6,7 @@
 | Status | draft (hostnames are placeholders until B-06) |
 | Extension rule | Later versions add optional fields only; semantics never change. |
 | Freezes | fixed in the 1a build; frozen by ticket G-08 (golden vectors + `FROZEN`) |
-| Owner of the code | Backend `services/backend/src/aios_backend/net/` (only user of httpx) and `config/allowlist.py`; Electron main `apps/desktop/src/main/updater.ts` for the update feed |
+| Owner of the code | Backend `services/backend/aios_backend/net/` (only user of httpx) and `config/allowlist.py`; Electron main `apps/desktop/src/main/updater.ts` for the update feed |
 | Files | `allowlist.json` (data), `allowlist.schema.json` |
 
 ## 1 Purpose

@@ -5,4 +5,6 @@ declare global {
   interface Window {
     aios?: AiosBridge;
   }
+  /** apps/ui/package.json version, injected by vite.config.ts. */
+  const __APP_VERSION__: string;
 }

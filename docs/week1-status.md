@@ -44,7 +44,7 @@ Google's prohibited-use policy first. Llama 4 is excluded (Llama 4 Community Lic
 | Task | Acceptance criterion | Status |
 | --- | --- | --- |
 | B-01 | Repository, folder layout | **Repo.** GitHub `tryaios-dev/aios-windows` (not pushed yet). `services/evidence-writer/` and `apps/verifier-cli/` are created by their own tickets (an empty `services/*` folder would break the uv workspace) |
-| B-01 | A test PR touching the gateway folder cannot merge without the reviewer | **Repo ready, Team to enforce.** `services/backend/src/aios_backend/gateway/` exists; `.github/CODEOWNERS`; `tools/github/apply-main-ruleset.ps1` applies the ruleset. Needs GitHub Team plan + A-02 names |
+| B-01 | A test PR touching the gateway folder cannot merge without the reviewer | **Repo ready, Team to enforce.** `services/backend/aios_backend/gateway/` exists; `.github/CODEOWNERS`; `tools/github/apply-main-ruleset.ps1` applies the ruleset. Needs GitHub Team plan + A-02 names |
 | B-01 | CLAUDE.md has the seven invariants verbatim + tests-first rule | **Team check.** Tests-first rule present. CLAUDE.md lists **8** invariants; compare with MVP 5.3 word for word (not in the repo) |
 | B-02 | Lint + pytest on Linux and Windows; red pipeline blocks merge | **Repo done** (`.github/workflows/ci.yml`: `py-unit`/`ts-unit` on ubuntu + windows). Blocking needs the ruleset (Team plan) |
 | B-02 | Windows job produces backend.exe and an installer | **Repo done.** `package-windows` job, artefact kept 14 days. Verified locally |

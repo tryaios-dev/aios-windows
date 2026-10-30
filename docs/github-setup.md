@@ -33,7 +33,7 @@ Settings that cannot live in the repository. Do once, as an organisation owner o
 
 ## Checking the acceptance criteria
 
-- **B-01**: open a test PR that changes `services/backend/src/aios_backend/gateway/__init__.py`.
+- **B-01**: open a test PR that changes `services/backend/aios_backend/gateway/__init__.py`.
   GitHub requests a review from `security-reviewers`; the merge button stays blocked until the reviewer
   or the deputy approves.
 - **B-02 step one**: open a PR that breaks a test. `py-unit (ubuntu-latest)` and

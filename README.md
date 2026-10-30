@@ -7,6 +7,25 @@ Electron + React desktop app with a local FastAPI backend and an encrypted SQLit
 React UI (apps/ui)  --window.aios-->  Electron main (apps/desktop)  --HTTP + token-->  FastAPI backend (services/backend)  -->  chats.db (SQLCipher)
 ```
 
+## Architecture
+
+| Layer | Package | Details |
+| --- | --- | --- |
+| Frontend: React screens + Electron shell | `apps/ui`, `apps/desktop` | [apps/ui/README.md](apps/ui/README.md), [apps/desktop/README.md](apps/desktop/README.md) |
+| Backend: FastAPI + encrypted database | `services/backend` | [services/backend/README.md](services/backend/README.md) |
+| Shared plumbing | `packages/ts/bridge-contract`, `packages/py/aios-common` | [bridge-contract](packages/ts/bridge-contract/README.md), [aios-common](packages/py/aios-common/README.md) |
+| Why things are built this way | `docs/adr/` | e.g. [0008 UI stack](docs/adr/0008-ui-stack.md), [0009 backend layout](docs/adr/0009-backend-layout.md) |
+
+Features are named the same on both sides, one folder each:
+
+| Feature | UI (`features/`) | Backend (`apps/`) |
+| --- | --- | --- |
+| First-run setup (6 steps) | `apps/ui/src/features/setup` | `services/backend/aios_backend/apps/setup` |
+| Workspace shell | `apps/ui/src/features/workspace` | `services/backend/aios_backend/apps/workspace` |
+
+The UI screens are built; they run on simulated data until the backend apps get endpoints.
+The backend app packages are the layout only (no endpoints, tables or logic yet).
+
 ## 1. Install the tools (once per machine)
 
 Windows 11, PowerShell. No admin rights needed except where winget asks.
@@ -89,9 +108,10 @@ everything and has no `/docs`.
 pnpm dev:ui
 ```
 
-Open http://localhost:5173. Expected: **AIOS** with *Browser preview (no backend)*.
-That is correct: the UI is not allowed to call the network, and `window.aios` (its only way to
-the backend) exists only inside Electron. Use this mode for layout work; edits reload instantly.
+Open http://localhost:5173. Expected: the first-run wizard, *Private AI on this computer.*
+Click through the six steps to reach the workspace (setup data is simulated). The UI is not
+allowed to call the network, and `window.aios` (its only way to the backend) exists only inside
+Electron. Use this mode for layout work; edits reload instantly.
 
 ### Window 3 - the desktop app (Electron)
 
@@ -99,9 +119,9 @@ the backend) exists only inside Electron. Use this mode for layout work; edits r
 pnpm dev:desktop
 ```
 
-Expected: a window opens with **Backend connected**, **Database: Encrypted, ready** and
-**Backend version 0.1.0**. Electron starts its own backend with a fresh token, so Window 1 is
-not needed for this. Close the window to stop both.
+Expected: a window opens with the same first-run wizard as Window 2. Electron starts its own
+backend with a fresh token, so Window 1 is not needed for this. It builds the UI once at start,
+so run it again after UI changes. Close the window to stop both.
 
 The desktop app uses the real per-user locations: database in
 `%LOCALAPPDATA%\AIOS\data\chats.db`, key in Windows Credential Manager
@@ -158,16 +178,16 @@ Dev database: `services/backend/.dev/chats.db` (fixed dev key, throw-away data).
 
 | Path | What it is |
 | --- | --- |
-| `apps/desktop/` | Electron main + preload: launch token, starts the backend, IPC, auto-update, installer config |
-| `apps/ui/` | React renderer (Vite). One folder per feature in `src/features/` |
-| `packages/ts/bridge-contract/` | Types + zod schemas of the `window.aios` bridge |
+| `apps/desktop/` | Electron main + preload: launch token, starts the backend, IPC, auto-update, installer config ([README](apps/desktop/README.md)) |
+| `apps/ui/` | React renderer (Vite, Tailwind). One folder per feature in `src/features/` ([README](apps/ui/README.md)) |
+| `packages/ts/bridge-contract/` | Types + zod schemas of the `window.aios` bridge ([README](packages/ts/bridge-contract/README.md)) |
 | `packages/ts/config/` | Shared tsconfig and eslint rules (renderer: no network, no Node) |
-| `services/backend/` | `backend.exe`: FastAPI app (`main.py`, `routes.py`, `config.py`, `cli.py`, `__main__.py`) + `db/` |
-| `packages/py/aios-common/` | Token handshake, loopback/token middleware, keystore, content-free logging, paths |
+| `services/backend/` | `backend.exe`: `aios_backend/` (FastAPI app: `main.py`, `routes.py`, `config.py`, `cli.py`, `__main__.py`, one package per feature in `apps/`) and `db/` (chats.db) ([README](services/backend/README.md)) |
+| `packages/py/aios-common/` | Token handshake, loopback/token middleware, keystore, content-free logging, paths ([README](packages/py/aios-common/README.md)) |
 | `contracts/` | Launch handshake, network allowlist, generated OpenAPI file |
 | `build/` | PyInstaller spec, signing scripts, SQLCipher and llama.cpp pins |
 | `tools/` | Test runner, SBOM, dependency scans, update feed |
-| `docs/` | ADRs, GitHub setup, week-1 status, signing record (A-01), dependency exceptions record |
+| `docs/` | ADRs ([docs/adr/](docs/adr/): why each major choice was made), Developer Brief and Backend Commands (Word), GitHub setup, week-1 status, signing record (A-01), dependency exceptions record |
 
 Rules every change follows: [CLAUDE.md](CLAUDE.md). CI: `.github/workflows/`. Server-side GitHub
 settings: [docs/github-setup.md](docs/github-setup.md). Task status: [docs/week1-status.md](docs/week1-status.md).

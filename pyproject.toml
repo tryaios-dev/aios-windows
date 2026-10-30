@@ -27,14 +27,14 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-extend-exclude = ["node_modules", "apps", "packages/ts", "build/out", "venv"]
+extend-exclude = ["node_modules", "apps/desktop", "apps/ui", "packages/ts", "build/out", "venv"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "S", "T20", "FAST"]
 ignore = ["S101", "E501"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["aios_backend", "aios_common"]
+known-first-party = ["aios_backend", "aios_common", "db"]
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header", "fastapi.Path"]
@@ -56,22 +56,21 @@ ignore_missing_imports = true
 
 # ---------------------------------------------------------------- import boundaries
 [tool.importlinter]
-root_packages = ["aios_backend", "aios_common"]
+root_packages = ["aios_backend", "db", "aios_common"]
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "Shared package never imports the backend"
 type = "forbidden"
 source_modules = ["aios_common"]
-forbidden_modules = ["aios_backend"]
+forbidden_modules = ["aios_backend", "db"]
 
 [[tool.importlinter.contracts]]
 name = "Only db.sqlcipher imports sqlcipher3"
 type = "forbidden"
 source_modules = [
     "aios_backend.main", "aios_backend.cli", "aios_backend.config", "aios_backend.routes",
-    "aios_backend.db.session", "aios_backend.db.migrate", "aios_backend.db.base",
-    "aios_backend.db.models",
+    "aios_backend.apps", "db.session", "db.migrate", "db.base", "db.models", "db.registry",
 ]
 forbidden_modules = ["sqlcipher3"]
 allow_indirect_imports = true
@@ -79,13 +78,27 @@ allow_indirect_imports = true
 [[tool.importlinter.contracts]]
 name = "Only aios_common.keystore imports keyring"
 type = "forbidden"
-source_modules = ["aios_backend", "aios_common.handshake", "aios_common.asgi_auth", "aios_common.logging", "aios_common.paths"]
+source_modules = ["aios_backend", "db", "aios_common.handshake", "aios_common.asgi_auth", "aios_common.logging", "aios_common.paths"]
 forbidden_modules = ["keyring"]
 allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
+name = "Backend apps never import each other (same rule as apps/ui/src/features)"
+type = "independence"
+modules = ["aios_backend.apps.setup", "aios_backend.apps.workspace"]
+
+[[tool.importlinter.contracts]]
+name = "App layers: router -> service -> repository -> models"
+type = "layers"
+containers = ["aios_backend.apps.setup", "aios_backend.apps.workspace"]
+layers = ["router", "service", "repository", "models"]
+
+[[tool.importlinter.contracts]]
 name = "Routes stay thin: no ORM, DB driver, processes or raw network"
 type = "forbidden"
-source_modules = ["aios_backend.routes"]
+source_modules = [
+    "aios_backend.routes",
+    "aios_backend.apps.setup.router", "aios_backend.apps.workspace.router",
+]
 forbidden_modules = ["sqlalchemy", "sqlcipher3", "subprocess", "httpx", "socket"]
 allow_indirect_imports = true

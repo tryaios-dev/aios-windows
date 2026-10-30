@@ -31,7 +31,7 @@ jobs:
       - run: uv sync --frozen --all-packages --all-extras
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      - run: uv run mypy packages/py/aios-common/src services/backend/src
+      - run: uv run mypy packages/py/aios-common/src services/backend/aios_backend services/backend/db
       - run: uv run lint-imports
       - run: uv run aios-backend --profile test migrate   # SQLCipher opens, migrations apply
       - run: uv run aios-backend --profile test check     # at head, models match migrations

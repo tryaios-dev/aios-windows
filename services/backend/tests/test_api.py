@@ -1,8 +1,8 @@
 from fastapi.testclient import TestClient
 
 from aios_backend.config import Profile, Settings, load
-from aios_backend.db.session import Database
 from aios_backend.main import create_app
+from db.session import Database
 
 
 def test_health_with_token(client: TestClient) -> None:

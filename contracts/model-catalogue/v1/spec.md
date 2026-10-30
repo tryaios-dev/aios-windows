@@ -6,7 +6,7 @@
 | Status | draft |
 | Extension rule | Later versions add optional fields only; semantics never change. |
 | Freezes | week 4, by ticket I-01 (golden vectors + `FROZEN`) |
-| Owner of the code | Backend catalogue app (`services/backend/src/aios_backend/apps/catalogue/`), signing tool `tools/catalogue/sign.py` |
+| Owner of the code | Backend catalogue app (`services/backend/aios_backend/apps/catalogue/`), signing tool `tools/catalogue/sign.py` |
 | Schemas | `catalogue.schema.json` (`catalogue.json`), `signature.schema.json` (`catalogue.json.sig`) |
 
 ## 1 Purpose

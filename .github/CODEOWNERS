@@ -8,17 +8,17 @@
 /apps/desktop/src/main/backend/                              @tryaios-dev/security-reviewers
 /packages/py/aios-common/src/aios_common/handshake.py        @tryaios-dev/security-reviewers
 /packages/py/aios-common/src/aios_common/asgi_auth.py        @tryaios-dev/security-reviewers
-/services/backend/src/aios_backend/__main__.py               @tryaios-dev/security-reviewers
-/services/backend/src/aios_backend/main.py                   @tryaios-dev/security-reviewers
-/services/backend/src/aios_backend/config.py                 @tryaios-dev/security-reviewers
+/services/backend/aios_backend/__main__.py               @tryaios-dev/security-reviewers
+/services/backend/aios_backend/main.py                   @tryaios-dev/security-reviewers
+/services/backend/aios_backend/config.py                 @tryaios-dev/security-reviewers
 
 # storage encryption and recovery
-/services/backend/src/aios_backend/db/                       @tryaios-dev/security-reviewers
+/services/backend/db/                                          @tryaios-dev/security-reviewers
 /packages/py/aios-common/src/aios_common/keystore.py         @tryaios-dev/security-reviewers
-/services/backend/src/aios_backend/recovery/                 @tryaios-dev/security-reviewers
+/services/backend/aios_backend/recovery/                 @tryaios-dev/security-reviewers
 
 # gateway (model requests)
-/services/backend/src/aios_backend/gateway/                  @tryaios-dev/security-reviewers
+/services/backend/aios_backend/gateway/                  @tryaios-dev/security-reviewers
 
 # evidence writer and verifier
 /services/evidence-writer/                                   @tryaios-dev/security-reviewers

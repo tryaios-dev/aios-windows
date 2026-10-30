@@ -13,7 +13,7 @@
     "test": "turbo run test",
     "package:win": "pnpm fetch:llama && pnpm build:backend && turbo run build && pnpm --filter @aios/desktop package",
     "fetch:llama": "uv run python build/llama/fetch.py",
-    "check:py": "uv run ruff check . && uv run lint-imports && uv run mypy packages/py/aios-common/src services/backend/src && uv run python tools/run_tests.py",
+    "check:py": "uv run ruff check . && uv run lint-imports && uv run mypy packages/py/aios-common/src services/backend/aios_backend services/backend/db && uv run python tools/run_tests.py",
     "check:all": "pnpm check:py && pnpm check",
     "build:backend": "uv run pyinstaller build/pyinstaller/backend.spec --distpath build/out --workpath build/out/work --noconfirm",
     "dev:backend": "uv run aios-backend serve",
