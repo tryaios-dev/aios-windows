@@ -14,7 +14,8 @@ test-results/
 # build output
 dist/
 out/
-release/
+# installer output only; a bare `release/` would also hide tools/release/
+/apps/desktop/release/
 build/out/
 # runtime data
 .dev/

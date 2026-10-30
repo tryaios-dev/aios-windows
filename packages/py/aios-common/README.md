@@ -23,7 +23,7 @@ from aios_common.keystore import get_secret
 from aios_common.logging import get_logger, log_event
 
 log = get_logger("api")
-log_event(log, "request_done", status=200, duration_ms=12)   # only allowed keys are written
+log_event(log, "request_done", status=200, duration_ms=12)  # only allowed keys are written
 ```
 
 To log a new kind of field, add its key to `ALLOWED_KEYS` in `logging.py`. Never add a key that
