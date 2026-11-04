@@ -45,6 +45,7 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header", 
 "**/cli.py" = ["T201"]
 "**/db/migrations/**" = ["E501"]
 "**/tests/**" = ["S105", "S106"]
+"tests/engine/**" = ["S310", "S603", "S607"]   # starts llama-server, loopback HTTP
 
 [tool.mypy]
 strict = true

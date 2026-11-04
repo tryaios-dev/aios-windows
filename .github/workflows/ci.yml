@@ -1,5 +1,6 @@
 # CI for the Windows desktop app (B-02, B-05).
 #   lint + unit tests on Linux AND Windows   (B-02 step one; M-23: never Windows-only Python)
+#   llama-server built from pinned source + patch, engine tests (D-03)
 #   backend.exe + installer on Windows       (B-02 step two)
 #   dependency scan                          (B-05)
 # A red run blocks the merge once `main` has a ruleset requiring these checks
@@ -20,6 +21,11 @@ concurrency:
 
 permissions:
   contents: read
+
+env:
+  # Tiny model used only to prove the engine starts, authenticates and answers (D-03).
+  TEST_MODEL_URL: https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories260K.gguf
+  TEST_MODEL_SHA256: 270cba1bd5109f42d03350f60406024560464db173c0e387d91f0426d3bd256d
 
 jobs:
   py-lint:
@@ -75,8 +81,70 @@ jobs:
       - run: pnpm test
       - run: pnpm --filter @aios/desktop test:security
 
+  llama-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - run: uv sync --frozen --all-packages --all-extras
+      - run: uv run python build/llama/build.py cpu
+      - name: Fetch test model
+        run: |
+          curl -sfL -o "$RUNNER_TEMP/test.gguf" "$TEST_MODEL_URL"
+          echo "$TEST_MODEL_SHA256  $RUNNER_TEMP/test.gguf" | sha256sum -c -
+      - name: Engine tests (D-03)
+        env:
+          AIOS_LLAMA_SERVER: ${{ github.workspace }}/build/out/llama/cpu/llama-server
+          AIOS_TEST_MODEL: ${{ runner.temp }}/test.gguf
+        run: uv run pytest -v tests/engine
+
+  llama-windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [cpu, vulkan]
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: ilammy/msvc-dev-cmd@v1
+        with: { arch: x64 }
+      - run: choco install ninja --no-progress
+      - name: Vulkan SDK (version pinned in build/llama/manifest.json)
+        if: matrix.variant == 'vulkan'
+        run: |
+          $v = (Get-Content build/llama/manifest.json | ConvertFrom-Json).vulkan_sdk
+          curl.exe -sfL -o "$env:RUNNER_TEMP\vulkan.exe" "https://sdk.lunarg.com/sdk/download/$v/windows/vulkansdk-windows-X64-$v.exe"
+          & "$env:RUNNER_TEMP\vulkan.exe" --accept-licenses --default-answer --confirm-command install | Out-Null
+          Add-Content $env:GITHUB_ENV "VULKAN_SDK=C:\VulkanSDK\$v"
+          Add-Content $env:GITHUB_PATH "C:\VulkanSDK\$v\bin"
+      - run: uv sync --frozen --all-packages --all-extras
+      - run: uv run python build/llama/build.py ${{ matrix.variant }}
+      - name: Fetch test model
+        run: |
+          curl.exe -sfL -o "$env:RUNNER_TEMP\test.gguf" $env:TEST_MODEL_URL
+          $hash = (Get-FileHash "$env:RUNNER_TEMP\test.gguf" -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne $env:TEST_MODEL_SHA256) { throw "test model digest mismatch: $hash" }
+      # The runner has no GPU: the vulkan variant falls back to its CPU backend here.
+      - name: Engine tests (D-03)
+        env:
+          AIOS_LLAMA_SERVER: ${{ github.workspace }}\build\out\llama\${{ matrix.variant }}\llama-server.exe
+          AIOS_TEST_MODEL: ${{ runner.temp }}\test.gguf
+        run: uv run pytest -v tests/engine
+      - uses: actions/upload-artifact@v4
+        with:
+          name: llama-${{ matrix.variant }}
+          path: |
+            build/out/llama/${{ matrix.variant }}/
+            build/out/llama/manifest-${{ matrix.variant }}.json
+          retention-days: 14
+
   package-windows:
-    needs: [py-lint, py-unit, ts-lint, ts-unit]
+    needs: [py-lint, py-unit, ts-lint, ts-unit, llama-windows]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -86,7 +154,11 @@ jobs:
         with: { node-version-file: .nvmrc, cache: pnpm }
       - run: uv sync --frozen --all-packages --all-extras
       - run: pnpm install --frozen-lockfile
-      - run: pnpm fetch:llama                      # pinned llama-server builds, SHA-256 checked
+      - uses: actions/download-artifact@v4         # patched llama-server builds from llama-windows
+        with:
+          pattern: llama-*
+          path: build/out/llama
+          merge-multiple: true
       - run: pnpm build:backend                    # backend.exe (PyInstaller)
       - run: uv run python tools/smoke_backend_exe.py   # D-01 / AC-10 against the built exe
       - run: pnpm build
@@ -97,6 +169,7 @@ jobs:
           path: |
             apps/desktop/release/*.exe
             build/out/backend/
+            build/out/llama/manifest-*.json
           retention-days: 14                       # artefact retention (B-02)
 
   audit:

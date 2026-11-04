@@ -3,8 +3,8 @@
 Covers what ships in the installer:
 * Python runtime packages in backend.exe (from uv.lock, no dev tools)
 * Node production packages of the Electron app and UI (from pnpm-lock.yaml)
-* bundled binaries: Electron, SQLCipher (build/sqlcipher/pin.json), and llama.cpp once pinned
-  in build/llama/manifest.json
+* bundled binaries: Electron, SQLCipher (build/sqlcipher/pin.json), and llama.cpp built from
+  the source pinned in build/llama/manifest.json
 """
 
 import datetime
@@ -108,6 +108,7 @@ def binary_components() -> list[dict[str, object]]:
                 "type": "application",
                 "name": "llama.cpp",
                 "version": rel,
+                "description": "llama-server built from source with the patches in build/llama/patches/",
                 "purl": f"pkg:github/ggml-org/llama.cpp@{rel}",
             }
         )

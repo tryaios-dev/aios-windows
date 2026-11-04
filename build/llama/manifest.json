@@ -1,17 +1,13 @@
 {
-  "_readme": "B-02: pinned llama.cpp build. fetch.py downloads both zips into build/out/llama and fails on any SHA-256 mismatch. Changing the pin is a reviewed change (CODEOWNERS): update release, commit, url and sha256 together. Digests are the ones GitHub publishes for the release assets.",
-  "llama_cpp_release": "b11960",
-  "commit": "8642541b255bfb5dc39cd351a178be09013a55d6",
-  "builds": {
-    "cpu": {
-      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11960/llama-b11960-bin-win-cpu-x64.zip",
-      "size": 24407745,
-      "sha256": "73f962f82850d244db47eaacb9d913637027b82399124324298576d58c5f4287"
-    },
-    "vulkan": {
-      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11960/llama-b11960-bin-win-vulkan-x64.zip",
-      "size": 37345851,
-      "sha256": "bac6914b5e83523eb008c6789eaa12669f93fbc196c3b9e8237b6672323b33e9"
+  "_readme": "D-03: llama-server is built from this pinned source with the patches below (build/llama/build.py). Changing the pin or a patch is a reviewed change (CODEOWNERS): update release, commit and the patch digests together, then re-run the engine tests. See build/llama/README.md.",
+  "llama_cpp_release": "b12111",
+  "commit": "52e53a76df0298d2c316ae7e704eeec03b0bf478",
+  "repo": "https://github.com/ggml-org/llama.cpp",
+  "patches": [
+    {
+      "name": "0001-api-key-stdin.patch",
+      "sha256": "0e7e0e731ad74dfc56269007f5389e3c9d83925def0c1fd9a1731261ed1301b4"
     }
-  }
+  ],
+  "vulkan_sdk": "1.4.357.0"
 }
