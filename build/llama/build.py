@@ -66,7 +66,20 @@ def checkout(manifest: dict[str, object]) -> Path:
     src = WORK / "src"
     shutil.rmtree(src, ignore_errors=True)
     tag, commit = str(manifest["llama_cpp_release"]), str(manifest["commit"])
-    run("git", "clone", "--quiet", "--depth", "1", "--branch", tag, str(manifest["repo"]), src)
+    # No CRLF conversion (Windows default): the patches must apply to the exact upstream bytes.
+    run(
+        "git",
+        "-c",
+        "core.autocrlf=false",
+        "clone",
+        "--quiet",
+        "--depth",
+        "1",
+        "--branch",
+        tag,
+        str(manifest["repo"]),
+        src,
+    )
     actual = run("git", "-C", src, "rev-parse", "HEAD", capture=True)
     if actual != commit:
         raise SystemExit(f"tag {tag} points at {actual}, manifest.json pins {commit}")
