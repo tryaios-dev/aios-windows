@@ -88,6 +88,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm fetch:llama                      # pinned llama-server builds, SHA-256 checked
       - run: pnpm build:backend                    # backend.exe (PyInstaller)
+      - run: uv run python tools/smoke_backend_exe.py   # D-01 / AC-10 against the built exe
       - run: pnpm build
       - run: pnpm --filter @aios/desktop package   # unsigned: AIOS_SIGN is set only in release.yml
       - uses: actions/upload-artifact@v4

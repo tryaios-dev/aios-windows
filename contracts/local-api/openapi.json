@@ -1,6 +1,17 @@
 {
   "components": {
     "schemas": {
+      "ComponentState": {
+        "enum": [
+          "not_started",
+          "starting",
+          "ok",
+          "degraded",
+          "failed"
+        ],
+        "title": "ComponentState",
+        "type": "string"
+      },
       "Health": {
         "properties": {
           "backend": {
@@ -11,6 +22,12 @@
             "title": "Database",
             "type": "string"
           },
+          "engine": {
+            "$ref": "#/components/schemas/ComponentState"
+          },
+          "evidence_writer": {
+            "$ref": "#/components/schemas/ComponentState"
+          },
           "version": {
             "title": "Version",
             "type": "string"
@@ -19,6 +36,8 @@
         "required": [
           "backend",
           "database",
+          "engine",
+          "evidence_writer",
           "version"
         ],
         "title": "Health",
@@ -47,7 +66,7 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Backend and database are up",
+        "summary": "Backend, database, engine and evidence writer status",
         "tags": [
           "system"
         ]

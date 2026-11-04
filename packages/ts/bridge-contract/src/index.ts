@@ -5,9 +5,13 @@
  */
 import { z } from "zod";
 
+const ComponentState = z.enum(["not_started", "starting", "ok", "degraded", "failed"]);
+
 export const Health = z.object({
   backend: z.string(),
   database: z.enum(["ok", "locked", "error"]),
+  engine: ComponentState,
+  evidence_writer: ComponentState,
   version: z.string(),
 });
 export type Health = z.infer<typeof Health>;

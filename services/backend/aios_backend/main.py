@@ -10,6 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
+from aios_backend.components import Components
 from aios_backend.config import Settings
 from aios_backend.routes import VERSION
 from aios_backend.routes import router as system_router
@@ -79,6 +80,7 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.db = database
+    app.state.components = Components()
     register_error_handlers(app)
     app.include_router(system_router)
     app.add_middleware(LoopbackTokenMiddleware, public_paths=settings.public_paths)
