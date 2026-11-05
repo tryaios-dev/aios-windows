@@ -42,20 +42,23 @@ class Settings:
     db_key: str | None  # None -> key from the OS keystore
     log_file: Path | None
     backups_dir: Path
-    # llama-server CPU build and the folder the user's models live in (D-04 spike, D-05).
-    engine_dir: Path = Path()
+    # llama-server builds (engine_root/cpu, engine_root/vulkan) and the user's models folder.
+    engine_root: Path = Path()
     models_dir: Path = Path()
+    engine_idle_unload_s: float = 300.0
+    # "Safe mode (CPU)" (MVP 4.3): never use the GPU build. The settings screen sets it later.
+    engine_safe_mode: bool = False
     # Paths reachable without the token. Empty in the shipped app.
     public_paths: frozenset[str] = frozenset()
     docs_enabled: bool = False
 
 
-def _engine_dir() -> Path:
-    """Installed: resources/backend/backend.exe next to resources/llama/cpu/ (electron-builder.yml).
-    From source: the build of build/llama/build.py."""
+def _engine_root() -> Path:
+    """Installed: resources/backend/backend.exe next to resources/llama/{cpu,vulkan}/
+    (electron-builder.yml). From source: the output of build/llama/build.py."""
     if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parents[1] / "llama" / "cpu"
-    return REPO_ROOT / "build" / "out" / "llama" / "cpu"
+        return Path(sys.executable).resolve().parents[1] / "llama"
+    return REPO_ROOT / "build" / "out" / "llama"
 
 
 def load(profile: Profile | str | None = None) -> Settings:
@@ -70,7 +73,7 @@ def load(profile: Profile | str | None = None) -> Settings:
             db_key=None,
             log_file=paths.logs_dir() / "backend.log",
             backups_dir=paths.data_dir() / "backups",
-            engine_dir=_engine_dir(),
+            engine_root=_engine_root(),
             models_dir=paths.models_dir(),
         )
 
@@ -82,7 +85,7 @@ def load(profile: Profile | str | None = None) -> Settings:
             db_key=DEV_DB_KEY,
             log_file=DEV_DIR / "backend.log",
             backups_dir=DEV_DIR / "backups",
-            engine_dir=_engine_dir(),
+            engine_root=_engine_root(),
             models_dir=DEV_DIR / "models",
             public_paths=frozenset({"/health", "/docs", "/openapi.json"}),
             docs_enabled=True,
@@ -96,6 +99,6 @@ def load(profile: Profile | str | None = None) -> Settings:
         db_key=TEST_DB_KEY,
         log_file=None,
         backups_dir=tmp / "backups",
-        engine_dir=_engine_dir(),
+        engine_root=_engine_root(),
         models_dir=tmp / "models",
     )

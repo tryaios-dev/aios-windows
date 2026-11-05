@@ -96,7 +96,8 @@ not a filtered copy of its own:
 
 No `APPDATA`, no `PROGRAMDATA`, no `LLAMA_*`: neither config file is found and
 no option comes from the environment. Command-line flags also override both.
-`minimal_env()` in `tests/engine/test_engine.py` is the reference; the process manager (D-05)
+`minimal_env()` in `tests/engine/test_engine.py` is the reference; the backend launcher
+(`services/backend/aios_backend/engine/launcher.py`, used by the process manager)
 implements it.
 
 ## Engine output

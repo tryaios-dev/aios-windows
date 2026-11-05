@@ -109,3 +109,28 @@ def test_ready_line_matches_the_canonical_golden_vector(capsys) -> None:  # type
     canonical = next(v for v in vectors if v.get("canonical"))
     print_ready(canonical["api_port"])
     assert capsys.readouterr().out == canonical["line"] + "\n"
+
+
+def test_ipc_51_backend_exits_when_its_parent_is_gone(settings: Settings, db: Database) -> None:
+    """A crashed Electron main cannot leave the backend (and so the engine) running."""
+    import psutil
+
+    parent = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+    ready = threading.Event()
+
+    async def main() -> None:
+        task = asyncio.create_task(
+            serve(settings, db, 0, lambda port: ready.set(), parent=psutil.Process(parent.pid))
+        )
+        while not ready.is_set():
+            await asyncio.sleep(0.01)
+        parent.kill()  # Electron main crashes
+        parent.wait()  # reaped (here it is our child; a dead Electron is not a zombie of ours)
+        await asyncio.wait_for(task, timeout=15)  # serve() returns: the backend exits
+
+    try:
+        asyncio.run(main())
+    finally:
+        if parent.poll() is None:
+            parent.kill()
+    assert ready.is_set()

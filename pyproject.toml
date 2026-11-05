@@ -23,6 +23,7 @@ dev = [
     "import-linter>=2.1",
     "pip-audit>=2.7",
     "jsonschema>=4.23",
+    "types-psutil>=6.1",
 ]
 
 [tool.ruff]

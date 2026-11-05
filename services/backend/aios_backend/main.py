@@ -67,16 +67,19 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
     database = db or Database(settings)
     components = Components()
     engine = EngineManager(
-        settings.engine_dir,
+        settings.engine_root,
         settings.models_dir,
         settings.models_dir.parent / "engine-tmp",
         components,
+        idle_unload_s=settings.engine_idle_unload_s,
+        safe_mode=settings.engine_safe_mode,
     )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        await engine.startup()  # ends orphaned engines (IPC-52), starts the watcher
         yield
-        engine.stop()
+        await engine.shutdown()
         database.dispose()
 
     docs = settings.docs_enabled

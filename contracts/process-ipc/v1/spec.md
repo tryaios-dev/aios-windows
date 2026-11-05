@@ -220,7 +220,7 @@ tests close the rule; the rule is binding from the freeze regardless.
 
 | Rule | Test(s) | Status |
 | --- | --- | --- |
-| IPC-01 processes | process manager tests (D-05); writer start-up tests (F-01) | pending D-05, F-01 |
+| IPC-01 processes | `services/backend/tests/test_engine_manager.py` (the backend starts only llama-server from `engine_root/{cpu,vulkan}`); writer start-up tests (F-01) | engine side proven; pending F-01 |
 | IPC-02 gateway is a module | gateway endpoint tests (G-01); `aios_backend/gateway/` is reviewer-owned in `.github/CODEOWNERS` | pending G-01 |
 | IPC-03 only the writer opens evidence.db | `services/backend/tests/test_database.py::test_ac_14_backend_declares_exactly_one_database`, `services/backend/tests/test_layout_rules.py::test_ac_14_no_backend_code_names_evidence_db`; writer API tests (F-01) | partly; pending F-01 |
 | IPC-04 secrets only in the keystore | import-linter contract "Only aios_common.keystore imports keyring" (`pyproject.toml`); `services/backend/tests/test_database.py::test_first_start_creates_key_in_keystore` | proven |
@@ -239,10 +239,10 @@ tests close the rule; the rule is binding from the freeze regardless.
 | IPC-30 engine key over stdin | `tests/engine/test_engine.py::test_answers_a_prompt_with_the_key`, `::test_rejects_requests_without_the_key`, `::test_refuses_to_start_without_a_key`, `::test_key_not_in_command_line_or_environment`; backend launcher: `services/backend/tests/test_spike.py::test_ipc_30_engine_key_not_in_its_command_line_or_environment` | proven |
 | IPC-31 engine flags | `tests/engine/test_engine.py::test_slots_and_webui_are_off` (and every engine test runs with the exact flag set); `services/backend/tests/test_engine_launcher.py::test_ipc_31_fixed_flags_are_exactly_the_contract_set` | proven |
 | IPC-32 engine environment | every `tests/engine/test_engine.py` test runs with `minimal_env()`; `test_engine_launcher.py::test_ipc_32_environment_is_built_from_scratch`, `test_spike.py::test_ipc_30_engine_key_not_in_its_command_line_or_environment` (no `LLAMA*` variable reaches the engine) | proven |
-| IPC-33 engine readiness and state | `test_api.py::test_health_reports_component_states`; process manager tests (D-05) | partly; pending D-05 |
+| IPC-33 engine readiness and state | `test_api.py::test_health_reports_component_states`; `test_engine_manager.py` (states through start, crash, idle unload, GPU fallback); `test_engine_lifetime.py::test_idle_unload_frees_the_engine_and_the_next_message_restarts_it` (real engine) | proven |
 | IPC-34 engine `/health` (question 12) | `tests/engine/test_engine.py::test_health_is_the_only_public_endpoint` | decision pending reviewer |
 | IPC-40, IPC-41, IPC-42 evidence writer | writer start-up, auth and API tests (F-01) | pending F-01 |
-| IPC-50 to IPC-53 lifetime | `test_engine_launcher.py::test_ipc_50_closing_the_job_kills_its_processes` (Windows CI), `test_spike.py::test_engine_stops_with_the_backend`; parent-exit and orphan clean-up: process manager tests (D-05), AC-09 test | IPC-50 proven; IPC-51 to IPC-53 pending D-05 |
+| IPC-50 to IPC-53 lifetime | IPC-50: `test_engine_launcher.py::test_ipc_50_closing_the_job_kills_its_processes`, `test_engine_lifetime.py::test_ac_09_no_engine_remains_after_the_backend_is_killed` (Windows CI, real engine, backend hard-killed), `test_spike.py::test_engine_stops_with_the_backend`. IPC-51: `test_startup.py::test_ipc_51_backend_exits_when_its_parent_is_gone`. IPC-52: `test_engine_orphans.py` (incl. `test_ac_09_real_orphan_left_by_a_crash_is_killed`, Windows CI), `test_engine_manager.py::test_shutdown_stops_the_engine`. IPC-53: `test_engine_lifetime.py` (engine stdin closed), `handshake.read_handshake` closes the backend's stdin; writer pipe (F-01) | IPC-50 to IPC-52 proven; IPC-53 engine side proven, writer pending F-01; manual AC-09 run on the clean VM |
 | IPC-60 renderer sandbox | `apps/desktop/tests/security/csp.test.ts` ("ac-10 renderer hardening"); eslint renderer rules (`packages/ts/config`) | proven |
 | IPC-61, IPC-62 bridge and main | IPC handler tests (C-02); security suite (L-01, AC-11) | pending C-02, L-01 |
 

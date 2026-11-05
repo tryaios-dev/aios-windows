@@ -21,13 +21,13 @@ router = APIRouter(prefix="/spike", tags=["spike (temporary, D-04)"])
 async def chat_completions(body: ChatCompletionRequest, request: Request) -> StreamingResponse:
     manager: EngineManager = request.app.state.engine
     try:
-        engine = await service.start_engine(manager)
+        await service.start_engine(manager)  # errors map to 409/503 before streaming
     except NoModel:
         raise HTTPException(status_code=409, detail="no_model") from None
     except EngineError:
         raise HTTPException(status_code=503, detail="engine_failed") from None
     return StreamingResponse(
-        service.stream_completion(engine, body),
+        service.stream_completion(manager, body),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-store"},
     )

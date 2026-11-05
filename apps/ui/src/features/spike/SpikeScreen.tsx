@@ -1,9 +1,9 @@
 import * as React from "react";
-import type { SpikeAnswer } from "@aios/bridge-contract";
+import type { Health, SpikeAnswer } from "@aios/bridge-contract";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/feedback";
 import { KeyValue, SectionLabel } from "@/components/ui/layout";
-import { bridge } from "@/bridge";
+import { bridge, useHealth } from "@/bridge";
 
 /**
  * SPIKE-D04 (temporary): send one prompt to the local model and show the answer with its timings.
@@ -17,12 +17,21 @@ const ERRORS: Record<string, string> = {
   backend_unavailable: "The backend is not reachable.",
 };
 
+/** Engine state from GET /health (process manager, D-05). */
+export function engineLine(h: Health): string {
+  if (h.engine === "not_started") return h.engine_idle_unloaded ? "Unloaded after idle time; starts on the next question" : "Not started; starts on the first question";
+  const where = h.engine_build === "vulkan" ? "GPU" : "CPU";
+  const state = { starting: "Loading", ok: "Running", degraded: "Degraded", failed: "Stopped" }[h.engine];
+  return h.engine === "failed" ? "Stopped; restarts on the next question" : `${state} on the ${where} build${h.engine_model ? ` · ${h.engine_model}` : ""}`;
+}
+
 const seconds = (ms: number | null) => (ms === null ? "–" : `${(ms / 1000).toFixed(2)} s`);
 
 export function SpikeScreen() {
   const [prompt, setPrompt] = React.useState("In one sentence, what is a local AI model?");
   const [busy, setBusy] = React.useState(false);
   const [answer, setAnswer] = React.useState<SpikeAnswer | null>(null);
+  const health = useHealth().data;
 
   const ask = async () => {
     setBusy(true);
@@ -37,6 +46,12 @@ export function SpikeScreen() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto bg-paper p-6">
       <SectionLabel>Local answer (temporary spike)</SectionLabel>
+      {health && <KeyValue dense rows={[{ k: "Engine", v: engineLine(health) }]} />}
+      {health?.engine_cpu_fallback && (
+        <Callout tone="caution" title="Running on the CPU">
+          The GPU engine failed, so AIOS switched to the CPU build for this session. Answers are slower.
+        </Callout>
+      )}
       <textarea
         aria-label="Prompt"
         className="min-h-24 w-full rounded-md border border-line bg-paper-raised p-3 text-sm"

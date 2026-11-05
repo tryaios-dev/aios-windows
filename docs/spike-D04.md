@@ -16,8 +16,9 @@ exist. Proves installer → Electron → backend → llama-server → renderer o
 
 **Removal:** G-01 cannot close while `git grep SPIKE-D04` finds anything outside this file.
 
-Not temporary: the engine launcher (`services/backend/aios_backend/engine/`), which the
-process manager (D-05) builds on, and `tools/bench/engine_bench.py`.
+Not temporary: the engine launcher and process manager (`services/backend/aios_backend/engine/`,
+D-05) and `tools/bench/engine_bench.py`. The spike endpoint uses the process manager like the
+gateway will.
 
 ## M1 check on a clean Windows 11 VM
 
@@ -55,6 +56,6 @@ VM run (2026-11-05) also passed M1: installed `AIOS Setup 0.1.0.exe` (unsigned, 
 f924eb4), answer returned, no firewall prompt, no `llama-server.exe` left after closing the app.
 
 Observed: the first question waits for the model to load (about a minute in the VM). The
-chat screen should show that state (engine `starting` is already in `/health`).
+chat screen should show that state (engine `starting` is in `/health`; the spike screen shows it).
 
 Any change to the tier table goes to the product owner.

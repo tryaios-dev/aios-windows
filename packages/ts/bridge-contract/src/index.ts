@@ -11,6 +11,14 @@ export const Health = z.object({
   backend: z.string(),
   database: z.enum(["ok", "locked", "error"]),
   engine: ComponentState,
+  /** Build of the starting or running engine. */
+  engine_build: z.enum(["cpu", "vulkan"]).nullable(),
+  /** Model file of the starting or running engine. */
+  engine_model: z.string().nullable(),
+  /** The GPU build failed this session; the engine runs on the CPU build (tell the user). */
+  engine_cpu_fallback: z.boolean(),
+  /** Unloaded after the idle period; the next message starts it again. */
+  engine_idle_unloaded: z.boolean(),
   evidence_writer: ComponentState,
   version: z.string(),
 });

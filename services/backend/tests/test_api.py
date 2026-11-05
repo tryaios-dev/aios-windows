@@ -13,6 +13,10 @@ def test_health_with_token(client: TestClient) -> None:
         "backend": "ok",
         "database": "ok",
         "engine": "not_started",
+        "engine_build": None,
+        "engine_model": None,
+        "engine_cpu_fallback": False,
+        "engine_idle_unloaded": False,
         "evidence_writer": "not_started",
         "version": "0.1.0",
     }

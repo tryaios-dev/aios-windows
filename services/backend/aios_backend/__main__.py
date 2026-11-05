@@ -6,23 +6,31 @@
 3. Back up chats.db and run migrations; restore the backup if one fails.
 4. Bind 127.0.0.1 (port 0 = the OS picks one) and serve the API.
 5. Print one READY line with the bound port once the server accepts requests.
+6. Exit when the parent (Electron main) is gone, so a crashed app cannot leave the backend
+   running (IPC-51). The engine dies with the backend through the Job Object (IPC-50).
 """
 
 import asyncio
 import json
+import os
 import socket
 import sys
 from collections.abc import Callable
 
+import psutil
 import uvicorn
 
 from aios_backend.config import Profile, Settings, load
 from aios_backend.main import configure_logging, create_app
 from aios_common.handshake import HandshakeError, read_handshake
+from aios_common.logging import get_logger, log_event
 from db import migrate
 from db.session import Database
 
 EXIT_BAD_HANDSHAKE = 2
+PARENT_CHECK_S = 1.0
+
+log = get_logger("api")
 
 
 def bind_loopback(port: int) -> socket.socket:
@@ -40,11 +48,22 @@ def print_ready(port: int) -> None:
     sys.stdout.flush()
 
 
+async def watch_parent(parent: psutil.Process, server: uvicorn.Server) -> None:
+    """IPC-51: shut down cleanly (engine stopped, database closed) once the parent is gone.
+    ``is_running()`` also compares the start time, so a reused PID does not count."""
+    while not server.should_exit:
+        await asyncio.sleep(PARENT_CHECK_S)
+        if not parent.is_running():
+            log_event(log, "parent_gone")
+            server.should_exit = True
+
+
 async def serve(
     settings: Settings,
     db: Database,
     port: int,
     on_ready: Callable[[int], None] = print_ready,
+    parent: psutil.Process | None = None,
 ) -> None:
     sock = bind_loopback(port)
     server = uvicorn.Server(
@@ -59,7 +78,11 @@ async def serve(
             return
         await asyncio.sleep(0.01)
     on_ready(sock.getsockname()[1])
+    if parent is not None:
+        watcher = asyncio.create_task(watch_parent(parent, server))
     await task
+    if parent is not None:
+        watcher.cancel()
 
 
 def main() -> None:
@@ -72,7 +95,7 @@ def main() -> None:
     configure_logging(settings)
     db = Database(settings)
     migrate.upgrade(db)  # synchronous, before the event loop starts
-    asyncio.run(serve(settings, db, hs.api_port))
+    asyncio.run(serve(settings, db, hs.api_port, parent=psutil.Process(os.getppid())))
 
 
 if __name__ == "__main__":

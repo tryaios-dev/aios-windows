@@ -87,6 +87,36 @@
           "engine": {
             "$ref": "#/components/schemas/ComponentState"
           },
+          "engine_build": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine Build"
+          },
+          "engine_cpu_fallback": {
+            "title": "Engine Cpu Fallback",
+            "type": "boolean"
+          },
+          "engine_idle_unloaded": {
+            "title": "Engine Idle Unloaded",
+            "type": "boolean"
+          },
+          "engine_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine Model"
+          },
           "evidence_writer": {
             "$ref": "#/components/schemas/ComponentState"
           },
@@ -99,6 +129,10 @@
           "backend",
           "database",
           "engine",
+          "engine_build",
+          "engine_model",
+          "engine_cpu_fallback",
+          "engine_idle_unloaded",
           "evidence_writer",
           "version"
         ],

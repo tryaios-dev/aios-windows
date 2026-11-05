@@ -33,8 +33,8 @@ def spike_client(settings: Settings, db: Database, tmp_path: Path) -> Iterator[T
     models.mkdir()
     if MODEL:
         shutil.copy(MODEL, models / "test.gguf")
-    engine_dir = Path(SERVER).parent if SERVER else tmp_path / "no-engine"
-    s = dataclasses.replace(settings, engine_dir=engine_dir, models_dir=models)
+    engine_root = Path(SERVER).parent.parent if SERVER else tmp_path / "no-engine"
+    s = dataclasses.replace(settings, engine_root=engine_root, models_dir=models)
     headers = {"Authorization": f"Bearer {LAUNCH_TOKEN}"}
     with TestClient(create_app(s, db), client=LOOPBACK, headers=headers) as c:
         yield c
@@ -91,7 +91,9 @@ def test_engine_stops_with_the_backend(settings: Settings, db: Database, tmp_pat
     models = tmp_path / "models"
     models.mkdir()
     shutil.copy(str(MODEL), models / "test.gguf")
-    s = dataclasses.replace(settings, engine_dir=Path(str(SERVER)).parent, models_dir=models)
+    s = dataclasses.replace(
+        settings, engine_root=Path(str(SERVER)).parent.parent, models_dir=models
+    )
     headers = {"Authorization": f"Bearer {LAUNCH_TOKEN}"}
     with TestClient(create_app(s, db), client=LOOPBACK, headers=headers) as c:
         with c.stream("POST", "/spike/v1/chat/completions", json=PROMPT) as resp:

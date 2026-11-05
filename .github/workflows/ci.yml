@@ -99,12 +99,12 @@ jobs:
           AIOS_LLAMA_SERVER: ${{ github.workspace }}/build/out/llama/cpu/llama-server
           AIOS_TEST_MODEL: ${{ runner.temp }}/test.gguf
         run: uv run pytest -v tests/engine
-      - name: Backend -> engine end to end (D-04 spike)
+      - name: Backend -> engine end to end (D-04 spike, D-05 process manager)
         env:
           AIOS_LLAMA_SERVER: ${{ github.workspace }}/build/out/llama/cpu/llama-server
           AIOS_TEST_MODEL: ${{ runner.temp }}/test.gguf
         working-directory: services/backend
-        run: uv run pytest -v tests/test_spike.py tests/test_engine_launcher.py
+        run: uv run pytest -v tests/test_spike.py tests/test_engine_launcher.py tests/test_engine_lifetime.py
 
   llama-windows:
     strategy:
@@ -142,13 +142,13 @@ jobs:
           AIOS_LLAMA_SERVER: ${{ github.workspace }}\build\out\llama\${{ matrix.variant }}\llama-server.exe
           AIOS_TEST_MODEL: ${{ runner.temp }}\test.gguf
         run: uv run pytest -v tests/engine
-      - name: Backend -> engine end to end (D-04 spike), incl. Job Object
+      - name: Backend -> engine end to end (D-04 spike, D-05 process manager), incl. Job Object and AC-09
         if: matrix.variant == 'cpu'
         env:
           AIOS_LLAMA_SERVER: ${{ github.workspace }}\build\out\llama\cpu\llama-server.exe
           AIOS_TEST_MODEL: ${{ runner.temp }}\test.gguf
         working-directory: services/backend
-        run: uv run pytest -v tests/test_spike.py tests/test_engine_launcher.py
+        run: uv run pytest -v tests/test_spike.py tests/test_engine_launcher.py tests/test_engine_lifetime.py
       - uses: actions/upload-artifact@v4
         with:
           name: llama-${{ matrix.variant }}

@@ -10,7 +10,7 @@ from collections.abc import AsyncIterator
 import httpx
 
 from aios_backend.apps.spike.schemas import ChatCompletionRequest
-from aios_backend.engine import Engine, EngineManager
+from aios_backend.engine import Engine, EngineError, EngineManager, NoModel
 from aios_common.logging import get_logger, log_event
 
 log = get_logger("spike")
@@ -31,12 +31,20 @@ def engine_body(req: ChatCompletionRequest) -> dict[str, object]:
     }
 
 
-async def stream_completion(engine: Engine, req: ChatCompletionRequest) -> AsyncIterator[bytes]:
-    """Engine server-sent events, passed through unchanged (OpenAI chunk format)."""
+async def stream_completion(
+    manager: EngineManager, req: ChatCompletionRequest
+) -> AsyncIterator[bytes]:
+    """Engine server-sent events, passed through unchanged (OpenAI chunk format).
+
+    Holds the engine for the whole answer so it is not unloaded mid-stream.
+    """
     began = time.monotonic()
     status = 0
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(600, connect=5)) as client:
+        async with (
+            manager.use() as engine,
+            httpx.AsyncClient(timeout=httpx.Timeout(600, connect=5)) as client,
+        ):
             async with client.stream(
                 "POST",
                 f"{engine.base_url}/v1/chat/completions",
@@ -49,6 +57,10 @@ async def stream_completion(engine: Engine, req: ChatCompletionRequest) -> Async
                     return
                 async for chunk in resp.aiter_raw():
                     yield chunk
+    except (EngineError, NoModel):
+        yield b'data: {"error": "engine_failed"}\n\n'
+    except httpx.HTTPError:  # e.g. the engine crashed mid-answer; the watcher restarts it
+        yield b'data: {"error": "engine_error"}\n\n'
     finally:
         log_event(
             log,
