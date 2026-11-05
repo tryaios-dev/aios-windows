@@ -1,17 +1,22 @@
 {
-  "_readme": "B-02: pinned llama.cpp build. fetch.py downloads both zips into build/out/llama and fails on any SHA-256 mismatch. Changing the pin is a reviewed change (CODEOWNERS): update release, commit, url and sha256 together. Digests are the ones GitHub publishes for the release assets.",
+  "_readme": "B-02: pinned llama.cpp build. fetch.py downloads both zips into build/out/llama and fails on any SHA-256 mismatch. Changing the pin is a reviewed change (CODEOWNERS): update release, commit, url and sha256 together. Digests are the ones GitHub publishes for the release assets. Builds are listed per platform (same ids as the platform layers); AIOS ships the windows set only. Another OS adds its own entry with its binary name.",
   "llama_cpp_release": "b11960",
   "commit": "8642541b255bfb5dc39cd351a178be09013a55d6",
-  "builds": {
-    "cpu": {
-      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11960/llama-b11960-bin-win-cpu-x64.zip",
-      "size": 24407745,
-      "sha256": "73f962f82850d244db47eaacb9d913637027b82399124324298576d58c5f4287"
-    },
-    "vulkan": {
-      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11960/llama-b11960-bin-win-vulkan-x64.zip",
-      "size": 37345851,
-      "sha256": "bac6914b5e83523eb008c6789eaa12669f93fbc196c3b9e8237b6672323b33e9"
+  "platforms": {
+    "windows": {
+      "binary": "llama-server.exe",
+      "builds": {
+        "cpu": {
+          "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11960/llama-b11960-bin-win-cpu-x64.zip",
+          "size": 24407745,
+          "sha256": "73f962f82850d244db47eaacb9d913637027b82399124324298576d58c5f4287"
+        },
+        "vulkan": {
+          "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11960/llama-b11960-bin-win-vulkan-x64.zip",
+          "size": 37345851,
+          "sha256": "bac6914b5e83523eb008c6789eaa12669f93fbc196c3b9e8237b6672323b33e9"
+        }
+      }
     }
   }
 }

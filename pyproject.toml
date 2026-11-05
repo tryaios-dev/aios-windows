@@ -70,7 +70,8 @@ name = "Only db.sqlcipher imports sqlcipher3"
 type = "forbidden"
 source_modules = [
     "aios_backend.main", "aios_backend.cli", "aios_backend.config", "aios_backend.routes",
-    "aios_backend.apps", "db.session", "db.migrate", "db.base", "db.models", "db.registry",
+    "aios_backend.apps", "aios_backend.deps", "aios_backend.errors",
+    "db.session", "db.migrate", "db.base", "db.models", "db.registry", "db.outbox", "db.lookups",
 ]
 forbidden_modules = ["sqlcipher3"]
 allow_indirect_imports = true
@@ -78,19 +79,23 @@ allow_indirect_imports = true
 [[tool.importlinter.contracts]]
 name = "Only aios_common.keystore imports keyring"
 type = "forbidden"
-source_modules = ["aios_backend", "db", "aios_common.handshake", "aios_common.asgi_auth", "aios_common.logging", "aios_common.paths"]
+source_modules = ["aios_backend", "db", "aios_common.handshake", "aios_common.asgi_auth", "aios_common.logging", "aios_common.paths", "aios_common.platforms", "aios_common.canonical"]
 forbidden_modules = ["keyring"]
 allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
 name = "Backend apps never import each other (same rule as apps/ui/src/features)"
 type = "independence"
-modules = ["aios_backend.apps.setup", "aios_backend.apps.workspace"]
+modules = [
+    "aios_backend.apps.chat", "aios_backend.apps.evidence", "aios_backend.apps.models", "aios_backend.apps.projects", "aios_backend.apps.search", "aios_backend.apps.settings", "aios_backend.apps.setup",
+]
 
 [[tool.importlinter.contracts]]
 name = "App layers: router -> service -> repository -> models"
 type = "layers"
-containers = ["aios_backend.apps.setup", "aios_backend.apps.workspace"]
+containers = [
+    "aios_backend.apps.chat", "aios_backend.apps.evidence", "aios_backend.apps.models", "aios_backend.apps.projects", "aios_backend.apps.search", "aios_backend.apps.settings", "aios_backend.apps.setup",
+]
 layers = ["router", "service", "repository", "models"]
 
 [[tool.importlinter.contracts]]
@@ -98,7 +103,13 @@ name = "Routes stay thin: no ORM, DB driver, processes or raw network"
 type = "forbidden"
 source_modules = [
     "aios_backend.routes",
-    "aios_backend.apps.setup.router", "aios_backend.apps.workspace.router",
+    "aios_backend.apps.chat.router",
+    "aios_backend.apps.evidence.router",
+    "aios_backend.apps.models.router",
+    "aios_backend.apps.projects.router",
+    "aios_backend.apps.search.router",
+    "aios_backend.apps.settings.router",
+    "aios_backend.apps.setup.router",
 ]
 forbidden_modules = ["sqlalchemy", "sqlcipher3", "subprocess", "httpx", "socket"]
 allow_indirect_imports = true

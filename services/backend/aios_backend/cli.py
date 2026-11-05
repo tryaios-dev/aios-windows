@@ -3,8 +3,9 @@
     uv run aios-backend serve                     # API on http://127.0.0.1:8765 (/health, /docs)
     uv run aios-backend migrate | downgrade -1 | showmigrations | check
     uv run aios-backend makemigrations -m "add tags"
-    uv run aios-backend sql "SELECT * FROM preferences" | reset-db --yes
+    uv run aios-backend sql "SELECT * FROM settings" | reset-db --yes
     uv run aios-backend routes | openapi [--check]
+    uv run aios-backend serve-e2e --data DIR      # end-to-end tests only (token over stdin)
 
 Works on the dev profile (services/backend/.dev/) or the test profile, never on the desktop
 profile: real user data is only touched by backend.exe itself.
@@ -15,10 +16,12 @@ import asyncio
 import json
 import secrets
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 from sqlalchemy import text
 
+from aios_backend.apps.chat.answers import ModelInfo
 from aios_backend.config import Profile, load
 from db import migrate
 from db.session import Database
@@ -126,6 +129,46 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+class EchoAnswers:
+    """End-to-end tests only (``serve-e2e --echo``): answers by repeating the question, so chat,
+    evidence and search can be tested before the local engine exists. Never used by backend.exe."""
+
+    def model(self, provider: str, model_id: str | None) -> ModelInfo | None:
+        if provider != "local":
+            return None
+        return ModelInfo(model_id=model_id or "e2e-echo", context_length=4096, runtime="e2e-echo")
+
+    def answer(self, provider: str, model_id: str, messages: list[dict[str, str]]) -> Iterator[str]:
+        question = messages[-1]["content"] if messages else ""
+        yield "You said: "
+        yield question
+
+
+def cmd_serve_e2e(args: argparse.Namespace) -> int:
+    """Throw-away backend for end-to-end tests: test profile (fixed test keys, no keystore) in
+    ``--data``, launch token over stdin and a READY line, exactly like backend.exe."""
+    import dataclasses
+
+    from aios_backend.__main__ import free_port, serve
+    from aios_common.handshake import read_handshake
+
+    hs = read_handshake()
+    data = Path(args.data).resolve()
+    settings = dataclasses.replace(
+        load(Profile.TEST),
+        chats_db=data / "chats.db",
+        backups_dir=data / "backups",
+        recovery_pkg=data / "recovery.pkg",
+        models_dir=data / "models",
+    )
+    data.mkdir(parents=True, exist_ok=True)
+    db = Database(settings)
+    migrate.upgrade(db)
+    answers = EchoAnswers() if args.echo else None
+    asyncio.run(serve(settings, db, hs.api_port or free_port(), answers))
+    return 0
+
+
 def openapi_schema() -> str:
     from aios_backend.main import create_app
 
@@ -198,6 +241,11 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("serve", help="run the API for development (dev profile)")
     p.add_argument("--port", type=int, default=8765)
     p.set_defaults(func=cmd_serve)
+
+    p = sub.add_parser("serve-e2e", help="throw-away backend for end-to-end tests (test profile)")
+    p.add_argument("--data", required=True, help="empty folder for the test database and files")
+    p.add_argument("--echo", action="store_true", help="answer messages by echoing them (no model)")
+    p.set_defaults(func=cmd_serve_e2e)
 
     p = sub.add_parser("openapi", help="write contracts/local-api/openapi.json")
     p.add_argument("--check", action="store_true", help="fail if the committed file is out of date")

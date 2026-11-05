@@ -10,7 +10,7 @@ from sqlalchemy import text
 
 from aios_backend.config import Settings
 from db import migrate, session
-from db.models import Preference
+from db.models import Project
 from db.session import Database
 from db.sqlcipher import DatabaseKeyMissing
 
@@ -36,15 +36,22 @@ def test_migrations_downgrade_and_upgrade_again(db: Database) -> None:
 
 def test_rows_round_trip(db: Database) -> None:
     with db.session() as s:
-        s.add(Preference(key="theme", value='"dark"'))
+        s.add(
+            Project(
+                id="p1",
+                name="Round trip",
+                classification="internal",
+                classification_source="project",
+            )
+        )
         s.commit()
     with db.session() as s:
-        assert s.get(Preference, "theme").value == '"dark"'  # type: ignore[union-attr]
+        assert s.get(Project, "p1").name == "Round trip"  # type: ignore[union-attr]
 
 
 def test_ac_06_chats_db_is_unreadable_without_the_key(db: Database) -> None:
     with pytest.raises(sqlite3.DatabaseError):
-        sqlite3.connect(db.settings.chats_db).execute("SELECT * FROM preferences").fetchall()
+        sqlite3.connect(db.settings.chats_db).execute("SELECT * FROM settings").fetchall()
 
 
 def test_ac_06_wrong_key_fails_fast(db: Database) -> None:

@@ -1,6 +1,7 @@
+import { useNavigate } from "react-router";
 import { ArrowRight, FileSignature, Lock, WifiOff } from "lucide-react";
 import { motion } from "motion/react";
-import { EASE } from "@/lib/motion";
+import { APP_VERSION } from "@/bridge/sim/store";
 import { Button } from "@/components/ui/button";
 import { Plate, StepBody, StepHeading } from "../SetupFrame";
 
@@ -10,7 +11,8 @@ const PROMISES = [
   { icon: WifiOff, text: "Works with no internet." },
 ];
 
-export function WelcomeStep({ onContinue, onRestore }: { onContinue: () => void; onRestore: () => void }) {
+export function WelcomeStep({ onContinue }: { onContinue: () => void }) {
+  const navigate = useNavigate();
   return (
     <StepBody className="flex min-h-full flex-col lg:pt-20">
       <StepHeading title="Private AI on this computer." rule className="mb-10" />
@@ -23,9 +25,12 @@ export function WelcomeStep({ onContinue, onRestore }: { onContinue: () => void;
               className="flex items-center gap-4 px-5 py-4 sm:px-6"
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.24, ease: EASE, delay: 0.08 + i * 0.04 }}
+              transition={{ duration: 0.24, ease: [0.2, 0.7, 0.2, 1], delay: 0.08 + i * 0.04 }}
             >
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-line-soft bg-paper-raised text-ink-soft" aria-hidden>
+              <span
+                className="flex size-8 shrink-0 items-center justify-center rounded-md border border-line-soft bg-paper-raised text-ink-soft"
+                aria-hidden
+              >
                 <Icon className="size-4" strokeWidth={1.75} />
               </span>
               <span className="text-md leading-6 text-ink">{text}</span>
@@ -38,12 +43,12 @@ export function WelcomeStep({ onContinue, onRestore }: { onContinue: () => void;
         <Button variant="primary" size="lg" onClick={onContinue} trailing={<ArrowRight className="size-3.5" />}>
           Set up AIOS
         </Button>
-        <Button variant="secondary" size="lg" onClick={onRestore}>
+        <Button variant="secondary" size="lg" onClick={() => navigate("/setup/restore")}>
           Restore from a backup
         </Button>
       </div>
 
-      <p className="label-mono mt-auto pt-16">AIOS {__APP_VERSION__} · internal pilot build</p>
+      <p className="label-mono mt-auto pt-16">AIOS {APP_VERSION} · internal pilot build</p>
     </StepBody>
   );
 }

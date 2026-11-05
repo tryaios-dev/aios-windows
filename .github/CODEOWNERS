@@ -15,7 +15,14 @@
 # storage encryption and recovery
 /services/backend/db/                                          @tryaios-dev/security-reviewers
 /packages/py/aios-common/src/aios_common/keystore.py         @tryaios-dev/security-reviewers
-/services/backend/aios_backend/recovery/                 @tryaios-dev/security-reviewers
+/packages/py/aios-common/src/aios_common/platforms/          @tryaios-dev/security-reviewers
+/apps/desktop/src/main/platform/                             @tryaios-dev/security-reviewers
+/services/backend/aios_backend/apps/setup/               @tryaios-dev/security-reviewers
+/services/backend/aios_backend/apps/chat/answers.py      @tryaios-dev/security-reviewers
+/services/backend/aios_backend/apps/models/catalogue.py  @tryaios-dev/security-reviewers
+/services/backend/aios_backend/apps/models/service.py    @tryaios-dev/security-reviewers
+/services/backend/aios_backend/apps/models/catalogue_dev.json @tryaios-dev/security-reviewers
+/packages/py/aios-common/src/aios_common/canonical.py        @tryaios-dev/security-reviewers
 
 # gateway (model requests)
 /services/backend/aios_backend/gateway/                  @tryaios-dev/security-reviewers

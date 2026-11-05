@@ -36,6 +36,10 @@ class Database:
         set_secret(KEYSTORE_ENTRY, key)
         return key
 
+    def key_hex(self) -> str:
+        """The database key, only for wrapping it into the Recovery Package. Never log it."""
+        return self._key()
+
     @property
     def engine(self) -> Engine:
         if self._engine is None:

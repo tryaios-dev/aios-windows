@@ -9,6 +9,7 @@ dependencies = [
     "pydantic>=2.9",
     "sqlalchemy>=2.0.36",
     "alembic>=1.14",
+    "cryptography>=44",  # Recovery Package v1: Argon2id, AES-256-GCM, Ed25519
     # SQLCipher build: pinned exactly (B-02). Bumping it is a reviewed change that also updates
     # build/sqlcipher/pin.json. Windows wheel = what ships; the Linux build is for CI tests only.
     "sqlcipher3==0.6.4; sys_platform == 'win32'",

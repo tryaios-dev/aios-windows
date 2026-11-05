@@ -12,13 +12,12 @@ export function useSequence(durations: number[], complete = false) {
     let i = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const next = () => {
-      const wait = list.current[i];
-      if (wait === undefined) return;
+      if (i >= list.current.length) return;
       timer = setTimeout(() => {
         i += 1;
         setDone(i);
         next();
-      }, wait);
+      }, list.current[i]);
     };
     next();
     return () => {

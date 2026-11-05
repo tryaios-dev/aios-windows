@@ -6,9 +6,10 @@ Routes stay thin: they take ``db: Db`` / ``session: DbSession`` and never import
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from aios_backend.config import APP_VERSION
 from db.session import Db
 
-VERSION = "0.1.0"
+VERSION = APP_VERSION
 
 router = APIRouter(tags=["system"])
 
