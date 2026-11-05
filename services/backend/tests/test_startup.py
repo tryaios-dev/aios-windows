@@ -1,6 +1,7 @@
 """Start-up order of backend.exe (Process and IPC Contract v1, sections 4 and 8)."""
 
 import asyncio
+import json
 import os
 import socket
 import subprocess
@@ -94,3 +95,17 @@ def test_port_taken_by_another_socket_is_not_shared() -> None:
             second.close()
     finally:
         first.close()
+
+
+def test_ready_line_matches_the_canonical_golden_vector(capsys) -> None:  # type: ignore[no-untyped-def]
+    from aios_backend.__main__ import print_ready
+
+    vectors = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "contracts/process-ipc/v1/golden-vectors/ready-lines.json"
+        ).read_text("utf-8")
+    )["vectors"]
+    canonical = next(v for v in vectors if v.get("canonical"))
+    print_ready(canonical["api_port"])
+    assert capsys.readouterr().out == canonical["line"] + "\n"

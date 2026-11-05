@@ -42,6 +42,7 @@ jobs:
       - run: uv run aios-backend --profile test migrate   # SQLCipher opens, migrations apply
       - run: uv run aios-backend --profile test check     # at head, models match migrations
       - run: uv run aios-backend openapi --check
+      - run: uv run python tools/contracts/gen_process_ipc_vectors.py --check   # golden vectors current (D-02)
 
   py-unit:
     strategy:
