@@ -17,4 +17,13 @@ export class BackendClient {
     if (!res.ok) throw new Error(`backend_${res.status}`);
     return (await res.json()) as T;
   }
+
+  /** POST and hand back the raw response, for server-sent event streams. */
+  async stream(path: string, body: unknown): Promise<Response> {
+    return fetch(this.#base + path, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.#token}`, "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify(body),
+    });
+  }
 }

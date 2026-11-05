@@ -14,6 +14,7 @@ The dev/test keys are not secrets: they only protect throw-away development data
 """
 
 import os
+import sys
 import tempfile
 from dataclasses import dataclass
 from enum import StrEnum
@@ -23,6 +24,7 @@ from aios_common import paths
 
 PROFILE_ENV = "AIOS_ENV"
 DEV_DIR = Path(__file__).resolve().parents[1] / ".dev"  # services/backend/.dev
+REPO_ROOT = Path(__file__).resolve().parents[3]
 DEV_DB_KEY = "de" * 32  # 256-bit hex; development data only
 TEST_DB_KEY = "00" * 32
 
@@ -40,9 +42,20 @@ class Settings:
     db_key: str | None  # None -> key from the OS keystore
     log_file: Path | None
     backups_dir: Path
+    # llama-server CPU build and the folder the user's models live in (D-04 spike, D-05).
+    engine_dir: Path = Path()
+    models_dir: Path = Path()
     # Paths reachable without the token. Empty in the shipped app.
     public_paths: frozenset[str] = frozenset()
     docs_enabled: bool = False
+
+
+def _engine_dir() -> Path:
+    """Installed: resources/backend/backend.exe next to resources/llama/cpu/ (electron-builder.yml).
+    From source: the build of build/llama/build.py."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parents[1] / "llama" / "cpu"
+    return REPO_ROOT / "build" / "out" / "llama" / "cpu"
 
 
 def load(profile: Profile | str | None = None) -> Settings:
@@ -57,6 +70,8 @@ def load(profile: Profile | str | None = None) -> Settings:
             db_key=None,
             log_file=paths.logs_dir() / "backend.log",
             backups_dir=paths.data_dir() / "backups",
+            engine_dir=_engine_dir(),
+            models_dir=paths.models_dir(),
         )
 
     if chosen is Profile.DEV:
@@ -67,6 +82,8 @@ def load(profile: Profile | str | None = None) -> Settings:
             db_key=DEV_DB_KEY,
             log_file=DEV_DIR / "backend.log",
             backups_dir=DEV_DIR / "backups",
+            engine_dir=_engine_dir(),
+            models_dir=DEV_DIR / "models",
             public_paths=frozenset({"/health", "/docs", "/openapi.json"}),
             docs_enabled=True,
         )
@@ -79,4 +96,6 @@ def load(profile: Profile | str | None = None) -> Settings:
         db_key=TEST_DB_KEY,
         log_file=None,
         backups_dir=tmp / "backups",
+        engine_dir=_engine_dir(),
+        models_dir=tmp / "models",
     )

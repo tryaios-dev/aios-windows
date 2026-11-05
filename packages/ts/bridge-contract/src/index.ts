@@ -16,9 +16,26 @@ export const Health = z.object({
 });
 export type Health = z.infer<typeof Health>;
 
+/** SPIKE-D04 (temporary): one local answer. Removed when the chat screen (K-01) uses the gateway (G-01). */
+export const SpikePrompt = z.string().trim().min(1).max(4000);
+export const SpikeAnswer = z.object({
+  text: z.string(),
+  /** Short code, never a backend error body: no_model, engine_failed, engine_error, backend_unavailable. */
+  error: z.string().nullable(),
+  firstTokenMs: z.number().nullable(),
+  totalMs: z.number(),
+  tokens: z.number().int().nullable(),
+  tokensPerSecond: z.number().nullable(),
+});
+export type SpikeAnswer = z.infer<typeof SpikeAnswer>;
+
 export interface AiosBridge {
   system: {
     health(): Promise<Health>;
+  };
+  /** SPIKE-D04 (temporary). */
+  spike: {
+    ask(prompt: string): Promise<SpikeAnswer>;
   };
 }
 

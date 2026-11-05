@@ -236,13 +236,13 @@ tests close the rule; the rule is binding from the freeze regardless.
 | IPC-22 non-loopback → 403 | `services/backend/tests/test_api.py::test_ac_10_non_loopback_caller_is_forbidden` | proven |
 | IPC-23 bearer check → 401 | `test_api.py::test_ac_10_request_without_token_is_rejected`, `::test_ac_10_wrong_token_is_rejected`, `::test_ac_10_unknown_path_without_token_reveals_nothing`; `tools/smoke_backend_exe.py` | proven |
 | IPC-24 no public paths in the shipped app | `test_api.py::test_shipped_app_has_no_web_surface`, `::test_desktop_profile_ignores_environment` | proven |
-| IPC-30 engine key over stdin | `tests/engine/test_engine.py::test_answers_a_prompt_with_the_key`, `::test_rejects_requests_without_the_key`, `::test_refuses_to_start_without_a_key`, `::test_key_not_in_command_line_or_environment`; backend side: process manager tests (D-05) | proven for the engine; launcher pending D-05 |
-| IPC-31 engine flags | `tests/engine/test_engine.py::test_slots_and_webui_are_off` (and every engine test runs with the exact flag set); launcher (D-05) | proven for the flag set; launcher pending D-05 |
-| IPC-32 engine environment | every `tests/engine/test_engine.py` test runs with `minimal_env()`; launcher (D-05) | pending D-05 |
+| IPC-30 engine key over stdin | `tests/engine/test_engine.py::test_answers_a_prompt_with_the_key`, `::test_rejects_requests_without_the_key`, `::test_refuses_to_start_without_a_key`, `::test_key_not_in_command_line_or_environment`; backend launcher: `services/backend/tests/test_spike.py::test_ipc_30_engine_key_not_in_its_command_line_or_environment` | proven |
+| IPC-31 engine flags | `tests/engine/test_engine.py::test_slots_and_webui_are_off` (and every engine test runs with the exact flag set); `services/backend/tests/test_engine_launcher.py::test_ipc_31_fixed_flags_are_exactly_the_contract_set` | proven |
+| IPC-32 engine environment | every `tests/engine/test_engine.py` test runs with `minimal_env()`; `test_engine_launcher.py::test_ipc_32_environment_is_built_from_scratch`, `test_spike.py::test_ipc_30_engine_key_not_in_its_command_line_or_environment` (no `LLAMA*` variable reaches the engine) | proven |
 | IPC-33 engine readiness and state | `test_api.py::test_health_reports_component_states`; process manager tests (D-05) | partly; pending D-05 |
 | IPC-34 engine `/health` (question 12) | `tests/engine/test_engine.py::test_health_is_the_only_public_endpoint` | decision pending reviewer |
 | IPC-40, IPC-41, IPC-42 evidence writer | writer start-up, auth and API tests (F-01) | pending F-01 |
-| IPC-50 to IPC-53 lifetime | process manager tests (D-05), AC-09 test | pending D-05 |
+| IPC-50 to IPC-53 lifetime | `test_engine_launcher.py::test_ipc_50_closing_the_job_kills_its_processes` (Windows CI), `test_spike.py::test_engine_stops_with_the_backend`; parent-exit and orphan clean-up: process manager tests (D-05), AC-09 test | IPC-50 proven; IPC-51 to IPC-53 pending D-05 |
 | IPC-60 renderer sandbox | `apps/desktop/tests/security/csp.test.ts` ("ac-10 renderer hardening"); eslint renderer rules (`packages/ts/config`) | proven |
 | IPC-61, IPC-62 bridge and main | IPC handler tests (C-02); security suite (L-01, AC-11) | pending C-02, L-01 |
 

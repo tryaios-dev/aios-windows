@@ -14,6 +14,16 @@ const browserPreview: AiosBridge = {
       version: "-",
     }),
   },
+  spike: {
+    ask: async () => ({
+      text: "",
+      error: "backend_unavailable",
+      firstTokenMs: null,
+      totalMs: 0,
+      tokens: null,
+      tokensPerSecond: null,
+    }),
+  },
 };
 
 export const inElectron = () => window.aios !== undefined;

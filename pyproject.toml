@@ -87,12 +87,12 @@ allow_indirect_imports = true
 [[tool.importlinter.contracts]]
 name = "Backend apps never import each other (same rule as apps/ui/src/features)"
 type = "independence"
-modules = ["aios_backend.apps.setup", "aios_backend.apps.workspace"]
+modules = ["aios_backend.apps.setup", "aios_backend.apps.workspace", "aios_backend.apps.spike"]
 
 [[tool.importlinter.contracts]]
 name = "App layers: router -> service -> repository -> models"
 type = "layers"
-containers = ["aios_backend.apps.setup", "aios_backend.apps.workspace"]
+containers = ["aios_backend.apps.setup", "aios_backend.apps.workspace", "aios_backend.apps.spike"]
 layers = ["router", "service", "repository", "models"]
 
 [[tool.importlinter.contracts]]
@@ -101,6 +101,7 @@ type = "forbidden"
 source_modules = [
     "aios_backend.routes",
     "aios_backend.apps.setup.router", "aios_backend.apps.workspace.router",
+    "aios_backend.apps.spike.router",
 ]
 forbidden_modules = ["sqlalchemy", "sqlcipher3", "subprocess", "httpx", "socket"]
 allow_indirect_imports = true

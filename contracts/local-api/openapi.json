@@ -1,6 +1,55 @@
 {
   "components": {
     "schemas": {
+      "ChatCompletionRequest": {
+        "properties": {
+          "max_tokens": {
+            "default": 512,
+            "maximum": 2048.0,
+            "minimum": 1.0,
+            "title": "Max Tokens",
+            "type": "integer"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ChatMessage"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Messages",
+            "type": "array"
+          }
+        },
+        "required": [
+          "messages"
+        ],
+        "title": "ChatCompletionRequest",
+        "type": "object"
+      },
+      "ChatMessage": {
+        "properties": {
+          "content": {
+            "maxLength": 32000,
+            "title": "Content",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "system",
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "ChatMessage",
+        "type": "object"
+      },
       "ComponentState": {
         "enum": [
           "not_started",
@@ -11,6 +60,19 @@
         ],
         "title": "ComponentState",
         "type": "string"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
       },
       "Health": {
         "properties": {
@@ -42,6 +104,46 @@
         ],
         "title": "Health",
         "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
       }
     }
   },
@@ -69,6 +171,51 @@
         "summary": "Backend, database, engine and evidence writer status",
         "tags": [
           "system"
+        ]
+      }
+    },
+    "/spike/v1/chat/completions": {
+      "post": {
+        "operationId": "chat_completions_spike_v1_chat_completions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatCompletionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "no_model"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "engine_failed"
+          }
+        },
+        "summary": "TEMPORARY (D-04): stream one local answer; replaced by the gateway (G-01)",
+        "tags": [
+          "spike (temporary, D-04)"
         ]
       }
     }

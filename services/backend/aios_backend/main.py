@@ -10,8 +10,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
+from aios_backend.apps.spike.router import router as spike_router  # SPIKE-D04
 from aios_backend.components import Components
 from aios_backend.config import Settings
+from aios_backend.engine import EngineManager
 from aios_backend.routes import VERSION
 from aios_backend.routes import router as system_router
 from aios_common.asgi_auth import LoopbackTokenMiddleware
@@ -63,10 +65,18 @@ def register_error_handlers(app: FastAPI) -> None:
 
 def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
     database = db or Database(settings)
+    components = Components()
+    engine = EngineManager(
+        settings.engine_dir,
+        settings.models_dir,
+        settings.models_dir.parent / "engine-tmp",
+        components,
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
+        engine.stop()
         database.dispose()
 
     docs = settings.docs_enabled
@@ -80,8 +90,10 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.db = database
-    app.state.components = Components()
+    app.state.components = components
+    app.state.engine = engine
     register_error_handlers(app)
     app.include_router(system_router)
+    app.include_router(spike_router)  # SPIKE-D04: temporary, removed by G-01
     app.add_middleware(LoopbackTokenMiddleware, public_paths=settings.public_paths)
     return app

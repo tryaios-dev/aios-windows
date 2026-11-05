@@ -2,6 +2,7 @@ import type * as React from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import { Cpu, FileSignature, Settings2, SlidersHorizontal } from "lucide-react";
 import { RestoreScreen, SetupWizard } from "@/features/setup";
+import { SpikeScreen } from "@/features/spike"; // SPIKE-D04
 import { ComingSoon, ConversationsView, ProjectLayout, WorkspaceHome, WorkspaceLayout } from "@/features/workspace";
 import { DEFAULT_PROJECT, useSession } from "./session";
 
@@ -52,6 +53,7 @@ export function AppRoutes() {
           <Route path="evidence" element={<ComingSoon icon={<FileSignature />} title="Evidence" description="The evidence log for this project is not built yet." />} />
           <Route path="settings" element={<ComingSoon icon={<SlidersHorizontal />} title="Project settings" description="Project settings are not built yet." />} />
         </Route>
+        <Route path="spike" element={<SpikeScreen />} /> {/* SPIKE-D04: temporary */}
         <Route path="models" element={<ComingSoon icon={<Cpu />} title="Models" description="The model manager is not built yet." />} />
         <Route path="settings/*" element={<ComingSoon icon={<Settings2 />} title="Settings" description="Settings are not built yet." />} />
       </Route>

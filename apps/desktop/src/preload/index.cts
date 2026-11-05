@@ -10,6 +10,9 @@ const bridge: AiosBridge = {
   system: {
     health: () => invoke("system.health"),
   },
+  spike: {
+    ask: (prompt: string) => invoke("spike.ask", prompt), // SPIKE-D04 (temporary)
+  },
 };
 
 contextBridge.exposeInMainWorld("aios", bridge);

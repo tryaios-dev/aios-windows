@@ -1,6 +1,6 @@
 import type * as React from "react";
 import { NavLink, useLocation, useNavigate, useParams } from "react-router";
-import { ChevronsLeft, ChevronsRight, Cpu, FolderPlus, Search, Settings2 } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, Cpu, FlaskConical, FolderPlus, Search, Settings2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Wordmark } from "@/components/ui/brand";
 import { IconButton } from "@/components/ui/button";
@@ -29,6 +29,7 @@ export function Sidebar({ mode = "full", onCollapse, onExpand }: { mode?: Sideba
   const active = projects.filter((p) => !p.archived);
   const isSettings = location.pathname.startsWith("/settings");
   const isModels = location.pathname.startsWith("/models");
+  const isSpike = location.pathname.startsWith("/spike"); // SPIKE-D04
 
   return (
     <aside
@@ -112,6 +113,7 @@ export function Sidebar({ mode = "full", onCollapse, onExpand }: { mode?: Sideba
 
       {/* Secondary navigation */}
       <div className={cn("flex flex-col gap-0.5 border-t border-line-soft px-2 pt-2", collapsed && "items-center")}>
+        <SideLink to="/spike" icon={<FlaskConical />} label="Local answer (spike)" active={isSpike} collapsed={collapsed} /> {/* SPIKE-D04 */}
         <SideLink to="/models" icon={<Cpu />} label="Models" active={isModels} collapsed={collapsed} />
         <SideLink to="/settings" icon={<Settings2 />} label="Settings" active={isSettings} collapsed={collapsed} />
       </div>
