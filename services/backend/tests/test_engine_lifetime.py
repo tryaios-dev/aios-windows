@@ -79,6 +79,9 @@ import asyncio, sys
 from pathlib import Path
 from aios_backend.components import Components
 from aios_backend.engine import EngineManager
+from aios_common.handshake import set_token_for_tests
+
+set_token_for_tests("test-launch-token")  # backend.exe gets it from the stdin handshake
 
 async def main():
     root, models, tmp = map(Path, sys.argv[1:4])
