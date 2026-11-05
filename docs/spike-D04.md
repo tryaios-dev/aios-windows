@@ -44,7 +44,17 @@ Use `resources\llama\vulkan` on the GPU machine. Targets: MVP 10.2 (small tier, 
 
 | Machine | Engine | Model load | First words | Tokens/s | ≈ Words/s | Within targets |
 | --- | --- | --- | --- | --- | --- | --- |
-| 8 GB, CPU only | cpu | | | | | |
-| 16 GB, NVIDIA | vulkan | | | | | |
+| 8 GB, CPU only (fleet) | cpu | | | | | pending |
+| 16 GB, NVIDIA (fleet) | vulkan | | | | | pending |
+| *Reference:* clean Win 11 VM, 8 GB, 4 vCPU of an i9-12900H, installed app, spike screen | cpu | ~65 s (first question) | 1.5 s | 5.3 | ~4 | first words yes; speed just under 5 words/s |
+| *Reference:* dev laptop i9-12900H, Linux, `engine_bench.py` | cpu | 3.6 s | 0.42 s | 12.2 | ~9 | yes |
+| *Reference:* dev laptop, RTX 3070 Ti Laptop, Linux, `engine_bench.py` | vulkan | 7.7 s | 0.05 s | 84.5 | ~63 | yes |
+
+Reference rows are not the fleet: they show the method works and give a first estimate. The
+VM run (2026-11-05) also passed M1: installed `AIOS Setup 0.1.0.exe` (unsigned, CI build of
+f924eb4), answer returned, no firewall prompt, no `llama-server.exe` left after closing the app.
+
+Observed: the first question waits for the model to load (about a minute in the VM). The
+chat screen should show that state (engine `starting` is already in `/health`).
 
 Any change to the tier table goes to the product owner.
