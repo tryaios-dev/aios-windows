@@ -1,9 +1,11 @@
 import * as React from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { Health, SpikeAnswer } from "@aios/bridge-contract";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/feedback";
+import { Checkbox, Label } from "@/components/ui/fields";
 import { KeyValue, SectionLabel } from "@/components/ui/layout";
-import { bridge, useHealth } from "@/bridge";
+import { bridge, useEngineSettings, useHealth } from "@/bridge";
 
 /**
  * SPIKE-D04 (temporary): send one prompt to the local model and show the answer with its timings.
@@ -32,6 +34,15 @@ export function SpikeScreen() {
   const [busy, setBusy] = React.useState(false);
   const [answer, setAnswer] = React.useState<SpikeAnswer | null>(null);
   const health = useHealth().data;
+  const safeMode = useEngineSettings().data?.safe_mode;
+  const queryClient = useQueryClient();
+  const refresh = () => void queryClient.invalidateQueries();
+
+  // D-06: temporary home of the "Safe mode (CPU)" switch until the settings screen (K-04).
+  const setSafeMode = async (on: boolean) => {
+    await bridge().settings.setEngine({ safe_mode: on });
+    refresh();
+  };
 
   const ask = async () => {
     setBusy(true);
@@ -40,6 +51,7 @@ export function SpikeScreen() {
       setAnswer(await bridge().spike.ask(prompt));
     } finally {
       setBusy(false);
+      refresh(); // show a CPU fallback right away, not on the next 10 s poll
     }
   };
 
@@ -47,6 +59,12 @@ export function SpikeScreen() {
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto bg-paper p-6">
       <SectionLabel>Local answer (temporary spike)</SectionLabel>
       {health && <KeyValue dense rows={[{ k: "Engine", v: engineLine(health) }]} />}
+      {safeMode !== undefined && (
+        <div className="flex items-center gap-2">
+          <Checkbox id="safe-mode" checked={safeMode} onCheckedChange={(v) => void setSafeMode(v === true)} />
+          <Label htmlFor="safe-mode">Safe mode (CPU): never use the GPU engine</Label>
+        </div>
+      )}
       {health?.engine_cpu_fallback && (
         <Callout tone="caution" title="Running on the CPU">
           The GPU engine failed, so AIOS switched to the CPU build for this session. Answers are slower.

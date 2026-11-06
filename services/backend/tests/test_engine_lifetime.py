@@ -74,6 +74,39 @@ def test_idle_unload_frees_the_engine_and_the_next_message_restarts_it(
         assert c.get("/health").json()["engine"] == "ok"
 
 
+def test_ac_09_gpu_engine_dying_still_answers_from_the_cpu_build(
+    settings: Settings, db: Database, tmp_path: Path
+) -> None:
+    """D-06: a forced GPU failure falls back to CPU within one answer, with the notice flag.
+
+    The "GPU build" is a copy of the CPU build that the probe reports as having a GPU, so the
+    manager picks it; killing it is the forced failure."""
+    from aios_backend.components import Components
+    from aios_backend.engine import EngineManager
+
+    root = tmp_path / "llama"
+    shutil.copytree(Path(str(SERVER)).parent, root / "cpu", symlinks=True)
+    shutil.copytree(Path(str(SERVER)).parent, root / "vulkan", symlinks=True)
+    models = tmp_path / "models"
+    models.mkdir()
+    shutil.copy(str(MODEL), models / "test.gguf")
+    app = create_app(settings, db)
+    components: Components = app.state.components
+    app.state.engine = EngineManager(
+        root, models, tmp_path / "engine-tmp", components, probe_fn=lambda d, t: ["Vulkan0"]
+    )
+    headers = {"Authorization": f"Bearer {LAUNCH_TOKEN}"}
+    with TestClient(app, client=LOOPBACK, headers=headers) as c:
+        _answer(c)
+        assert c.get("/health").json()["engine_build"] == "vulkan"
+        gpu = app.state.engine._engine.process
+        gpu.kill()  # forced GPU failure, right before the next question
+        _answer(c)  # still answered
+        health = c.get("/health").json()
+        assert health["engine_build"] == "cpu" and health["engine_cpu_fallback"]
+        assert health["engine"] == "ok"
+
+
 HOLDER = r"""
 import asyncio, sys
 from pathlib import Path

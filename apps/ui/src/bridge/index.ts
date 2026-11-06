@@ -18,6 +18,10 @@ const browserPreview: AiosBridge = {
       version: "-",
     }),
   },
+  settings: {
+    engine: async () => ({ safe_mode: false }),
+    setEngine: async (settings) => settings,
+  },
   spike: {
     ask: async () => ({
       text: "",
@@ -32,6 +36,9 @@ const browserPreview: AiosBridge = {
 
 export const inElectron = () => window.aios !== undefined;
 export const bridge = (): AiosBridge => window.aios ?? browserPreview;
+
+export const useEngineSettings = () =>
+  useQuery({ queryKey: ["settings", "engine"], queryFn: () => bridge().settings.engine() });
 
 export const useHealth = () =>
   useQuery({ queryKey: ["health"], queryFn: () => bridge().system.health(), refetchInterval: 10_000 });

@@ -271,3 +271,50 @@ def test_device_list_parsing() -> None:
     assert parse_device_list(text) == ["Vulkan0", "Vulkan1"]
     assert parse_device_list("Available devices:\n  (none)\n") == []
     assert parse_device_list("") == []
+
+
+def test_d06_turning_safe_mode_on_stops_an_idle_gpu_engine(tmp_path: Path) -> None:
+    fakes = FakeEngines(gpus=["Vulkan0"])
+    m, c = setup(tmp_path, fakes, vulkan=True)
+
+    async def body() -> None:
+        gpu = await m.ensure()
+        assert gpu.build == "vulkan"
+        await m.set_safe_mode(True)
+        assert not gpu.alive() and c.engine is ComponentState.NOT_STARTED
+        assert (await m.ensure()).build == "cpu"
+        assert fakes.started == ["vulkan", "cpu"]
+
+    run(fakes, m, body)
+
+
+def test_d06_safe_mode_waits_for_the_answer_in_progress(tmp_path: Path) -> None:
+    fakes = FakeEngines(gpus=["Vulkan0"])
+    m, c = setup(tmp_path, fakes, vulkan=True)
+
+    async def body() -> None:
+        async with m.use() as gpu:
+            await m.set_safe_mode(True)
+            await asyncio.sleep(0.2)
+            assert gpu.alive()  # not cut off mid-answer
+        await until(lambda: not gpu.alive())
+        assert c.engine is ComponentState.NOT_STARTED
+
+    run(fakes, m, body)
+
+
+def test_d06_lost_gpu_is_true_only_for_a_dead_gpu_engine(tmp_path: Path) -> None:
+    fakes = FakeEngines(gpus=["Vulkan0"])
+    m, _ = setup(tmp_path, fakes, vulkan=True, watch_interval_s=60)
+
+    async def body() -> None:
+        gpu = await m.ensure()
+        assert not await m.lost_gpu(gpu, wait_s=0.1)  # still running: a plain error
+        gpu.process.kill()
+        assert await m.lost_gpu(gpu)
+        cpu = await m.ensure()  # the retry
+        assert cpu.build == "cpu"
+        cpu.process.kill()
+        assert not await m.lost_gpu(cpu)  # a CPU crash is not retried
+
+    run(fakes, m, body)

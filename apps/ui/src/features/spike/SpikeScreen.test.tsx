@@ -60,6 +60,19 @@ describe("SPIKE-D04 screen", () => {
     expect(screen.getByText("Running on the CPU build · m.gguf")).toBeTruthy();
   });
 
+  it("switches Safe mode through the bridge", async () => {
+    const setEngine = vi.fn().mockResolvedValue({ safe_mode: true });
+    const engine = vi.fn().mockResolvedValue({ safe_mode: false });
+    (window as { aios?: Partial<AiosBridge> }).aios = {
+      system: { health: vi.fn().mockResolvedValue(HEALTH) },
+      settings: { engine, setEngine },
+      spike: { ask: vi.fn() },
+    };
+    render(<SpikeScreen />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: /Safe mode \(CPU\)/ }));
+    expect(setEngine).toHaveBeenCalledWith({ safe_mode: true });
+  });
+
   it("describes each engine state", () => {
     expect(engineLine(HEALTH)).toMatch(/starts on the first question/);
     expect(engineLine({ ...HEALTH, engine_idle_unloaded: true })).toMatch(/Unloaded after idle time/);

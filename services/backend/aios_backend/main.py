@@ -10,6 +10,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
+from aios_backend.apps.settings import service as settings_service
+from aios_backend.apps.settings.router import router as settings_router
 from aios_backend.apps.spike.router import router as spike_router  # SPIKE-D04
 from aios_backend.components import Components
 from aios_backend.config import Settings
@@ -63,6 +65,16 @@ def register_error_handlers(app: FastAPI) -> None:
         return JSONResponse({"error": "internal_error"}, status_code=500)
 
 
+def load_safe_mode(database: Database) -> bool:
+    """Saved Safe mode; off if chats.db cannot be read (then nothing else works either)."""
+    try:
+        with database.session() as session:
+            return settings_service.load_safe_mode(session)
+    except Exception as exc:
+        log_event(log, "safe_mode_unreadable", error_code=type(exc).__name__)
+        return False
+
+
 def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
     database = db or Database(settings)
     components = Components()
@@ -72,14 +84,15 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
         settings.models_dir.parent / "engine-tmp",
         components,
         idle_unload_s=settings.engine_idle_unload_s,
-        safe_mode=settings.engine_safe_mode,
     )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        await engine.startup()  # ends orphaned engines (IPC-52), starts the watcher
+        manager: EngineManager = app.state.engine
+        await manager.set_safe_mode(load_safe_mode(database))  # before any engine can start
+        await manager.startup()  # ends orphaned engines (IPC-52), starts the watcher
         yield
-        await engine.shutdown()
+        await manager.shutdown()
         database.dispose()
 
     docs = settings.docs_enabled
@@ -97,6 +110,7 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
     app.state.engine = engine
     register_error_handlers(app)
     app.include_router(system_router)
+    app.include_router(settings_router)
     app.include_router(spike_router)  # SPIKE-D04: temporary, removed by G-01
     app.add_middleware(LoopbackTokenMiddleware, public_paths=settings.public_paths)
     return app

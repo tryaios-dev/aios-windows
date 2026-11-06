@@ -36,31 +36,43 @@ async def stream_completion(
 ) -> AsyncIterator[bytes]:
     """Engine server-sent events, passed through unchanged (OpenAI chunk format).
 
-    Holds the engine for the whole answer so it is not unloaded mid-stream.
+    Holds the engine for the whole answer so it is not unloaded mid-stream. If the GPU engine
+    dies before the first byte of the answer, the same request is sent once more, now to the
+    CPU build (D-06: "an answer from the CPU build and a notice, not a dead chat"). Once text
+    has been sent it cannot be continued cleanly: that answer ends with ``engine_error`` and
+    the next one runs on the CPU build.
     """
     began = time.monotonic()
     status = 0
     try:
-        async with (
-            manager.use() as engine,
-            httpx.AsyncClient(timeout=httpx.Timeout(600, connect=5)) as client,
-        ):
-            async with client.stream(
-                "POST",
-                f"{engine.base_url}/v1/chat/completions",
-                json=engine_body(req),
-                headers={"Authorization": f"Bearer {engine.key}"},
-            ) as resp:
-                status = resp.status_code
-                if status != 200:
-                    yield b'data: {"error": "engine_error"}\n\n'
-                    return
-                async for chunk in resp.aiter_raw():
-                    yield chunk
+        for attempt in (1, 2):
+            sent = False
+            async with manager.use() as engine:
+                try:
+                    async with (
+                        httpx.AsyncClient(timeout=httpx.Timeout(600, connect=5)) as client,
+                        client.stream(
+                            "POST",
+                            f"{engine.base_url}/v1/chat/completions",
+                            json=engine_body(req),
+                            headers={"Authorization": f"Bearer {engine.key}"},
+                        ) as resp,
+                    ):
+                        status = resp.status_code
+                        if status == 200:
+                            async for chunk in resp.aiter_raw():
+                                sent = True
+                                yield chunk
+                            return
+                except httpx.HTTPError:
+                    status = 0
+                if attempt == 1 and not sent and await manager.lost_gpu(engine):
+                    log_event(log, "spike_retry_on_cpu", error_code="engine_crashed")
+                    continue
+            yield b'data: {"error": "engine_error"}\n\n'
+            return
     except (EngineError, NoModel):
         yield b'data: {"error": "engine_failed"}\n\n'
-    except httpx.HTTPError:  # e.g. the engine crashed mid-answer; the watcher restarts it
-        yield b'data: {"error": "engine_error"}\n\n'
     finally:
         log_event(
             log,

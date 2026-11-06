@@ -1,9 +1,14 @@
 """Process manager for llama-server (MVP 5.1, 11.1; Master FR-38; contract IPC-30 to IPC-52).
 
 * Starts the engine only when a local conversation needs it (``use()``), on the Vulkan build
-  when it finds a GPU, otherwise on the CPU build. "Safe mode (CPU)" forces the CPU build.
+  when it finds a GPU, otherwise on the CPU build.
+* "Safe mode (CPU)" (D-06, saved in chats.db by ``apps/settings``): while it is on the Vulkan
+  binary is never started, not even to probe for a GPU. Turning it on stops a running GPU
+  engine as soon as no answer is using it.
 * If the GPU build fails to start or crashes, it switches to the CPU build for the rest of the
-  session, restarts at once and reports ``engine_cpu_fallback`` on ``/health`` (MVP 4.3).
+  session, restarts at once and reports ``engine_cpu_fallback`` on ``/health`` (MVP 4.3). A
+  caller whose request died with the GPU engine (``lost_gpu()``) retries it once, so the user
+  still gets that answer from the CPU build.
 * A watcher checks every second that the engine is still running and unloads it after an
   idle period; the next request starts it again.
 * Every engine runs in the backend's kill-on-close Job Object (IPC-50); orphans from a crash
@@ -100,6 +105,17 @@ class EngineManager:
         self._set(ComponentState.NOT_STARTED)
         self._job.close()
 
+    @property
+    def safe_mode(self) -> bool:
+        return self._safe_mode
+
+    async def set_safe_mode(self, on: bool) -> None:
+        async with self._lock:
+            if on != self._safe_mode:
+                log_event(log, "engine_safe_mode", status="on" if on else "off")
+            self._safe_mode = on
+            await self._leave_gpu_if_safe_mode()
+
     # ---- use ------------------------------------------------------------------------------
 
     @contextlib.asynccontextmanager
@@ -121,6 +137,16 @@ class EngineManager:
             if self._engine is not None:
                 return self._engine
             return await self._start()
+
+    async def lost_gpu(self, engine: Engine, wait_s: float = 3.0) -> bool:
+        """True if ``engine`` is the GPU build and has exited (a request to it just failed).
+        The caller may then retry once: the next ``use()`` runs on the CPU build."""
+        if engine.build != Build.VULKAN:
+            return False
+        deadline = time.monotonic() + wait_s
+        while engine.alive() and time.monotonic() < deadline:
+            await asyncio.sleep(0.05)
+        return not engine.alive()
 
     # ---- internals (called with the lock held) --------------------------------------------
 
@@ -173,6 +199,14 @@ class EngineManager:
         self._set(ComponentState.FAILED)
         return crashed
 
+    async def _leave_gpu_if_safe_mode(self) -> None:
+        engine = self._engine
+        if not self._safe_mode or engine is None or engine.build != Build.VULKAN or self._leases:
+            return
+        self._engine = None
+        await asyncio.to_thread(engine.stop)
+        self._set(ComponentState.NOT_STARTED)
+
     def _fall_back(self, reason: str) -> None:
         self._cpu_fallback = True
         self._c.engine_cpu_fallback = True
@@ -206,6 +240,7 @@ class EngineManager:
             with contextlib.suppress(NoModel, EngineError):
                 await self._start()
             return
+        await self._leave_gpu_if_safe_mode()  # safe mode turned on during an answer
         engine = self._engine
         if engine is None or self._leases:
             return

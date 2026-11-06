@@ -61,6 +61,20 @@
         "title": "ComponentState",
         "type": "string"
       },
+      "EngineSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "safe_mode": {
+            "title": "Safe Mode",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "safe_mode"
+        ],
+        "title": "EngineSettings",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -205,6 +219,66 @@
         "summary": "Backend, database, engine and evidence writer status",
         "tags": [
           "system"
+        ]
+      }
+    },
+    "/settings/engine": {
+      "get": {
+        "operationId": "get_engine_settings_settings_engine_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngineSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Engine settings (Safe mode)",
+        "tags": [
+          "settings"
+        ]
+      },
+      "put": {
+        "operationId": "put_engine_settings_settings_engine_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EngineSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngineSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Change engine settings; Safe mode applies at once and persists",
+        "tags": [
+          "settings"
         ]
       }
     },

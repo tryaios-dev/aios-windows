@@ -37,9 +37,20 @@ export const SpikeAnswer = z.object({
 });
 export type SpikeAnswer = z.infer<typeof SpikeAnswer>;
 
+/** Engine settings (D-06; shown by the settings screen, K-04). */
+export const EngineSettings = z.object({
+  /** "Safe mode (CPU)": never start the GPU build. Kept across restarts. */
+  safe_mode: z.boolean(),
+}).strict();
+export type EngineSettings = z.infer<typeof EngineSettings>;
+
 export interface AiosBridge {
   system: {
     health(): Promise<Health>;
+  };
+  settings: {
+    engine(): Promise<EngineSettings>;
+    setEngine(settings: EngineSettings): Promise<EngineSettings>;
   };
   /** SPIKE-D04 (temporary). */
   spike: {

@@ -46,8 +46,6 @@ class Settings:
     engine_root: Path = Path()
     models_dir: Path = Path()
     engine_idle_unload_s: float = 300.0
-    # "Safe mode (CPU)" (MVP 4.3): never use the GPU build. The settings screen sets it later.
-    engine_safe_mode: bool = False
     # Paths reachable without the token. Empty in the shipped app.
     public_paths: frozenset[str] = frozenset()
     docs_enabled: bool = False
