@@ -60,3 +60,19 @@ Observed: the first question waits for the model to load (about a minute in the 
 chat screen should show that state (engine `starting` is in `/health`; the spike screen shows it).
 
 Any change to the tier table goes to the product owner. The note with these findings: `docs/notes/2026-11-06-local-speed-and-model-loading.md`.
+
+## Low-end comparison: MiniCPM5-2B against Qwen3-4B (2026-11-06)
+
+Same clean Win 11 VM (8 GB, 4 vCPU, CPU build), installed app, spike screen, both models in the
+same session with the host idle. MiniCPM5-2B is the catalogue v3 pick for "8 GB RAM, no dedicated
+GPU". File: `openbmb/MiniCPM5-2B-GGUF` @ `2079a22f`, `MiniCPM5-2B-Q4_K_M.gguf`, 1,561,318,368
+bytes, SHA-256 `ec2d5801640099e97d8d7e8003ad4d81f336e757811f03a26173dddf386602fd`.
+
+| Model | File | First words (model loaded) | Tokens/s | ≈ Words/s | 512-token answer | Within 5–15 words/s |
+| --- | --- | --- | --- | --- | --- | --- |
+| MiniCPM5-2B Q4_K_M | 1.56 GB | 0.44–0.45 s | 8.3–9.3 | ~6.5 | 63 s | yes |
+| Qwen3-4B Q4_K_M | 2.50 GB | 0.44–0.68 s | 4.4–5.3 | ~3.8 | 118 s | no |
+
+On the dev laptop CPU (`engine_bench.py`): MiniCPM5-2B 27.0 tokens/s, load 0.8 s; Qwen3-4B
+15.3 tokens/s, load 3.0 s. Load time on the VM (45–50 s for both) is not comparable yet:
+MiniCPM5-2B ran first after install, while Windows Defender was still scanning the engine.
