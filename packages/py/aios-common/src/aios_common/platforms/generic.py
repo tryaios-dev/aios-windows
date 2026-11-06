@@ -24,6 +24,15 @@ class GenericPlatform(Platform):
         base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
         return Path(base) / "AIOS"
 
+    def child_env(self, bin_dir: Path, temp_dir: Path) -> dict[str, str]:
+        return {
+            "PATH": f"{bin_dir}:/usr/bin:/bin",
+            "HOME": str(temp_dir),
+            "XDG_CONFIG_HOME": str(temp_dir),
+            "XDG_CACHE_HOME": str(temp_dir),
+            "TMPDIR": str(temp_dir),
+        }
+
     def hardware(self, disk: Path) -> Hardware:
         disk.mkdir(parents=True, exist_ok=True)
         sysconf = getattr(os, "sysconf", None)  # POSIX only

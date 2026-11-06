@@ -1,6 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from aios_backend.components import ComponentState
 from aios_backend.config import Profile, Settings, load
 from aios_backend.main import create_app
 from aios_common import platforms
@@ -11,7 +12,22 @@ from db.session import Database
 def test_health_with_token(client: TestClient) -> None:
     resp = client.get("/health")
     assert resp.status_code == 200
-    assert resp.json() == {"backend": "ok", "database": "ok", "version": "0.1.0"}
+    assert resp.json() == {
+        "backend": "ok",
+        "database": "ok",
+        "engine": "not_started",
+        "engine_build": None,
+        "engine_model": None,
+        "engine_cpu_fallback": False,
+        "engine_idle_unloaded": False,
+        "evidence_writer": "not_started",
+        "version": "0.1.0",
+    }
+
+
+def test_health_reports_component_states(client: TestClient) -> None:
+    client.app.state.components.engine = ComponentState.STARTING  # type: ignore[attr-defined]
+    assert client.get("/health").json()["engine"] == "starting"
 
 
 def test_ac_10_request_without_token_is_rejected(anonymous: TestClient) -> None:
