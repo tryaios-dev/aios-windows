@@ -34,7 +34,7 @@ export function SecureStep({
   const key = useStore((s) => s.recoveryKey);
   const issued = useRef(false);
   const { done, finished } = useSequence([640, 720, 620], prepared);
-  const { copied, copy } = useCopy();
+  const { copied, failed, copy } = useCopy(4000);
   const [issue, setIssue] = useState<{ error: string; alreadyIssued: boolean } | null>(null);
 
   // The key is issued exactly once for this installation (in the desktop app, the backend
@@ -131,13 +131,19 @@ export function SecureStep({
                   ))}
                 </div>
                 <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-line-soft pt-4">
-                  <span className="font-mono text-xs leading-4.5 tabular text-ink-50">
-                    {groups.length} groups · {groups.join("").length} characters
-                  </span>
+                  {failed ? (
+                    <span role="alert" className="text-xs leading-4.5 text-deny">
+                      Could not copy to the clipboard. Write the key down instead.
+                    </span>
+                  ) : (
+                    <span className="font-mono text-xs leading-4.5 tabular text-ink-50">
+                      {groups.length} groups · {groups.join("").length} characters
+                    </span>
+                  )}
                   <Button
                     variant="secondary"
                     leading={copied ? <Check className="size-3.5 text-green" /> : <Copy className="size-3.5" />}
-                    onClick={() => copy(key)}
+                    onClick={() => void copy(key)}
                     aria-label={copied ? "Copied recovery key" : "Copy recovery key"}
                   >
                     {copied ? "Copied" : "Copy"}

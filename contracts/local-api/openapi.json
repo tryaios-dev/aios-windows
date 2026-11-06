@@ -43,6 +43,68 @@
         "title": "AllowlistEntry",
         "type": "object"
       },
+      "BenchmarkOut": {
+        "properties": {
+          "engine": {
+            "enum": [
+              "cpu",
+              "vulkan"
+            ],
+            "title": "Engine",
+            "type": "string"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "run_at": {
+            "format": "date-time",
+            "title": "Run At",
+            "type": "string"
+          },
+          "time_to_first_token_ms": {
+            "title": "Time To First Token Ms",
+            "type": "integer"
+          },
+          "tokens_per_second": {
+            "title": "Tokens Per Second",
+            "type": "number"
+          }
+        },
+        "required": [
+          "model_id",
+          "engine",
+          "tokens_per_second",
+          "time_to_first_token_ms",
+          "run_at"
+        ],
+        "title": "BenchmarkOut",
+        "type": "object"
+      },
+      "CatalogueCheckOut": {
+        "properties": {
+          "changed": {
+            "title": "Changed",
+            "type": "boolean"
+          },
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "changed",
+          "checked_at"
+        ],
+        "title": "CatalogueCheckOut",
+        "type": "object"
+      },
       "CatalogueEntryOut": {
         "properties": {
           "artifact_digest": {
@@ -208,6 +270,60 @@
         "title": "CatalogueOut",
         "type": "object"
       },
+      "Checkpoint": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "epoch": {
+            "title": "Epoch",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "root_hash": {
+            "title": "Root Hash",
+            "type": "string"
+          },
+          "seq_from": {
+            "title": "Seq From",
+            "type": "integer"
+          },
+          "seq_to": {
+            "title": "Seq To",
+            "type": "integer"
+          },
+          "signature": {
+            "title": "Signature",
+            "type": "string"
+          },
+          "signer_key_id": {
+            "title": "Signer Key Id",
+            "type": "string"
+          },
+          "stream_id": {
+            "title": "Stream Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "stream_id",
+          "epoch",
+          "seq_from",
+          "seq_to",
+          "root_hash",
+          "signer_key_id",
+          "signature",
+          "created_at"
+        ],
+        "title": "Checkpoint",
+        "type": "object"
+      },
       "CompanyAi": {
         "properties": {
           "confirmed": {
@@ -226,6 +342,92 @@
         "title": "CompanyAi",
         "type": "object"
       },
+      "CompanyStatus": {
+        "description": "The Company AI server as Settings > Network shows it. Never holds the API key.",
+        "properties": {
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          },
+          "reachable": {
+            "title": "Reachable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "reachable",
+          "base_url",
+          "model_name",
+          "checked_at"
+        ],
+        "title": "CompanyStatus",
+        "type": "object"
+      },
+      "CompanySummary": {
+        "properties": {
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          },
+          "reachable": {
+            "title": "Reachable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "reachable",
+          "base_url",
+          "model_name"
+        ],
+        "title": "CompanySummary",
+        "type": "object"
+      },
       "Completed": {
         "properties": {
           "default_project_id": {
@@ -237,6 +439,65 @@
           "default_project_id"
         ],
         "title": "Completed",
+        "type": "object"
+      },
+      "ContinueIn": {
+        "description": "Exactly one: the interrupted answer to continue, or the message that could not be sent.",
+        "properties": {
+          "partial_message_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partial Message Id"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "maxLength": 200000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          }
+        },
+        "title": "ContinueIn",
+        "type": "object"
+      },
+      "ContinueOut": {
+        "properties": {
+          "assistant": {
+            "$ref": "#/components/schemas/MessageOut"
+          },
+          "conversation": {
+            "$ref": "#/components/schemas/ConversationOut"
+          },
+          "user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MessageOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "conversation",
+          "user",
+          "assistant"
+        ],
+        "title": "ContinueOut",
         "type": "object"
       },
       "ConversationCreate": {
@@ -408,6 +669,51 @@
         "title": "ConversationPatch",
         "type": "object"
       },
+      "DataPaths": {
+        "properties": {
+          "backups": {
+            "title": "Backups",
+            "type": "string"
+          },
+          "chats_db": {
+            "title": "Chats Db",
+            "type": "string"
+          },
+          "logs": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logs"
+          },
+          "models": {
+            "title": "Models",
+            "type": "string"
+          },
+          "recovery_package": {
+            "title": "Recovery Package",
+            "type": "string"
+          },
+          "root": {
+            "title": "Root",
+            "type": "string"
+          }
+        },
+        "required": [
+          "root",
+          "chats_db",
+          "recovery_package",
+          "models",
+          "logs",
+          "backups"
+        ],
+        "title": "DataPaths",
+        "type": "object"
+      },
       "DeviationApproval": {
         "properties": {
           "date": {
@@ -431,17 +737,133 @@
         "title": "DeviationApproval",
         "type": "object"
       },
-      "EngineStatus": {
-        "description": "The local engine (llama-server) is not part of this build yet.",
+      "DownloadStart": {
         "properties": {
+          "entry_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Entry Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entry_id"
+        ],
+        "title": "DownloadStart",
+        "type": "object"
+      },
+      "DownloadState": {
+        "properties": {
+          "entry_id": {
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "received_bytes": {
+            "title": "Received Bytes",
+            "type": "integer"
+          },
+          "speed_bps": {
+            "title": "Speed Bps",
+            "type": "integer"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "downloading",
+              "paused",
+              "verifying",
+              "failed",
+              "done"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "total_bytes": {
+            "title": "Total Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "entry_id",
+          "status",
+          "received_bytes",
+          "total_bytes",
+          "speed_bps",
+          "error",
+          "started_at"
+        ],
+        "title": "DownloadState",
+        "type": "object"
+      },
+      "EngineStatus": {
+        "description": "State of the local engine (llama-server). ``not_built`` until the engine module exists.",
+        "properties": {
+          "build": {
+            "anyOf": [
+              {
+                "enum": [
+                  "cpu",
+                  "vulkan"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build"
+          },
+          "fallback": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FallbackOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "installed": {
             "title": "Installed",
             "type": "integer"
           },
+          "loaded_model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loaded Model Id"
+          },
           "state": {
             "enum": [
               "not_built",
-              "no_model"
+              "no_model",
+              "not_started",
+              "loading",
+              "ready",
+              "generating",
+              "idle_unloaded",
+              "failed"
             ],
             "title": "State",
             "type": "string"
@@ -452,6 +874,57 @@
           "installed"
         ],
         "title": "EngineStatus",
+        "type": "object"
+      },
+      "EngineSummary": {
+        "properties": {
+          "build": {
+            "anyOf": [
+              {
+                "enum": [
+                  "cpu",
+                  "vulkan"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build"
+          },
+          "loaded_model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loaded Model Id"
+          },
+          "state": {
+            "enum": [
+              "not_built",
+              "no_model",
+              "not_started",
+              "loading",
+              "ready",
+              "generating",
+              "idle_unloaded",
+              "failed"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "build",
+          "loaded_model_id"
+        ],
+        "title": "EngineSummary",
         "type": "object"
       },
       "EvidenceEventOut": {
@@ -476,6 +949,28 @@
             ],
             "title": "Conversation Id"
           },
+          "epoch": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Epoch"
+          },
+          "event_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Hash"
+          },
           "event_id": {
             "title": "Event Id",
             "type": "string"
@@ -484,9 +979,47 @@
             "title": "Event Type",
             "type": "string"
           },
+          "format_version": {
+            "default": 1,
+            "title": "Format Version",
+            "type": "integer"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
+          },
+          "input_commitment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Commitment"
+          },
+          "model_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Digest"
+          },
+          "output_commitment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Commitment"
           },
           "payload": {
             "additionalProperties": {
@@ -512,6 +1045,17 @@
             "title": "Pending",
             "type": "boolean"
           },
+          "prev_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prev Hash"
+          },
           "project_id": {
             "anyOf": [
               {
@@ -523,6 +1067,21 @@
             ],
             "title": "Project Id"
           },
+          "provider": {
+            "anyOf": [
+              {
+                "enum": [
+                  "local",
+                  "company"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
           "seq": {
             "anyOf": [
               {
@@ -533,6 +1092,17 @@
               }
             ],
             "title": "Seq"
+          },
+          "stream_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stream Id"
           },
           "ts": {
             "format": "date-time",
@@ -555,6 +1125,162 @@
         "title": "EvidenceEventOut",
         "type": "object"
       },
+      "EvidenceExportIn": {
+        "description": "What to export. ``path``: where Electron main's save dialog says to write the bundle.",
+        "properties": {
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "from": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From"
+          },
+          "path": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "scope": {
+            "enum": [
+              "project",
+              "range"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To"
+          }
+        },
+        "required": [
+          "scope",
+          "path"
+        ],
+        "title": "EvidenceExportIn",
+        "type": "object"
+      },
+      "EvidenceExportOut": {
+        "properties": {
+          "checkpoint_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Checkpoint Ids",
+            "type": "array"
+          },
+          "custody": {
+            "title": "Custody",
+            "type": "string"
+          },
+          "epoch_range": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Epoch Range",
+            "type": "array"
+          },
+          "expected_tip": {
+            "title": "Expected Tip",
+            "type": "string"
+          },
+          "exported_at": {
+            "format": "date-time",
+            "title": "Exported At",
+            "type": "string"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "first_seq": {
+            "title": "First Seq",
+            "type": "integer"
+          },
+          "last_seq": {
+            "title": "Last Seq",
+            "type": "integer"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "signer_key_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Signer Key Ids",
+            "type": "array"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "stream_id": {
+            "title": "Stream Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file_name",
+          "path",
+          "size_bytes",
+          "stream_id",
+          "epoch_range",
+          "first_seq",
+          "last_seq",
+          "expected_tip",
+          "signer_key_ids",
+          "checkpoint_ids",
+          "custody",
+          "exported_at",
+          "scope"
+        ],
+        "title": "EvidenceExportOut",
+        "type": "object"
+      },
       "EvidenceStatus": {
         "properties": {
           "pending": {
@@ -575,6 +1301,67 @@
           "pending"
         ],
         "title": "EvidenceStatus",
+        "type": "object"
+      },
+      "EvidenceStream": {
+        "description": "This installation's evidence stream. Each restore starts a new epoch.",
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "device_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id"
+          },
+          "epoch": {
+            "title": "Epoch",
+            "type": "integer"
+          },
+          "prior_tip_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prior Tip Hash"
+          },
+          "signer_key_id": {
+            "title": "Signer Key Id",
+            "type": "string"
+          },
+          "stream_id": {
+            "title": "Stream Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stream_id",
+          "device_id",
+          "epoch",
+          "signer_key_id",
+          "prior_tip_hash",
+          "created_at"
+        ],
+        "title": "EvidenceStream",
         "type": "object"
       },
       "Exchange": {
@@ -667,6 +1454,102 @@
         "title": "ExportOut",
         "type": "object"
       },
+      "FallbackOut": {
+        "properties": {
+          "acknowledged": {
+            "title": "Acknowledged",
+            "type": "boolean"
+          },
+          "from_build": {
+            "enum": [
+              "cpu",
+              "vulkan"
+            ],
+            "title": "From Build",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "to_build": {
+            "enum": [
+              "cpu",
+              "vulkan"
+            ],
+            "title": "To Build",
+            "type": "string"
+          }
+        },
+        "required": [
+          "occurred_at",
+          "from_build",
+          "to_build",
+          "acknowledged"
+        ],
+        "title": "FallbackOut",
+        "type": "object"
+      },
+      "GenerationOut": {
+        "description": "Whether this conversation is answering right now (list dot, Stop button).",
+        "properties": {
+          "generating": {
+            "title": "Generating",
+            "type": "boolean"
+          },
+          "message_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Id"
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "enum": [
+                  "loading_engine",
+                  "preparing",
+                  "streaming"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phase"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "enum": [
+                  "local",
+                  "company"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          }
+        },
+        "required": [
+          "generating",
+          "message_id",
+          "phase",
+          "provider"
+        ],
+        "title": "GenerationOut",
+        "type": "object"
+      },
       "Gpu": {
         "properties": {
           "driver_ok": {
@@ -705,6 +1588,16 @@
       },
       "HardwareOut": {
         "properties": {
+          "benchmark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BenchmarkOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "checked_at": {
             "format": "date-time",
             "title": "Checked At",
@@ -838,6 +1731,82 @@
         "title": "ImportOut",
         "type": "object"
       },
+      "InstalledModelDetail": {
+        "properties": {
+          "artifact_digest": {
+            "title": "Artifact Digest",
+            "type": "string"
+          },
+          "catalogue_entry_id": {
+            "title": "Catalogue Entry Id",
+            "type": "string"
+          },
+          "checks": {
+            "$ref": "#/components/schemas/ModelChecks"
+          },
+          "context_length": {
+            "title": "Context Length",
+            "type": "integer"
+          },
+          "file_path": {
+            "title": "File Path",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "installed_at": {
+            "format": "date-time",
+            "title": "Installed At",
+            "type": "string"
+          },
+          "licence": {
+            "title": "Licence",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "source": {
+            "enum": [
+              "download",
+              "offline"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "tier": {
+            "enum": [
+              "small",
+              "medium"
+            ],
+            "title": "Tier",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "catalogue_entry_id",
+          "name",
+          "file_path",
+          "artifact_digest",
+          "size_bytes",
+          "context_length",
+          "licence",
+          "tier",
+          "installed_at",
+          "source",
+          "checks"
+        ],
+        "title": "InstalledModelDetail",
+        "type": "object"
+      },
       "InstalledModelOut": {
         "properties": {
           "artifact_digest": {
@@ -908,6 +1877,29 @@
           "source"
         ],
         "title": "InstalledModelOut",
+        "type": "object"
+      },
+      "Licence": {
+        "properties": {
+          "licence": {
+            "title": "Licence",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "role",
+          "licence"
+        ],
+        "title": "Licence",
         "type": "object"
       },
       "MessageOut": {
@@ -1045,6 +2037,133 @@
           "continued_from"
         ],
         "title": "MessageOut",
+        "type": "object"
+      },
+      "ModelChecks": {
+        "description": "What the setup Verified step shows.",
+        "properties": {
+          "deviation_approval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DeviationApproval"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "digest_matches": {
+            "title": "Digest Matches",
+            "type": "boolean"
+          },
+          "pipeline": {
+            "enum": [
+              "own",
+              "third-party"
+            ],
+            "title": "Pipeline",
+            "type": "string"
+          },
+          "provenance_complete": {
+            "title": "Provenance Complete",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "digest_matches",
+          "provenance_complete",
+          "pipeline",
+          "deviation_approval"
+        ],
+        "title": "ModelChecks",
+        "type": "object"
+      },
+      "ModelChoiceIn": {
+        "description": "``model_id``: an installed model; omitted -> the default model, else the first installed.",
+        "properties": {
+          "model_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Id"
+          }
+        },
+        "title": "ModelChoiceIn",
+        "type": "object"
+      },
+      "PackageRecordOut": {
+        "description": "One export or import of a Project Package (project settings, package history).",
+        "properties": {
+          "checksum": {
+            "title": "Checksum",
+            "type": "string"
+          },
+          "conversations": {
+            "title": "Conversations",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "export",
+              "import"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "messages": {
+            "title": "Messages",
+            "type": "integer"
+          },
+          "package_id": {
+            "title": "Package Id",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "summaries": {
+            "title": "Summaries",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "direction",
+          "package_id",
+          "file_name",
+          "size_bytes",
+          "checksum",
+          "conversations",
+          "messages",
+          "summaries",
+          "created_at"
+        ],
+        "title": "PackageRecordOut",
         "type": "object"
       },
       "ProjectCreate": {
@@ -1220,6 +2339,16 @@
       },
       "ProvidersStatus": {
         "properties": {
+          "company": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompanyStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "company_enabled": {
             "title": "Company Enabled",
             "type": "boolean"
@@ -1280,6 +2409,11 @@
             "title": "Backup Path",
             "type": "string"
           },
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
           "recovery_key": {
             "maxLength": 100,
             "minLength": 1,
@@ -1296,6 +2430,17 @@
       },
       "Restored": {
         "properties": {
+          "epoch": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Epoch"
+          },
           "stream_id": {
             "title": "Stream Id",
             "type": "string"
@@ -1639,6 +2784,144 @@
         "title": "StoreCreated",
         "type": "object"
       },
+      "SupportBundleIn": {
+        "description": "``path``: a folder (a file name is chosen) or a .zip file, chosen by Electron main.",
+        "properties": {
+          "path": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "SupportBundleIn",
+        "type": "object"
+      },
+      "SupportBundleOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "file_count": {
+            "title": "File Count",
+            "type": "integer"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "file_name",
+          "path",
+          "size_bytes",
+          "file_count",
+          "created_at"
+        ],
+        "title": "SupportBundleOut",
+        "type": "object"
+      },
+      "SystemInfo": {
+        "properties": {
+          "app_version": {
+            "title": "App Version",
+            "type": "string"
+          },
+          "data_paths": {
+            "$ref": "#/components/schemas/DataPaths"
+          },
+          "licences": {
+            "items": {
+              "$ref": "#/components/schemas/Licence"
+            },
+            "title": "Licences",
+            "type": "array"
+          },
+          "profile": {
+            "enum": [
+              "desktop",
+              "dev",
+              "test"
+            ],
+            "title": "Profile",
+            "type": "string"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "app_version",
+          "profile",
+          "schema_version",
+          "data_paths",
+          "licences"
+        ],
+        "title": "SystemInfo",
+        "type": "object"
+      },
+      "SystemStatus": {
+        "description": "Everything the sidebar status dots and Settings > Health show, in one call.",
+        "properties": {
+          "backend": {
+            "title": "Backend",
+            "type": "string"
+          },
+          "company": {
+            "$ref": "#/components/schemas/CompanySummary"
+          },
+          "database": {
+            "title": "Database",
+            "type": "string"
+          },
+          "engine": {
+            "$ref": "#/components/schemas/EngineSummary"
+          },
+          "generating_conversation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generating Conversation Id"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "writer": {
+            "$ref": "#/components/schemas/WriterSummary"
+          }
+        },
+        "required": [
+          "backend",
+          "database",
+          "version",
+          "engine",
+          "writer",
+          "company",
+          "generating_conversation_id"
+        ],
+        "title": "SystemStatus",
+        "type": "object"
+      },
       "UpdateAvailable": {
         "properties": {
           "size_bytes": {
@@ -1718,6 +3001,28 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "WriterSummary": {
+        "properties": {
+          "pending": {
+            "title": "Pending",
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "ok",
+              "unavailable"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "pending"
+        ],
+        "title": "WriterSummary",
         "type": "object"
       },
       "aios_backend__apps__models__schemas__ImportIn": {
@@ -1805,6 +3110,46 @@
           "chat"
         ]
       },
+      "get": {
+        "operationId": "get_conversation_conversations__conversation_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "One conversation",
+        "tags": [
+          "chat"
+        ]
+      },
       "patch": {
         "operationId": "update_conversation_conversations__conversation_id__patch",
         "parameters": [
@@ -1851,6 +3196,100 @@
           }
         },
         "summary": "Rename, archive or change model",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
+    "/conversations/{conversation_id}/continue-locally": {
+      "post": {
+        "operationId": "continue_locally_conversations__conversation_id__continue_locally_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinueIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinueOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Move to Local and continue an interrupted answer or send the pending message",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
+    "/conversations/{conversation_id}/generation": {
+      "get": {
+        "operationId": "generation_conversations__conversation_id__generation_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Whether an answer is being generated",
         "tags": [
           "chat"
         ]
@@ -1952,6 +3391,54 @@
         ]
       }
     },
+    "/conversations/{conversation_id}/messages/stream": {
+      "post": {
+        "operationId": "send_stream_conversations__conversation_id__messages_stream_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {}
+            },
+            "description": "Events: started, phase, delta, done, error (see docs/local-api-plan.md)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Send a message; the answer streams as Server-Sent Events",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
     "/conversations/{conversation_id}/provider": {
       "post": {
         "operationId": "change_provider_conversations__conversation_id__provider_post",
@@ -2046,6 +3533,148 @@
         ]
       }
     },
+    "/conversations/{conversation_id}/regenerate/stream": {
+      "post": {
+        "operationId": "regenerate_stream_conversations__conversation_id__regenerate_stream_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {}
+            },
+            "description": "Events: started, phase, delta, done, error (see docs/local-api-plan.md)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Answer the last question again, streamed as Server-Sent Events",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
+    "/conversations/{conversation_id}/stop": {
+      "post": {
+        "operationId": "stop_conversations__conversation_id__stop_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stop the answer being generated; the words so far are kept",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
+    "/engine/fallback/acknowledge": {
+      "post": {
+        "operationId": "acknowledge_fallback_engine_fallback_acknowledge_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Hide the GPU-to-CPU fallback notice",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/engine/start": {
+      "post": {
+        "operationId": "start_engine_engine_start_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ModelChoiceIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngineStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start the local engine and load a model",
+        "tags": [
+          "models"
+        ]
+      }
+    },
     "/engine/status": {
       "get": {
         "operationId": "engine_status_engine_status_get",
@@ -2078,6 +3707,7 @@
             "schema": {
               "anyOf": [
                 {
+                  "maxLength": 64,
                   "type": "string"
                 },
                 {
@@ -2085,6 +3715,72 @@
                 }
               ],
               "title": "Project Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "event_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 20,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Event Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 1000,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
             }
           }
         ],
@@ -2114,7 +3810,78 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Recorded events, oldest first (optionally for one project)",
+        "summary": "Recorded events, oldest first (optionally filtered)",
+        "tags": [
+          "evidence"
+        ]
+      }
+    },
+    "/evidence/checkpoints": {
+      "get": {
+        "operationId": "get_checkpoints_evidence_checkpoints_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from_seq",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From Seq"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to_seq",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To Seq"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Checkpoint"
+                  },
+                  "title": "Response Get Checkpoints Evidence Checkpoints Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Signed checkpoints (made by the evidence writer)",
         "tags": [
           "evidence"
         ]
@@ -2123,17 +3890,46 @@
     "/evidence/export": {
       "post": {
         "operationId": "export_evidence_export_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/EvidenceExportIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
+          "201": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceExportOut"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
-        "summary": "Export a verifiable bundle (done by the evidence writer)",
+        "summary": "Export a verifiable bundle for a project or date range (written by the evidence writer)",
         "tags": [
           "evidence"
         ]
@@ -2141,7 +3937,7 @@
     },
     "/evidence/status": {
       "get": {
-        "operationId": "status_evidence_status_get",
+        "operationId": "get_status_evidence_status_get",
         "responses": {
           "200": {
             "content": {
@@ -2155,6 +3951,69 @@
           }
         },
         "summary": "Evidence writer state and pending events",
+        "tags": [
+          "evidence"
+        ]
+      }
+    },
+    "/evidence/stream": {
+      "get": {
+        "operationId": "get_stream_evidence_stream_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceStream"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "This installation's evidence stream and current epoch",
+        "tags": [
+          "evidence"
+        ]
+      }
+    },
+    "/evidence/{seq}": {
+      "get": {
+        "operationId": "get_event_evidence__seq__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "seq",
+            "required": true,
+            "schema": {
+              "title": "Seq",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceEventOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "One event by sequence number (a pending event by its local id)",
         "tags": [
           "evidence"
         ]
@@ -2227,9 +4086,31 @@
         ]
       }
     },
+    "/models/catalogue/check": {
+      "post": {
+        "operationId": "check_catalogue_models_catalogue_check_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogueCheckOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ask the model mirror which catalogue it offers and record the check",
+        "tags": [
+          "models"
+        ]
+      }
+    },
     "/models/download/{entry_id}": {
       "post": {
-        "operationId": "download_models_download__entry_id__post",
+        "deprecated": true,
+        "operationId": "start_download_alias_models_download__entry_id__post",
         "parameters": [
           {
             "in": "path",
@@ -2242,10 +4123,12 @@
           }
         ],
         "responses": {
-          "200": {
+          "202": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadState"
+                }
               }
             },
             "description": "Successful Response"
@@ -2261,7 +4144,230 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Download from the model mirror (not available in this build: 503)",
+        "summary": "Deprecated alias of POST /models/downloads",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/models/downloads": {
+      "get": {
+        "operationId": "list_downloads_models_downloads_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DownloadState"
+                  },
+                  "title": "Response List Downloads Models Downloads Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Downloads in progress, paused, failed or done",
+        "tags": [
+          "models"
+        ]
+      },
+      "post": {
+        "operationId": "start_download_models_downloads_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DownloadStart"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start downloading a catalogue model from the model mirror",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/models/downloads/{entry_id}": {
+      "delete": {
+        "operationId": "cancel_download_models_downloads__entry_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "title": "Entry Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel a download and delete the partial file",
+        "tags": [
+          "models"
+        ]
+      },
+      "get": {
+        "operationId": "get_download_models_downloads__entry_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "title": "Entry Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "One download",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/models/downloads/{entry_id}/pause": {
+      "post": {
+        "operationId": "pause_download_models_downloads__entry_id__pause_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "title": "Entry Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pause a download; the part is kept",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/models/downloads/{entry_id}/resume": {
+      "post": {
+        "operationId": "resume_download_models_downloads__entry_id__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "title": "Entry Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resume a paused download where it stopped, or retry a failed one",
         "tags": [
           "models"
         ]
@@ -2341,11 +4447,69 @@
         "tags": [
           "models"
         ]
+      },
+      "get": {
+        "operationId": "get_model_models__model_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstalledModelDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "One installed model with its verification checks",
+        "tags": [
+          "models"
+        ]
       }
     },
     "/projects": {
       "get": {
         "operationId": "list_projects_projects_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "archived",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Archived"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -2360,9 +4524,19 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
-        "summary": "All projects, newest first",
+        "summary": "All projects, newest first (optionally only archived or active)",
         "tags": [
           "projects"
         ]
@@ -2819,6 +4993,52 @@
         ]
       }
     },
+    "/projects/{project_id}/packages": {
+      "get": {
+        "operationId": "package_history_projects__project_id__packages_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PackageRecordOut"
+                  },
+                  "title": "Response Package History Projects  Project Id  Packages Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export and import history, newest first",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
     "/projects/{project_id}/reclassify": {
       "post": {
         "operationId": "reclassify_projects__project_id__reclassify_post",
@@ -2946,6 +5166,65 @@
               "maxLength": 200,
               "title": "Q",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "user",
+                    "assistant"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Role"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_archived",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Include Archived",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 60,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
             }
           }
         ],
@@ -3145,6 +5424,54 @@
         ]
       }
     },
+    "/system/benchmark": {
+      "post": {
+        "operationId": "run_benchmark_system_benchmark_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ModelChoiceIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BenchmarkOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run a short benchmark on the local engine",
+        "tags": [
+          "models"
+        ]
+      }
+    },
     "/system/hardware": {
       "get": {
         "operationId": "get_hardware_system_hardware_get",
@@ -3182,9 +5509,30 @@
             "description": "Validation Error"
           }
         },
-        "summary": "This machine's hardware and the recommended tier",
+        "summary": "This machine's hardware, recommended tier, last benchmark",
         "tags": [
           "models"
+        ]
+      }
+    },
+    "/system/info": {
+      "get": {
+        "operationId": "system_info_system_info_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Version, data folders and licences (About, Data)",
+        "tags": [
+          "settings"
         ]
       }
     },
@@ -3208,6 +5556,68 @@
           }
         },
         "summary": "Every host AIOS may connect to",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/system/status": {
+      "get": {
+        "operationId": "system_status_system_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Backend, engine, evidence writer and Company AI state",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/system/support-bundle": {
+      "post": {
+        "operationId": "support_bundle_system_support_bundle_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupportBundleIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportBundleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Zip the log folder (logs only, never databases or keys)",
         "tags": [
           "settings"
         ]

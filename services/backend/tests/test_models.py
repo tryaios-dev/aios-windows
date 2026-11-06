@@ -139,6 +139,15 @@ def test_hardware_is_read_from_this_machine_and_kept(client: TestClient) -> None
 
 
 def test_engine_status(client: TestClient, tmp_path: Path, tiny_entry: catalogue.Entry) -> None:
-    assert client.get("/engine/status").json() == {"state": "no_model", "installed": 0}
+    no_engine = {"build": None, "loaded_model_id": None, "fallback": None}
+    assert client.get("/engine/status").json() == {
+        "state": "no_model",
+        "installed": 0,
+        **no_engine,
+    }
     client.post("/models/import", json={"path": str(gguf(tmp_path))})
-    assert client.get("/engine/status").json() == {"state": "not_built", "installed": 1}
+    assert client.get("/engine/status").json() == {
+        "state": "not_built",
+        "installed": 1,
+        **no_engine,
+    }

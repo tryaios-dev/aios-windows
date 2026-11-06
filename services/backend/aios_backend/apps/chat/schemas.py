@@ -76,6 +76,38 @@ class Exchange(BaseModel):
     assistant: MessageOut
 
 
+class CompanyStatus(BaseModel):
+    """The Company AI server as Settings > Network shows it. Never holds the API key."""
+
+    reachable: bool
+    base_url: str | None
+    model_name: str | None
+    checked_at: datetime
+
+
 class ProvidersStatus(BaseModel):
     local_ready: bool
     company_enabled: bool
+    company: CompanyStatus | None = None  # null while the operator flag is off
+
+
+class GenerationOut(BaseModel):
+    """Whether this conversation is answering right now (list dot, Stop button)."""
+
+    generating: bool
+    message_id: str | None
+    phase: Literal["loading_engine", "preparing", "streaming"] | None
+    provider: Provider | None
+
+
+class ContinueIn(BaseModel):
+    """Exactly one: the interrupted answer to continue, or the message that could not be sent."""
+
+    partial_message_id: str | None = Field(default=None, max_length=64)
+    text: str | None = Field(default=None, min_length=1, max_length=200_000)
+
+
+class ContinueOut(BaseModel):
+    conversation: ConversationOut
+    user: MessageOut | None
+    assistant: MessageOut

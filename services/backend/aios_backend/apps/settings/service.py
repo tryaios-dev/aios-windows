@@ -1,15 +1,29 @@
-"""Settings rules: defaults, partial updates, and the network allowlist shown in Settings > Network.
+"""Settings rules: defaults, partial updates, the network allowlist (Settings > Network), the
+support bundle (Settings > Health) and the build facts (Settings > About and Data).
 
 The allowlist mirrors contracts/network-allowlist/v1/allowlist.json (a test keeps them equal).
 It is read-only here: nothing in the backend can add a host.
 """
 
+import os
+import re
+import zipfile
+from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from aios_backend.apps.settings import repository as repo
-from aios_backend.apps.settings.schemas import AllowlistEntry, SettingsOut, UpdateAvailable
+from aios_backend.apps.settings.schemas import (
+    AllowlistEntry,
+    DataPaths,
+    Licence,
+    SettingsOut,
+    SupportBundleOut,
+    SystemInfo,
+    UpdateAvailable,
+)
 from aios_backend.config import APP_VERSION, Settings
 from aios_backend.errors import AppError
 from db.base import utcnow
@@ -103,3 +117,71 @@ def allowlist(settings: Settings) -> list[AllowlistEntry]:
         )
         for flow_id, host, port, purpose, kind in ALLOWLIST
     ]
+
+
+# ------------------------------------------------------------------ support bundle (L-03)
+LOG_NAME = re.compile(r"[A-Za-z0-9_.-]+\.log(\.\d{1,3})?")
+
+
+def _log_files(folder: Path) -> list[Path]:
+    """Only log files: in the dev profile the log folder also holds databases."""
+    return sorted(p for p in folder.iterdir() if p.is_file() and LOG_NAME.fullmatch(p.name))
+
+
+def _bundle_target(path_text: str, now: datetime) -> Path:
+    path = Path(path_text)
+    if not path.is_absolute():
+        raise AppError("invalid_path", 400)
+    if path.is_dir():
+        return path / f"aios-support-bundle-{now:%Y%m%d-%H%M%S}.zip"
+    if path.suffix.lower() == ".zip" and path.parent.is_dir():
+        return path
+    raise AppError("invalid_path", 400)
+
+
+def support_bundle(settings: Settings, path_text: str) -> SupportBundleOut:
+    """A zip of the log folder and nothing more. Logs are content-free; databases never go in."""
+    if settings.log_file is None or not settings.log_file.parent.is_dir():
+        raise AppError("log_folder_missing", 404)
+    now = utcnow()
+    target = _bundle_target(path_text, now)
+    files = _log_files(settings.log_file.parent)
+    tmp = target.with_name(target.name + ".part")
+    with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+        for file in files:
+            bundle.write(file, arcname=f"logs/{file.name}")
+    os.replace(tmp, target)
+    return SupportBundleOut(
+        file_name=target.name,
+        path=str(target),
+        size_bytes=target.stat().st_size,
+        file_count=len(files),
+        created_at=now,
+    )
+
+
+# ------------------------------------------------------------------ build facts (About, Data)
+LICENCES: list[tuple[str, str, str]] = [
+    ("llama.cpp", "Local inference engine", "MIT"),
+    ("Qwen3", "Model weights", "Apache-2.0"),
+    ("Gemma 4", "Model weights", "Apache-2.0"),
+    ("SQLCipher", "Encrypted database", "BSD-style"),
+    ("Electron", "Desktop shell", "MIT"),
+]
+
+
+def info(settings: Settings) -> SystemInfo:
+    return SystemInfo(
+        app_version=APP_VERSION,
+        profile=settings.profile.value,
+        schema_version=repo.schema_version(),
+        data_paths=DataPaths(
+            root=str(settings.chats_db.parent),
+            chats_db=str(settings.chats_db),
+            recovery_package=str(settings.recovery_pkg),
+            models=str(settings.models_dir),
+            logs=str(settings.log_file.parent) if settings.log_file else None,
+            backups=str(settings.backups_dir),
+        ),
+        licences=[Licence(name=n, role=r, licence=lic) for n, r, lic in LICENCES],
+    )

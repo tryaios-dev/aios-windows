@@ -13,10 +13,17 @@ from sqlalchemy.orm import Session
 
 from aios_backend.apps.projects import package
 from aios_backend.apps.projects import repository as repo
-from aios_backend.apps.projects.schemas import ExportOut, ImportOut, ProjectOut, ReclassifyOut
+from aios_backend.apps.projects.models import ProjectPackage
+from aios_backend.apps.projects.schemas import (
+    ExportOut,
+    ImportOut,
+    PackageRecordOut,
+    ProjectOut,
+    ReclassifyOut,
+)
 from aios_backend.config import APP_VERSION, Settings
 from aios_backend.errors import AppError, not_found
-from aios_common.canonical import utc_time
+from aios_common.canonical import sha256_hex, utc_time
 from db.models import Conversation, Message, Project, Summary
 
 CLASS_ORDER = {"restricted": 0, "internal": 1, "public": 2}
@@ -46,8 +53,8 @@ def _get(session: Session, project_id: str) -> Project:
     return project
 
 
-def list_projects(session: Session) -> list[Project]:
-    return list(repo.list_projects(session))
+def list_projects(session: Session, archived: bool | None = None) -> list[Project]:
+    return list(repo.list_projects(session, archived))
 
 
 def get_project(session: Session, project_id: str) -> Project:
@@ -325,6 +332,21 @@ def export_project(session: Session, project_id: str, raw_path: str, confirmed: 
             "manifest_digest": built.manifest_digest,
         },
     )
+    repo.add(
+        session,
+        ProjectPackage(
+            project_id=project.id,
+            direction="export",
+            package_id=built.package_id,
+            file_name=path.name[:255],
+            size_bytes=len(built.data),
+            checksum=built.checksum,
+            conversations=len(conv_files),
+            messages=sum(len(c["messages"]) for c in conv_files),
+            summaries=sum(len(c["summaries"]) for c in conv_files),
+            evidence_outbox_id=event.id,
+        ),
+    )
     return ExportOut(
         file_name=path.name,
         path=str(path),
@@ -351,6 +373,7 @@ def import_project(session: Session, raw_path: str) -> ImportOut:
         raise AppError(exc.code.lower(), 422) from exc  # nothing was imported
 
     # All-or-nothing: everything below runs in the request's single transaction.
+    seen_before = repo.imported_before(session, pkg.manifest.package_id)
     name = pkg.project.name
     remapped = repo.name_taken(session, name)
     if remapped:
@@ -441,7 +464,9 @@ def import_project(session: Session, raw_path: str) -> ImportOut:
     if skipped_system:
         warnings.append(f"Skipped {skipped_system} system message(s); they are not stored.")
 
-    repo.record_event(
+    if seen_before:
+        warnings.append("This package was imported before; it was added again as a new project.")
+    event = repo.record_event(
         session,
         "project_imported",
         project_id=project.id,
@@ -450,6 +475,21 @@ def import_project(session: Session, raw_path: str) -> ImportOut:
             "package_id": pkg.manifest.package_id,
             "manifest_digest": pkg.manifest_digest,
         },
+    )
+    repo.add(
+        session,
+        ProjectPackage(
+            project_id=project.id,
+            direction="import",
+            package_id=pkg.manifest.package_id,
+            file_name=path.name[:255],
+            size_bytes=len(data),
+            checksum=sha256_hex(data),
+            conversations=len(pkg.conversations),
+            messages=messages,
+            summaries=summaries,
+            evidence_outbox_id=event.id,
+        ),
     )
     return ImportOut(
         project_id=project.id,
@@ -460,3 +500,9 @@ def import_project(session: Session, raw_path: str) -> ImportOut:
         warnings=warnings,
         remapped=remapped,
     )
+
+
+def package_history(session: Session, project_id: str) -> list[PackageRecordOut]:
+    """Packages written from or read into this project, newest first."""
+    _get(session, project_id)
+    return [PackageRecordOut.model_validate(p) for p in repo.packages(session, project_id)]

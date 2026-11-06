@@ -210,7 +210,7 @@ export function PathValue({
     <Tooltip content={copied ? "Copied" : "Copy path"}>
       <button
         type="button"
-        onClick={() => copy(copyValue)}
+        onClick={() => void copy(copyValue)}
         aria-label={`Copy ${copyValue}`}
         className={cn(
           "group inline-flex max-w-full items-center gap-1.5 rounded-xs text-left font-mono text-xs tracking-[0.02em] text-ink hover:text-green",
