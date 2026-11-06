@@ -20,7 +20,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-from aios_backend.engine.job import KillOnCloseJob
+from aios_backend.engine.job import kill_on_close_job
 from aios_backend.engine.launcher import start
 from aios_common.handshake import set_token_for_tests
 
@@ -82,7 +82,7 @@ def main() -> int:
     args = p.parse_args()
 
     set_token_for_tests(secrets.token_urlsafe(32))  # the engine key is derived from it
-    job = KillOnCloseJob()
+    job = kill_on_close_job()
     with tempfile.TemporaryDirectory() as tmp:
         load_began = time.perf_counter()
         engine = start(args.engine_dir, args.model, Path(tmp), job)
