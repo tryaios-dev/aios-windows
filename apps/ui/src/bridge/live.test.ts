@@ -243,4 +243,24 @@ describe("desktop app: engine state comes from the backend's /health (D-06)", ()
     await ready({ engine_build: null });
     expect(useStore.getState().health.engine_build).toBe("cpu");
   });
+
+  it("without a usable graphics card and no engine running, shows the CPU build", async () => {
+    await ready({ engine_build: null }); // the fake hardware has no GPU
+    expect(useStore.getState().health.engine_build).toBe("cpu");
+  });
+
+  it("with a working graphics card and no engine running, shows the GPU build", async () => {
+    vi.mocked(fake.bridge.models.hardware).mockResolvedValue({
+      ...HARDWARE,
+      gpu: { name: "RTX", vram_gb: 16, driver_ok: true },
+    });
+    await ready({ engine_build: null });
+    expect(useStore.getState().health.engine_build).toBe("vulkan");
+  });
+
+  it("an answer still counts as sent when reading /health fails", async () => {
+    await ready({});
+    vi.mocked(fake.bridge.system.health).mockRejectedValueOnce(new Error("backend_503"));
+    expect(await api.conversations.send("conv-1", "hello")).toEqual({ ok: true });
+  });
 });

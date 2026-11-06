@@ -301,7 +301,10 @@ const ENGINE_STATE: Record<LiveHealth["engine"], EngineState> = {
 };
 
 /** The backend's /health (process manager) as the engine state every screen shows (D-06). */
-export function toEngineHealth(h: LiveHealth, s: { health: Health; installedModels: InstalledModel[]; safeMode: boolean }): Health {
+export function toEngineHealth(
+  h: LiveHealth,
+  s: { health: Health; installedModels: InstalledModel[]; safeMode: boolean; hardware: Hardware },
+): Health {
   let engine = ENGINE_STATE[h.engine];
   if (engine === "not_started" && h.engine_idle_unloaded) engine = "idle_unloaded";
   if (engine === "not_started" && s.installedModels.length === 0) engine = "no_model";
@@ -310,8 +313,9 @@ export function toEngineHealth(h: LiveHealth, s: { health: Health; installedMode
   return {
     ...s.health,
     engine,
-    // No engine running: show the build the next start will use (Safe mode or a fallback: CPU).
-    engine_build: h.engine_build ?? (s.safeMode || h.engine_cpu_fallback ? "cpu" : s.health.engine_build),
+    // No engine running: show the build the next start will use. CPU with Safe mode, after a
+    // fallback, or when this machine has no graphics card the GPU build can use.
+    engine_build: h.engine_build ?? (s.safeMode || h.engine_cpu_fallback || !s.hardware.gpu?.driver_ok ? "cpu" : "vulkan"),
     loaded_model_id: loaded?.id ?? null,
   };
 }
@@ -323,12 +327,20 @@ export async function refreshHealth(): Promise<void> {
   const h = await bridge().system.health();
   if (!newest()) return;
   useStore.setState((s) => ({
-    health: toEngineHealth(h, { health: s.health, installedModels: s.installedModels, safeMode: s.settings.safe_mode_cpu }),
+    health: toEngineHealth(h, {
+      health: s.health,
+      installedModels: s.installedModels,
+      safeMode: s.settings.safe_mode_cpu,
+      hardware: s.hardware,
+    }),
     ...(h.engine_cpu_fallback && s.fallbackNotice === null
       ? { fallbackNotice: { at: new Date().toISOString(), dismissed: false } }
       : {}),
   }));
 }
+
+/** For callers where the engine state is a bonus: a failed read never fails what they did. */
+export const refreshHealthQuietly = (): Promise<void> => refreshHealth().catch(() => undefined);
 
 export const HEALTH_POLL_MS = 10_000;
 let healthPoll: ReturnType<typeof setInterval> | undefined;
@@ -336,14 +348,14 @@ let healthPoll: ReturnType<typeof setInterval> | undefined;
 /** Keep the engine state current on every screen. A missed poll is not an error worth a toast. */
 export function startHealthPoll(): void {
   if (healthPoll !== undefined) return;
-  healthPoll = setInterval(() => void refreshHealth().catch(() => undefined), HEALTH_POLL_MS);
+  healthPoll = setInterval(() => void refreshHealthQuietly(), HEALTH_POLL_MS);
 }
 
 /** Everything a signed-in workspace shows. Messages load per conversation. */
 export async function refreshWorkspace(): Promise<void> {
   await refreshProjects();
   await Promise.all([refreshConversations(), refreshEvents(), refreshModels()]);
-  await refreshHealth(); // after the models: the loaded model is matched against them
+  await refreshHealthQuietly(); // after the models: the loaded model is matched against them
 }
 
 /** Run a change against the backend, then reload what it touched. Failures become a toast. */
