@@ -20,6 +20,7 @@ import {
 } from "@aios/bridge-contract";
 import type {
   Conversation,
+  EngineBuild,
   EngineState,
   EventType,
   EvidenceEvent,
@@ -300,11 +301,31 @@ const ENGINE_STATE: Record<LiveHealth["engine"], EngineState> = {
   failed: "failed",
 };
 
+/** The build the engine ran on last in this session; null until it has run. */
+let lastBuild: EngineBuild | null = null;
+
+/** Tests only: start as if the app had just opened. */
+export function resetEngineMemory(): void {
+  lastBuild = null;
+}
+
+/** No engine running: the build the next start will use. CPU with Safe mode or after a fallback;
+ * otherwise the build it last ran on, or the GPU build only if a graphics card with its own memory
+ * and a working driver was found (a virtual display adapter has none). The backend decides for
+ * real when it starts the engine. */
+function nextBuild(h: LiveHealth, s: { safeMode: boolean; hardware: Hardware }): EngineBuild {
+  if (s.safeMode || h.engine_cpu_fallback) return "cpu";
+  if (lastBuild) return lastBuild;
+  const gpu = s.hardware.gpu;
+  return gpu && gpu.driver_ok && gpu.vram_gb > 0 ? "vulkan" : "cpu";
+}
+
 /** The backend's /health (process manager) as the engine state every screen shows (D-06). */
 export function toEngineHealth(
   h: LiveHealth,
   s: { health: Health; installedModels: InstalledModel[]; safeMode: boolean; hardware: Hardware },
 ): Health {
+  if (h.engine_build) lastBuild = h.engine_build;
   let engine = ENGINE_STATE[h.engine];
   if (engine === "not_started" && h.engine_idle_unloaded) engine = "idle_unloaded";
   if (engine === "not_started" && s.installedModels.length === 0) engine = "no_model";
@@ -313,9 +334,7 @@ export function toEngineHealth(
   return {
     ...s.health,
     engine,
-    // No engine running: show the build the next start will use. CPU with Safe mode, after a
-    // fallback, or when this machine has no graphics card the GPU build can use.
-    engine_build: h.engine_build ?? (s.safeMode || h.engine_cpu_fallback || !s.hardware.gpu?.driver_ok ? "cpu" : "vulkan"),
+    engine_build: h.engine_build ?? nextBuild(h, s),
     loaded_model_id: loaded?.id ?? null,
   };
 }

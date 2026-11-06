@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AiosBridge, Exchange, Health, InstalledModel, Settings, SetupStatus } from "@aios/bridge-contract";
 import { api } from "./api";
-import { hydrate, refreshHealth } from "./live";
+import { hydrate, refreshHealth, resetEngineMemory } from "./live";
 import { useStore } from "./sim/store";
 
 const STATUS: SetupStatus = {
@@ -140,6 +140,7 @@ let fake: ReturnType<typeof fakeBridge>;
 
 beforeEach(() => {
   useStore.getState().resetFirstRun("fresh");
+  resetEngineMemory();
   fake = fakeBridge();
   window.aios = fake.bridge;
 });
@@ -249,12 +250,28 @@ describe("desktop app: engine state comes from the backend's /health (D-06)", ()
     expect(useStore.getState().health.engine_build).toBe("cpu");
   });
 
+  it("a virtual display adapter without its own memory does not count as a GPU", async () => {
+    vi.mocked(fake.bridge.models.hardware).mockResolvedValue({
+      ...HARDWARE,
+      gpu: { name: "Red Hat QXL controller", vram_gb: 0, driver_ok: true },
+    });
+    await ready({ engine_build: null });
+    expect(useStore.getState().health.engine_build).toBe("cpu");
+  });
+
   it("with a working graphics card and no engine running, shows the GPU build", async () => {
     vi.mocked(fake.bridge.models.hardware).mockResolvedValue({
       ...HARDWARE,
       gpu: { name: "RTX", vram_gb: 16, driver_ok: true },
     });
     await ready({ engine_build: null });
+    expect(useStore.getState().health.engine_build).toBe("vulkan");
+  });
+
+  it("after the engine has run, keeps showing the build it used", async () => {
+    await ready({ engine: "ok", engine_build: "vulkan" });
+    fake.state.health = { ...HEALTH, engine_idle_unloaded: true };
+    await refreshHealth();
     expect(useStore.getState().health.engine_build).toBe("vulkan");
   });
 
