@@ -71,8 +71,9 @@ async function updateSettings(patch: SettingsChange): Promise<void> {
   }
   try {
     const saved = await bridge().settings.update(patch);
-    s().updateSettings(patch); // keeps the engine state shown in step (Safe mode)
     applySettings(saved);
+    // The engine state comes from the backend, never from the simulation's guess (D-06).
+    if (patch.safe_mode_cpu !== undefined) await refreshHealthQuietly();
   } catch (err) {
     reportFailure(err, "Setting not saved");
   }

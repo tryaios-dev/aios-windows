@@ -48,7 +48,8 @@ Use `resources\llama\vulkan` on the GPU machine. Targets: MVP 10.2 (small tier, 
 | --- | --- | --- | --- | --- | --- | --- |
 | 8 GB, CPU only (fleet) | cpu | | | | | pending |
 | 16 GB, NVIDIA (fleet) | vulkan | | | | | pending |
-| *Reference:* clean Win 11 VM, 8 GB, 4 vCPU of an i9-12900H, installed app, spike screen | cpu | ~65 s (first question) | 1.5 s | 5.3 | ~4 | first words yes; speed just under 5 words/s |
+| *Reference:* clean Win 11 VM, 8 GB, **4 cores** of an i9-12900H, installed app, spike screen (2026-11-06) | cpu | ~8 s (first question) | 0.25 s | 12.1–12.4 | ~9 | yes |
+| *Superseded:* same VM, Windows using **1 core** (2026-11-05, see below) | cpu | ~65 s (first question) | 1.5 s | 5.3 | ~4 | first words yes; speed under 5 words/s |
 | *Reference:* dev laptop i9-12900H, Linux, `engine_bench.py` | cpu | 3.6 s | 0.42 s | 12.2 | ~9 | yes |
 | *Reference:* dev laptop, RTX 3070 Ti Laptop, Linux, `engine_bench.py` | vulkan | 7.7 s | 0.05 s | 84.5 | ~63 | yes |
 
@@ -56,23 +57,32 @@ Reference rows are not the fleet: they show the method works and give a first es
 VM run (2026-11-05) also passed M1: installed `AIOS Setup 0.1.0.exe` (unsigned, CI build of
 f924eb4), answer returned, no firewall prompt, no `llama-server.exe` left after closing the app.
 
-Observed: the first question waits for the model to load (about a minute in the VM). The
+**VM CPU layout.** Until 2026-11-06 the VM was given 4 virtual CPUs without a CPU topology, so
+QEMU presented them as 4 sockets and Windows 11 used only one (Task Manager: 1 virtual
+processor). Figures taken before then are single-core and understate the VM. Fixed with
+`virt-xml win11 --edit --vcpus 4,sockets=1,cores=4,threads=1`; Windows now shows 1 socket, 4 cores.
+
+Observed: the first question waits for the model to load (about a minute in the VM on one core,
+about 8 s on four with the file already cached). The
 chat screen should show that state (engine `starting` is in `/health`; the spike screen shows it).
 
 Any change to the tier table goes to the product owner. The note with these findings: `docs/notes/2026-11-06-local-speed-and-model-loading.md`.
 
 ## Low-end comparison: MiniCPM5-2B against Qwen3-4B (2026-11-06)
 
-Same clean Win 11 VM (8 GB, 4 vCPU, CPU build), installed app, spike screen, both models in the
-same session with the host idle. MiniCPM5-2B is the catalogue v3 pick for "8 GB RAM, no dedicated
+Clean Win 11 VM (8 GB, 4 cores, CPU build), installed app, spike screen, both models in the same
+session with the host idle. MiniCPM5-2B is the catalogue v3 pick for "8 GB RAM, no dedicated
 GPU". File: `openbmb/MiniCPM5-2B-GGUF` @ `2079a22f`, `MiniCPM5-2B-Q4_K_M.gguf`, 1,561,318,368
 bytes, SHA-256 `ec2d5801640099e97d8d7e8003ad4d81f336e757811f03a26173dddf386602fd`.
 
 | Model | File | First words (model loaded) | Tokens/s | ≈ Words/s | 512-token answer | Within 5–15 words/s |
 | --- | --- | --- | --- | --- | --- | --- |
-| MiniCPM5-2B Q4_K_M | 1.56 GB | 0.44–0.45 s | 8.3–9.3 | ~6.5 | 63 s | yes |
-| Qwen3-4B Q4_K_M | 2.50 GB | 0.44–0.68 s | 4.4–5.3 | ~3.8 | 118 s | no |
+| MiniCPM5-2B Q4_K_M | 1.56 GB | 0.21–0.45 s | 20.2–20.9 | ~15 | 26 s | yes (top of the range) |
+| Qwen3-4B Q4_K_M | 2.50 GB | 0.25–0.68 s | 11.6–12.4 | ~9 | 45 s | yes |
 
-On the dev laptop CPU (`engine_bench.py`): MiniCPM5-2B 27.0 tokens/s, load 0.8 s; Qwen3-4B
-15.3 tokens/s, load 3.0 s. Load time on the VM (45–50 s for both) is not comparable yet:
-MiniCPM5-2B ran first after install, while Windows Defender was still scanning the engine.
+MiniCPM5-2B is about 1.7× faster. Load time is not compared: MiniCPM5-2B's engine was already
+running from the set-up checks; Qwen3-4B loaded in about 8 s with the file cached.
+
+Earlier the same day, with Windows using one core: MiniCPM5-2B 8.3–9.3 tokens/s (~6.5 words/s),
+Qwen3-4B 4.4–5.3 (~3.8 words/s), same ratio. On the dev laptop CPU (`engine_bench.py`):
+MiniCPM5-2B 27.0 tokens/s, load 0.8 s; Qwen3-4B 15.3 tokens/s, load 3.0 s.

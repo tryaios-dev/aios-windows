@@ -280,4 +280,12 @@ describe("desktop app: engine state comes from the backend's /health (D-06)", ()
     vi.mocked(fake.bridge.system.health).mockRejectedValueOnce(new Error("backend_503"));
     expect(await api.conversations.send("conv-1", "hello")).toEqual({ ok: true });
   });
+
+  it("turning Safe mode off on a machine without a usable GPU still shows the CPU build", async () => {
+    fake.state.settings = { ...SETTINGS, safe_mode_cpu: true };
+    await ready({ engine_build: null });
+    await api.settings.update({ safe_mode_cpu: false });
+    expect(useStore.getState().settings.safe_mode_cpu).toBe(false);
+    expect(useStore.getState().health.engine_build).toBe("cpu");
+  });
 });
