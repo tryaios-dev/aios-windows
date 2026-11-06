@@ -59,4 +59,4 @@ f924eb4), answer returned, no firewall prompt, no `llama-server.exe` left after 
 Observed: the first question waits for the model to load (about a minute in the VM). The
 chat screen should show that state (engine `starting` is in `/health`; the spike screen shows it).
 
-Any change to the tier table goes to the product owner.
+Any change to the tier table goes to the product owner. The note with these findings: `docs/notes/2026-11-06-local-speed-and-model-loading.md`.

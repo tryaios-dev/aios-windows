@@ -110,19 +110,19 @@ the log files: it records only exit codes and its own content-free events
 
 ## Question 12: llama-server's public `/health`
 
-Upstream answers `GET /health` without a key, by design (`{"status":"ok"}`,
-or 503 while loading). M-19 says requests without the token are rejected.
+Upstream answers two routes without a key, by design: `GET /health` and `GET /v1/health`
+(`{"status":"ok"}`, or 503 while loading). They are listed in `get_public_endpoints` in
+`tools/server/server-http.cpp` at the pinned commit. M-19 says requests without the token are
+rejected.
 
-| Option | Cost | What it means |
-|---|---|---|
-| **A. Accept (recommended)** | none | Loopback-only liveness, no content and no model name. The UI never sees it: the backend probes it with the key and reports `engine` in its own `/health`. Recorded as a scoped exception to M-19's wording. |
-| B. Patch it | ~3 lines in the patch | `/health` requires the key like everything else. Grows the security-relevant patch and its rebase cost. |
+**Decision: Approved by Umer, 2026-11-06: option A, a scoped exception to M-19 for /health and /v1/health only (loopback, liveness only, no content). Any new public route needs a new review.**
 
-**Decision: pending the technical reviewer.** Record it here and in question
-12, and D-02 freezes it in `contracts/process-ipc/v1/spec.md` (replacing draft
-proposal P-1, which passed the key in an environment variable).
-`test_health_is_the_only_public_endpoint` pins the current behaviour; it changes
-if B is chosen.
+The UI never sees these routes: the backend probes the engine with the key and reports `engine`
+in its own `/health`. `tests/engine/test_engine.py` checks both routes return liveness only and
+that every other route (`/models`, `/v1/models`, `/props`, `/metrics`, `/api/tags`,
+`/v1/embeddings`, `/detokenize`, `/infill`) returns 401 without the key, so a llama.cpp update
+that opens another route fails CI and comes back for review (IPC-34 in
+`contracts/process-ipc/v1/spec.md`).
 
 ## Still to do by hand
 

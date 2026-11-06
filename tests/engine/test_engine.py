@@ -150,12 +150,41 @@ def test_rejects_requests_without_the_key(engine, path, body):
     assert _request(f"{engine.base}{path}", "wrong-key", body)[0] == 401
 
 
-def test_health_is_the_only_public_endpoint(engine):
-    # Question 12: /health answers without a key, by upstream design. It
-    # carries liveness only ({"status": "ok"}), never content.
-    status, body = _request(f"{engine.base}/health")
+# IPC-34 (approved 2026-11-06): upstream's public routes at the pinned commit are exactly
+# these two (get_public_endpoints in tools/server/server-http.cpp). Liveness only.
+PUBLIC_ROUTES = ("/health", "/v1/health")
+# Everything else needs the key. If a llama.cpp update opens one of these, CI fails and the
+# pin change goes back to the reviewer.
+KEYED_ROUTES = (
+    "/models",
+    "/v1/models",
+    "/props",
+    "/metrics",
+    "/api/tags",
+    "/v1/embeddings",
+    "/detokenize",
+    "/infill",
+)
+
+
+@pytest.mark.parametrize("path", PUBLIC_ROUTES)
+def test_health_routes_are_public_and_carry_liveness_only(engine, path):
+    status, body = _request(f"{engine.base}{path}")
     assert status == 200
     assert set(json.loads(body)) <= {"status", "error"}
+
+
+@pytest.mark.parametrize("path", KEYED_ROUTES)
+def test_health_is_the_only_public_endpoint(engine, path):
+    assert _request(f"{engine.base}{path}")[0] == 401
+
+
+def test_webui_paths_serve_nothing_without_the_key(engine):
+    # Upstream also lets the web UI's own paths through without a key; with --no-webui
+    # nothing is served there.
+    for path in ("/", "/index.html"):
+        status, body = _request(f"{engine.base}{path}")
+        assert status in (401, 404) and b"<html" not in body.lower()
 
 
 def test_slots_and_webui_are_off(engine):

@@ -3,7 +3,7 @@
 | Item | Value |
 | --- | --- |
 | Version | 1 |
-| Status | **ready for review** — frozen when the technical reviewer approves and `FROZEN` is added (section 14) |
+| Status | **approved** by Umer, 2026-11-06 (spec, D-03 patch, question 12) — frozen once the two open items of section 15 are checked and `FROZEN` is added (section 14) |
 | Extension rule | Later versions add optional fields only; semantics never change. |
 | Freezes | week 1, by ticket D-02 (golden vectors + `FROZEN`) |
 | Owner of the code | Electron main (`apps/desktop/src/main/backend/`, `apps/desktop/src/main/ipc/`), backend (`packages/py/aios-common/src/aios_common/handshake.py`, `asgi_auth.py`, `services/backend/aios_backend/__main__.py`), process manager (D-05), evidence writer (F-01) |
@@ -152,13 +152,14 @@ Implemented once in `aios_common.asgi_auth.LoopbackTokenMiddleware`, before rout
   until it answers 200 (503 = still loading) and reports the engine state in its own `/health`
   (`engine`: `not_started` → `starting` → `ok`, or `failed`). The renderer never sees the
   engine's port or key.
-- **IPC-34** Question 12 — llama-server's `/health`. Upstream answers `GET /health` without a
-  key (`{"status":"ok"}` or 503 while loading); every other route requires the key.
-  **Decision: PENDING the technical reviewer.** Proposed: **A, accept** as a recorded,
-  scoped exception to M-19's wording — loopback only, liveness only, no content and no model
-  name, and the UI only ever sees the backend's `/health`. Alternative B: extend the patch so
-  `/health` also requires the key (about 3 lines). The contract freezes with whichever is
-  approved; `test_health_is_the_only_public_endpoint` pins A and changes under B.
+- **IPC-34** Question 12 — llama-server's public health routes. At the pinned commit
+  (`52e53a7`, `get_public_endpoints` in `tools/server/server-http.cpp`) upstream answers exactly
+  two routes without a key: `GET /health` and `GET /v1/health` (`{"status":"ok"}`, or 503 while
+  loading). These two MUST be the only routes the engine answers without the key, and they carry
+  liveness only: no content and no model name, loopback only. Every other route MUST return 401
+  without the key. The UI only ever sees the backend's own `/health`.
+  **Decision: Approved by Umer, 2026-11-06: option A, a scoped exception to M-19 for /health and /v1/health only (loopback, liveness only, no content). Any new public route needs a new review.**
+  A llama.cpp update that opens another route fails CI (section 12) and goes back to review.
 - Engine output (stdout/stderr) is never written to the log files; the backend records only
   exit codes and its own content-free events (SR-07).
 
@@ -240,7 +241,7 @@ tests close the rule; the rule is binding from the freeze regardless.
 | IPC-31 engine flags | `tests/engine/test_engine.py::test_slots_and_webui_are_off` (and every engine test runs with the exact flag set); `services/backend/tests/test_engine_launcher.py::test_ipc_31_fixed_flags_are_exactly_the_contract_set` | proven |
 | IPC-32 engine environment | every `tests/engine/test_engine.py` test runs with `minimal_env()`; `test_engine_launcher.py::test_ipc_32_environment_is_built_from_scratch`, `test_spike.py::test_ipc_30_engine_key_not_in_its_command_line_or_environment` (no `LLAMA*` variable reaches the engine) | proven |
 | IPC-33 engine readiness and state | `test_api.py::test_health_reports_component_states`; `test_engine_manager.py` (states through start, crash, idle unload, GPU fallback); `test_engine_lifetime.py::test_idle_unload_frees_the_engine_and_the_next_message_restarts_it` (real engine) | proven |
-| IPC-34 engine `/health` (question 12) | `tests/engine/test_engine.py::test_health_is_the_only_public_endpoint` | decision pending reviewer |
+| IPC-34 engine public routes (question 12) | `tests/engine/test_engine.py::test_health_routes_are_public_and_carry_liveness_only` (`/health`, `/v1/health`: status/error only), `::test_health_is_the_only_public_endpoint` (401 without the key on `/models`, `/v1/models`, `/props`, `/metrics`, `/api/tags`, `/v1/embeddings`, `/detokenize`, `/infill`), `::test_webui_paths_serve_nothing_without_the_key` | proven (CPU build on Linux and Windows, Vulkan build on Windows) |
 | IPC-40, IPC-41, IPC-42 evidence writer | writer start-up, auth and API tests (F-01) | pending F-01 |
 | IPC-50 to IPC-53 lifetime | IPC-50: `test_engine_launcher.py::test_ipc_50_closing_the_job_kills_its_processes`, `test_engine_lifetime.py::test_ac_09_no_engine_remains_after_the_backend_is_killed` (Windows CI, real engine, backend hard-killed), `test_spike.py::test_engine_stops_with_the_backend`. IPC-51: `test_startup.py::test_ipc_51_backend_exits_when_its_parent_is_gone`. IPC-52: `test_engine_orphans.py` (incl. `test_ac_09_real_orphan_left_by_a_crash_is_killed`, Windows CI), `test_engine_manager.py::test_shutdown_stops_the_engine`. IPC-53: `test_engine_lifetime.py` (engine stdin closed), `handshake.read_handshake` closes the backend's stdin; writer pipe (F-01) | IPC-50 to IPC-52 proven; IPC-53 engine side proven, writer pending F-01. Manual AC-09 run on the clean Windows 11 VM (2026-11-05, installed CI build of 6898871): engine gone after ending backend.exe, after ending the app, and after 5 min idle (memory released, next question restarted it); a hand-made orphan was ended at the next app start |
 | IPC-60 renderer sandbox | `apps/desktop/tests/security/csp.test.ts` ("ac-10 renderer hardening"); eslint renderer rules (`packages/ts/config`) | proven |
@@ -252,13 +253,13 @@ L-01 re-runs the token, loopback and direct-call checks of this table on every m
 
 | Item | Decision |
 | --- | --- |
-| P-1 engine token transport | **Replaced** by IPC-30 (stdin, `--api-key-stdin`, D-03). An environment variable is forbidden by M-19, and the variable named in the draft (`LLAMA_ARG_API_KEY`) is not read by llama-server, so the engine would have started without a key. |
+| P-1 engine token transport | **Replaced** by IPC-30 (stdin; the D-03 patch was approved by Umer, 2026-11-06) (stdin, `--api-key-stdin`, D-03). An environment variable is forbidden by M-19, and the variable named in the draft (`LLAMA_ARG_API_KEY`) is not read by llama-server, so the engine would have started without a key. |
 | P-2 strict frame | Accepted: `additionalProperties: false` (IPC-12). |
 | P-3 READY tolerance | Accepted: readers ignore unknown fields (section 4). |
-| P-4 port choice | Accepted: Electron main sends `api_port: 0`; the child binds and reports (IPC-14). MVP 11.1 says main starts the backend "with a random port"; the OS-assigned port is random and avoids the pick-then-bind race, so this is a refinement, not a change. |
+| P-4 port choice | Accepted by Umer, 2026-11-06: Electron main sends `api_port: 0`; the child binds and reports (IPC-14). MVP 11.1 says main starts the backend "with a random port"; the OS-assigned port is random and avoids the pick-then-bind race, so this is a refinement, not a change. |
 | P-5 child lifetime | Accepted and made exact: IPC-50 to IPC-52. |
 | Question 8 | Decided (ticket D-02): the writer serves reads and exports over its channel (IPC-42). |
-| Question 12 | Pending the reviewer (IPC-34); proposed A. |
+| Question 12 | Approved by Umer, 2026-11-06: option A, a scoped exception to M-19 for /health and /v1/health only (loopback, liveness only, no content). Any new public route needs a new review. (IPC-34) |
 | Exit code for a bad frame | 2 (IPC-13). |
 
 ## 14 Freezing
