@@ -5,14 +5,18 @@ from collections.abc import Sequence
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from aios_backend.apps.projects.models import ProjectPackage
 from db import lookups, outbox
 from db.models import Conversation, EvidenceOutbox, Message, Project, Summary
 
 record_event = outbox.record
 
 
-def list_projects(session: Session) -> Sequence[Project]:
-    return session.scalars(select(Project).order_by(Project.created_at.desc())).all()
+def list_projects(session: Session, archived: bool | None = None) -> Sequence[Project]:
+    stmt = select(Project)
+    if archived is not None:
+        stmt = stmt.where(Project.archived.is_(archived))
+    return session.scalars(stmt.order_by(Project.created_at.desc())).all()
 
 
 def get_project(session: Session, project_id: str) -> Project | None:
@@ -54,3 +58,15 @@ def evidence_seq(session: Session, outbox_id: int) -> int | None:
 
 
 default_model_id = lookups.default_model_id
+
+
+def packages(session: Session, project_id: str) -> Sequence[ProjectPackage]:
+    stmt = select(ProjectPackage).where(ProjectPackage.project_id == project_id)
+    return session.scalars(stmt.order_by(ProjectPackage.id.desc())).all()
+
+
+def imported_before(session: Session, package_id: str) -> bool:
+    stmt = select(ProjectPackage.id).where(
+        ProjectPackage.package_id == package_id, ProjectPackage.direction == "import"
+    )
+    return session.scalars(stmt.limit(1)).first() is not None

@@ -452,7 +452,7 @@ function CommandBox({ command, className }: { command: string; className?: strin
       <Terminal className="size-3.5 shrink-0 text-ink-50" aria-hidden />
       <code className="min-w-0 flex-1 truncate font-mono text-xs text-ink">{command}</code>
       <Tooltip content={copied ? "Copied" : "Copy command"}>
-        <IconButton label="Copy command" size="sm" onClick={() => copy(command)}>
+        <IconButton label="Copy command" size="sm" onClick={() => void copy(command)}>
           {copied ? <Check className="text-green" /> : <Copy />}
         </IconButton>
       </Tooltip>

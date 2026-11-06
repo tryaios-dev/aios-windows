@@ -47,3 +47,40 @@ class AllowlistEntry(BaseModel):
     purpose: str
     kind: Literal["fixed", "configured"]
     enabled: bool
+
+
+class SupportBundleIn(BaseModel):
+    """``path``: a folder (a file name is chosen) or a .zip file, chosen by Electron main."""
+
+    path: str = Field(min_length=1, max_length=1024)
+
+
+class SupportBundleOut(BaseModel):
+    file_name: str
+    path: str
+    size_bytes: int
+    file_count: int
+    created_at: datetime
+
+
+class DataPaths(BaseModel):
+    root: str
+    chats_db: str
+    recovery_package: str
+    models: str
+    logs: str | None
+    backups: str
+
+
+class Licence(BaseModel):
+    name: str
+    role: str
+    licence: str
+
+
+class SystemInfo(BaseModel):
+    app_version: str
+    profile: Literal["desktop", "dev", "test"]
+    schema_version: int
+    data_paths: DataPaths
+    licences: list[Licence]

@@ -162,3 +162,26 @@ def test_restore_needs_a_recovery_package(
     device = fresh_device(settings, tmp_path)
     resp = device.post("/restore", json={"backup_path": str(folder), "recovery_key": key})
     assert resp.json() == {"error": "no_recovery_package"}
+
+
+def test_restore_over_a_finished_installation_needs_confirmation(
+    backup: tuple[Path, str], client: TestClient
+) -> None:
+    folder, key = backup
+    body = {"backup_path": str(folder), "recovery_key": key}
+    refused = client.post("/restore", json=body)
+    assert refused.status_code == 400 and refused.json() == {"error": "confirmation_required"}
+
+    resp = client.post("/restore", json={**body, "confirmed": True})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["epoch"] == 2  # each restore starts a new evidence epoch
+    assert client.get("/evidence/stream").json()["epoch"] == 2
+
+
+def test_restore_on_a_clean_device_needs_no_confirmation_and_reports_the_epoch(
+    backup: tuple[Path, str], settings: Settings, tmp_path: Path
+) -> None:
+    folder, key = backup
+    device = fresh_device(settings, tmp_path)
+    resp = device.post("/restore", json={"backup_path": str(folder), "recovery_key": key})
+    assert resp.json()["epoch"] == 2

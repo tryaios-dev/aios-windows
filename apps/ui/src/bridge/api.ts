@@ -343,11 +343,16 @@ export const api = {
   }): Promise<RestoreResult> => {
     if (!isLive()) return s().restore(input);
     try {
-      await bridge().setup.restore({ backup_path: input.backup_path, recovery_key: input.recovery_key });
+      // The Restore screen asks "Restore over the current installation?" before it gets here.
+      const restored = await bridge().setup.restore({
+        backup_path: input.backup_path,
+        recovery_key: input.recovery_key,
+        confirmed: true,
+      });
       await refreshStatus();
       await refreshSettings();
       await refreshWorkspace();
-      return { ok: true, epoch: null }; // epochs are numbered by the evidence writer (not built yet)
+      return { ok: true, epoch: restored.epoch ?? null };
     } catch (err) {
       return { ok: false, error: messageFor(err) };
     }

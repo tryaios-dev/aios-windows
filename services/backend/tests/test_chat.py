@@ -29,6 +29,7 @@ def test_without_a_model_nothing_is_sent_or_stored(client: TestClient) -> None:
     assert client.get("/providers/status").json() == {
         "local_ready": False,
         "company_enabled": False,
+        "company": None,
     }
 
 

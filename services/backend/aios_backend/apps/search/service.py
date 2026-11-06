@@ -1,4 +1,4 @@
-"""Search rules: at least two characters, newest first, at most 60 hits, a snippet around the match."""
+"""Search rules: at least two characters, newest first, 60 hits by default, a snippet around the match."""
 
 import re
 
@@ -8,7 +8,8 @@ from aios_backend.apps.search import repository as repo
 from aios_backend.apps.search.schemas import SearchHit
 
 MIN_QUERY = 2
-MAX_HITS = 60
+MAX_HITS = 60  # default
+LIMIT_CAP = 200
 
 
 def snippet(content: str, query: str) -> str:
@@ -20,10 +21,20 @@ def snippet(content: str, query: str) -> str:
     return ("…" if start > 0 else "") + text + ("…" if end < len(content) else "")
 
 
-def search(session: Session, q: str) -> list[SearchHit]:
+def search(
+    session: Session,
+    q: str,
+    project_id: str | None = None,
+    role: str | None = None,
+    include_archived: bool = True,
+    limit: int = MAX_HITS,
+) -> list[SearchHit]:
     query = q.strip()
     if len(query) < MIN_QUERY:
         return []
+    rows = repo.matching_messages(
+        session, query, min(limit, LIMIT_CAP), project_id, role, include_archived
+    )
     return [
         SearchHit(
             message_id=m.id,
@@ -33,5 +44,5 @@ def search(session: Session, q: str) -> list[SearchHit]:
             created_at=m.created_at,
             role=m.role,
         )
-        for m, project_id in repo.matching_messages(session, query, MAX_HITS)
+        for m, project_id in rows
     ]

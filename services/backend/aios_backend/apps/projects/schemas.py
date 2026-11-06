@@ -76,3 +76,21 @@ class ImportOut(BaseModel):
     summaries: int
     warnings: list[str]
     remapped: bool  # the name was taken, so " (imported)" was added
+
+
+class PackageRecordOut(BaseModel):
+    """One export or import of a Project Package (project settings, package history)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    project_id: str
+    direction: Literal["export", "import"]
+    package_id: str
+    file_name: str
+    size_bytes: int
+    checksum: str
+    conversations: int
+    messages: int
+    summaries: int
+    created_at: datetime

@@ -76,6 +76,14 @@ class Gpu(BaseModel):
     driver_ok: bool
 
 
+class BenchmarkOut(BaseModel):
+    model_id: str
+    engine: Literal["cpu", "vulkan"]
+    tokens_per_second: float
+    time_to_first_token_ms: int
+    run_at: datetime
+
+
 class HardwareOut(BaseModel):
     cpu: str
     cores: int
@@ -85,10 +93,76 @@ class HardwareOut(BaseModel):
     os: str
     recommended_tier: Tier | None
     checked_at: datetime
+    benchmark: BenchmarkOut | None = None  # the latest run on this machine
+
+
+EngineStateName = Literal[
+    "not_built",  # this build has no local engine
+    "no_model",
+    "not_started",
+    "loading",
+    "ready",
+    "generating",
+    "idle_unloaded",
+    "failed",
+]
+Build = Literal["cpu", "vulkan"]
+
+
+class FallbackOut(BaseModel):
+    occurred_at: datetime
+    from_build: Build
+    to_build: Build
+    acknowledged: bool
 
 
 class EngineStatus(BaseModel):
-    """The local engine (llama-server) is not part of this build yet."""
+    """State of the local engine (llama-server). ``not_built`` until the engine module exists."""
 
-    state: Literal["not_built", "no_model"]
+    state: EngineStateName
     installed: int
+    build: Build | None = None
+    loaded_model_id: str | None = None
+    fallback: FallbackOut | None = None
+
+
+class ModelChoiceIn(BaseModel):
+    """``model_id``: an installed model; omitted -> the default model, else the first installed."""
+
+    model_id: str | None = Field(default=None, max_length=64)
+
+
+class ModelChecks(BaseModel):
+    """What the setup Verified step shows."""
+
+    digest_matches: bool  # the installed file's SHA-256 equals the catalogue entry
+    provenance_complete: bool  # upstream, conversion and quantisation are all recorded
+    pipeline: Literal["own", "third-party"]
+    deviation_approval: DeviationApproval | None
+
+
+class InstalledModelDetail(InstalledModelOut):
+    checks: ModelChecks
+
+
+DownloadStatus = Literal["queued", "downloading", "paused", "verifying", "failed", "done"]
+
+
+class DownloadState(BaseModel):
+    entry_id: str
+    status: DownloadStatus
+    received_bytes: int
+    total_bytes: int
+    speed_bps: int
+    error: str | None
+    started_at: datetime
+
+
+class DownloadStart(BaseModel):
+    entry_id: str = Field(min_length=1, max_length=64)
+
+
+class CatalogueCheckOut(BaseModel):
+    version: str
+    changed: bool
+    checked_at: datetime

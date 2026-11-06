@@ -14,6 +14,15 @@ export const CSP = [
   "form-action 'none'",
 ].join("; ");
 
+/**
+ * The only permission the window gets: writing text to the clipboard (Copy buttons for the
+ * recovery key, answers, code, paths). Reading the clipboard, camera, notifications and every
+ * other permission stay denied.
+ */
+export const ALLOWED_PERMISSIONS: ReadonlySet<string> = new Set(["clipboard-sanitized-write"]);
+
+export const allowPermission = (permission: string): boolean => ALLOWED_PERMISSIONS.has(permission);
+
 export async function createMainWindow(): Promise<BrowserWindow> {
   const win = new BrowserWindow({
     width: 1280,
@@ -34,7 +43,9 @@ export async function createMainWindow(): Promise<BrowserWindow> {
   );
   win.webContents.on("will-navigate", (e) => e.preventDefault());
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-  win.webContents.session.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+  const session = win.webContents.session;
+  session.setPermissionRequestHandler((wc, perm, cb) => cb(wc === win.webContents && allowPermission(perm)));
+  session.setPermissionCheckHandler((wc, perm) => wc === win.webContents && allowPermission(perm));
 
   const ui = app.isPackaged
     ? path.join(process.resourcesPath, "ui", "index.html")
