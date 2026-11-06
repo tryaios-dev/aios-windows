@@ -1,8 +1,11 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from aios_backend.components import ComponentState
 from aios_backend.config import Profile, Settings, load
 from aios_backend.main import create_app
+from aios_common import platforms
+from aios_common.platforms import GenericPlatform, UnsupportedPlatform, WindowsPlatform
 from db.session import Database
 
 
@@ -53,10 +56,18 @@ def test_shipped_app_has_no_web_surface(client: TestClient) -> None:
 def test_desktop_profile_ignores_environment(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setenv("AIOS_ENV", "dev")
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setattr(platforms, "current", WindowsPlatform)  # also on a Linux CI runner
     desktop = load(Profile.DESKTOP)
+    assert desktop.chats_db == tmp_path / "AIOS" / "data" / "chats.db"
     assert desktop.profile is Profile.DESKTOP
     assert desktop.public_paths == frozenset()
     assert desktop.db_key is None  # key only from the keystore
+
+
+def test_desktop_profile_refuses_an_os_aios_does_not_ship_for(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setattr(platforms, "current", GenericPlatform)
+    with pytest.raises(UnsupportedPlatform):
+        load(Profile.DESKTOP)
 
 
 def test_dev_profile_opens_health_and_docs_without_token() -> None:

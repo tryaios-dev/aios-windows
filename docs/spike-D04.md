@@ -12,7 +12,7 @@ exist. Proves installer → Electron → backend → llama-server → renderer o
 | Router line | `services/backend/aios_backend/main.py` |
 | Bridge call `window.aios.spike.ask` | `packages/ts/bridge-contract`, `apps/desktop/src/preload`, `apps/desktop/src/main/ipc/spike.ts` |
 | Screen "Local answer (spike)" | `apps/ui/src/features/spike/`, route and sidebar link |
-| "Safe mode (CPU)" switch and CPU-fallback notice on that screen (D-06), until the settings screen (K-04) and the chat notice (K-06) use `window.aios.settings` and `/health` `engine_cpu_fallback` | `apps/ui/src/features/spike/SpikeScreen.tsx` |
+| CPU-fallback notice on that screen (D-06), until the chat notice (K-06) uses `/health` `engine_cpu_fallback`. Safe mode itself lives in Settings → Engine (not temporary) | `apps/ui/src/features/spike/SpikeScreen.tsx` |
 | Tests | `services/backend/tests/test_spike.py`, `apps/desktop/tests/unit/spike.test.ts` |
 
 **Removal:** G-01 cannot close while `git grep SPIKE-D04` finds anything outside this file.

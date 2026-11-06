@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from aios_backend.engine.job import KillOnCloseJob
+from aios_backend.engine.job import kill_on_close_job
 from aios_backend.engine.launcher import FIXED_FLAGS, find_model, minimal_env
 
 
@@ -58,7 +58,7 @@ def test_find_model_picks_the_first_gguf(tmp_path: Path) -> None:
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Job Objects are Windows only")
 def test_ipc_50_closing_the_job_kills_its_processes() -> None:
-    job = KillOnCloseJob()
+    job = kill_on_close_job()
     child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
     try:
         job.assign(child)

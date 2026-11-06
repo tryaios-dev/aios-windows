@@ -8,13 +8,13 @@ whose parent still runs belongs to someone else (a developer's second backend, a
 and is left alone; the desktop app itself runs once per user (Electron single-instance lock).
 """
 
-import sys
 from collections.abc import Iterable
 from pathlib import Path
 
 import psutil
 
 from aios_backend.engine.launcher import EXE
+from aios_common import platforms
 from aios_common.logging import get_logger, log_event
 
 log = get_logger("engine")
@@ -34,7 +34,8 @@ def is_orphan(proc: psutil.Process, engine_root: Path) -> bool:
         # parent() is None when the parent has exited (psutil also rejects a reused PID whose
         # process is younger than this one). Outside Windows an orphan is re-parented to init.
         parent = proc.parent()
-        return parent is None or (sys.platform != "win32" and parent.pid == 1)
+        reparented_to = platforms.current().orphan_parent_pid
+        return parent is None or (reparented_to is not None and parent.pid == reparented_to)
     except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
         return False
 

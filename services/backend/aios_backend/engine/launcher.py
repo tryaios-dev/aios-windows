@@ -9,19 +9,19 @@ The process manager (``manager.py``) decides when to call ``start()`` and with w
 
 import socket
 import subprocess
-import sys
 import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-from aios_backend.engine.job import KillOnCloseJob
+from aios_backend.engine.job import ChildJob
+from aios_common import platforms
 from aios_common.handshake import derive
 from aios_common.logging import get_logger, log_event
 
 ENGINE_PURPOSE = "aios/ipc/v1/engine"
-EXE = "llama-server.exe" if sys.platform == "win32" else "llama-server"
+EXE = "llama-server" + platforms.current().exe_suffix
 # IPC-31: the only flags besides model, port and sizing.
 FIXED_FLAGS = (
     "--host",
@@ -51,23 +51,7 @@ def find_model(models_dir: Path) -> Path | None:
 
 def minimal_env(engine_dir: Path, temp_dir: Path) -> dict[str, str]:
     """IPC-32: built from scratch. No APPDATA, PROGRAMDATA or LLAMA_* variables."""
-    if sys.platform == "win32":
-        import os
-
-        root = os.environ["SystemRoot"]
-        return {
-            "SystemRoot": root,
-            "PATH": f"{engine_dir};{root}\\System32",
-            "TEMP": str(temp_dir),
-            "TMP": str(temp_dir),
-        }
-    return {
-        "PATH": f"{engine_dir}:/usr/bin:/bin",
-        "HOME": str(temp_dir),
-        "XDG_CONFIG_HOME": str(temp_dir),
-        "XDG_CACHE_HOME": str(temp_dir),
-        "TMPDIR": str(temp_dir),
-    }
+    return platforms.current().child_env(engine_dir, temp_dir)
 
 
 def list_gpus(engine_dir: Path, temp_dir: Path) -> list[str]:
@@ -151,7 +135,7 @@ def _health(port: int) -> int | None:
 
 
 def start(
-    engine_dir: Path, model: Path, temp_dir: Path, job: KillOnCloseJob, build: str = "cpu"
+    engine_dir: Path, model: Path, temp_dir: Path, job: ChildJob, build: str = "cpu"
 ) -> Engine:
     """Start the engine and wait until it answers. ``-ngl`` is left at llama.cpp's default
     (``auto`` with ``--fit on``): on a GPU build it offloads as many layers as fit in VRAM."""

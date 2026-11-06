@@ -157,8 +157,24 @@ jobs:
             build/out/llama/manifest-${{ matrix.variant }}.json
           retention-days: 14
 
+  e2e:                                           # UI -> preload -> main handlers -> real backend
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: uv sync --frozen --all-packages --all-extras
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:e2e
+
   package-windows:
-    needs: [py-lint, py-unit, ts-lint, ts-unit, llama-windows]
+    needs: [py-lint, py-unit, ts-lint, ts-unit, e2e, llama-windows]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4

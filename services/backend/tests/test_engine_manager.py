@@ -17,7 +17,7 @@ import pytest
 
 from aios_backend.components import Components, ComponentState
 from aios_backend.engine import Engine, EngineError, EngineManager, NoModel
-from aios_backend.engine.job import KillOnCloseJob
+from aios_backend.engine.job import ChildJob
 from aios_backend.engine.launcher import EXE, parse_device_list
 
 
@@ -31,9 +31,7 @@ class FakeEngines:
         self.probes = 0
         self.engines: list[Engine] = []
 
-    def start(
-        self, engine_dir: Path, model: Path, temp: Path, job: KillOnCloseJob, build: str
-    ) -> Engine:
+    def start(self, engine_dir: Path, model: Path, temp: Path, job: ChildJob, build: str) -> Engine:
         assert engine_dir.name == build
         self.started.append(build)
         if build in self.fail:

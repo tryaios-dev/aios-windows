@@ -14,6 +14,8 @@ import subprocess
 import uuid
 from pathlib import Path
 
+# The OS this release is built for (sys.platform name). AIOS ships for Windows only.
+TARGET = "win32"
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "build" / "out" / "sbom"
 
@@ -88,7 +90,7 @@ def binary_components() -> list[dict[str, object]]:
             "purl": f"pkg:github/electron/electron@v{electron}",
         },
     ]
-    pin = json.loads((ROOT / "build/sqlcipher/pin.json").read_text("utf-8"))["win32"]
+    pin = json.loads((ROOT / "build/sqlcipher/pin.json").read_text("utf-8"))[TARGET]
     cipher = str(pin["cipher_version"]).split()[0]  # "4.19.0 community" -> "4.19.0"
     comps.append(
         {

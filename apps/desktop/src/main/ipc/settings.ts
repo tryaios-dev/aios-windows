@@ -1,9 +1,12 @@
-import { EngineSettings } from "@aios/bridge-contract";
+import { z } from "zod";
+import { AllowlistEntry, Settings, SettingsPatch } from "@aios/bridge-contract";
+import { checkForUpdate } from "../updater.js";
 import type { Handler } from "./index.js";
 
-/** Settings calls (D-06 Safe mode). Arguments are validated before they reach the backend. */
 export const settingsHandlers: Record<string, Handler> = {
-  "settings.engine": async (b) => EngineSettings.parse(await b.client.request("GET", "/settings/engine")),
-  "settings.setEngine": async (b, input) =>
-    EngineSettings.parse(await b.client.request("PUT", "/settings/engine", EngineSettings.parse(input))),
+  "settings.get": async (b) => Settings.parse(await b.client.request("GET", "/settings")),
+  "settings.update": async (b, patch) =>
+    Settings.parse(await b.client.request("PATCH", "/settings", SettingsPatch.parse(patch))),
+  "settings.network": async (b) => z.array(AllowlistEntry).parse(await b.client.request("GET", "/system/network")),
+  "settings.checkForUpdates": async (b) => Settings.parse(await checkForUpdate(b)),
 };

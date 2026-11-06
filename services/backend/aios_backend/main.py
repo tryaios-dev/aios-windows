@@ -10,12 +10,20 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
+from aios_backend.apps.chat.answers import AnswerSource
+from aios_backend.apps.chat.router import router as chat_router
+from aios_backend.apps.evidence.router import router as evidence_router
+from aios_backend.apps.models.router import router as models_router
+from aios_backend.apps.projects.router import router as projects_router
+from aios_backend.apps.search.router import router as search_router
 from aios_backend.apps.settings import service as settings_service
 from aios_backend.apps.settings.router import router as settings_router
+from aios_backend.apps.setup.router import router as setup_router
 from aios_backend.apps.spike.router import router as spike_router  # SPIKE-D04
 from aios_backend.components import Components
 from aios_backend.config import Settings
 from aios_backend.engine import EngineManager
+from aios_backend.errors import AppError
 from aios_backend.routes import VERSION
 from aios_backend.routes import router as system_router
 from aios_common.asgi_auth import LoopbackTokenMiddleware
@@ -55,6 +63,10 @@ def register_error_handlers(app: FastAPI) -> None:
         code = exc.detail if isinstance(exc.detail, str) else "error"
         return JSONResponse({"error": code}, status_code=exc.status_code)
 
+    @app.exception_handler(AppError)
+    async def _app_error(request: Request, exc: AppError) -> JSONResponse:
+        return JSONResponse({"error": exc.code}, status_code=exc.status)
+
     @app.exception_handler(DatabaseKeyMissing)
     async def _locked(request: Request, exc: DatabaseKeyMissing) -> JSONResponse:
         return JSONResponse({"error": "store_locked"}, status_code=503)
@@ -69,13 +81,16 @@ def load_safe_mode(database: Database) -> bool:
     """Saved Safe mode; off if chats.db cannot be read (then nothing else works either)."""
     try:
         with database.session() as session:
-            return settings_service.load_safe_mode(session)
+            return settings_service.safe_mode_cpu(session)
     except Exception as exc:
         log_event(log, "safe_mode_unreadable", error_code=type(exc).__name__)
         return False
 
 
-def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
+def create_app(
+    settings: Settings, db: Database | None = None, answers: AnswerSource | None = None
+) -> FastAPI:
+    """``answers``: what produces chat answers. None until the local model module exists."""
     database = db or Database(settings)
     components = Components()
     engine = EngineManager(
@@ -108,9 +123,19 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
     app.state.db = database
     app.state.components = components
     app.state.engine = engine
+    app.state.answers = answers
     register_error_handlers(app)
     app.include_router(system_router)
-    app.include_router(settings_router)
+    for router in (
+        setup_router,
+        projects_router,
+        chat_router,
+        search_router,
+        evidence_router,
+        settings_router,
+        models_router,
+    ):
+        app.include_router(router)
     app.include_router(spike_router)  # SPIKE-D04: temporary, removed by G-01
     app.add_middleware(LoopbackTokenMiddleware, public_paths=settings.public_paths)
     return app

@@ -23,7 +23,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from aios_backend.components import Components, ComponentState
-from aios_backend.engine.job import KillOnCloseJob
+from aios_backend.engine.job import ChildJob, kill_on_close_job
 from aios_backend.engine.launcher import (
     EXE,
     Engine,
@@ -50,7 +50,7 @@ class NoModel(Exception):
     """No model in the models folder."""
 
 
-StartFn = Callable[[Path, Path, Path, KillOnCloseJob, str], Engine]
+StartFn = Callable[[Path, Path, Path, ChildJob, str], Engine]
 ProbeFn = Callable[[Path, Path], list[str]]
 
 
@@ -80,7 +80,7 @@ class EngineManager:
 
         self._engine: Engine | None = None
         self._lock = asyncio.Lock()
-        self._job = KillOnCloseJob()
+        self._job = kill_on_close_job()
         self._leases = 0
         self._last_used = 0.0
         self._has_gpu: bool | None = None  # probed once, on the first start

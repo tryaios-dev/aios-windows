@@ -3,9 +3,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { Health, SpikeAnswer } from "@aios/bridge-contract";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/feedback";
-import { Checkbox, Label } from "@/components/ui/fields";
 import { KeyValue, SectionLabel } from "@/components/ui/layout";
-import { bridge, useEngineSettings, useHealth } from "@/bridge";
+import { bridge, useHealth } from "@/bridge";
+import { platform } from "@/lib/platform";
 
 /**
  * SPIKE-D04 (temporary): send one prompt to the local model and show the answer with its timings.
@@ -13,7 +13,7 @@ import { bridge, useEngineSettings, useHealth } from "@/bridge";
  * week-1 benchmark figures. Replaced by the chat screen (K-01).
  */
 const ERRORS: Record<string, string> = {
-  no_model: "No model found. Copy a .gguf file into %LOCALAPPDATA%\\AIOS\\models and try again.",
+  no_model: `No model found. Copy a .gguf file into ${platform.folders.models} and try again.`,
   engine_failed: "The local engine did not start.",
   engine_error: "The local engine returned an error.",
   backend_unavailable: "The backend is not reachable.",
@@ -34,15 +34,8 @@ export function SpikeScreen() {
   const [busy, setBusy] = React.useState(false);
   const [answer, setAnswer] = React.useState<SpikeAnswer | null>(null);
   const health = useHealth().data;
-  const safeMode = useEngineSettings().data?.safe_mode;
   const queryClient = useQueryClient();
   const refresh = () => void queryClient.invalidateQueries();
-
-  // D-06: temporary home of the "Safe mode (CPU)" switch until the settings screen (K-04).
-  const setSafeMode = async (on: boolean) => {
-    await bridge().settings.setEngine({ safe_mode: on });
-    refresh();
-  };
 
   const ask = async () => {
     setBusy(true);
@@ -59,15 +52,9 @@ export function SpikeScreen() {
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto bg-paper p-6">
       <SectionLabel>Local answer (temporary spike)</SectionLabel>
       {health && <KeyValue dense rows={[{ k: "Engine", v: engineLine(health) }]} />}
-      {safeMode !== undefined && (
-        <div className="flex items-center gap-2">
-          <Checkbox id="safe-mode" checked={safeMode} onCheckedChange={(v) => void setSafeMode(v === true)} />
-          <Label htmlFor="safe-mode">Safe mode (CPU): never use the GPU engine</Label>
-        </div>
-      )}
       {health?.engine_cpu_fallback && (
         <Callout tone="caution" title="Running on the CPU">
-          The GPU engine failed, so AIOS switched to the CPU build for this session. Answers are slower.
+          The GPU engine failed, so AIOS switched to the CPU build for this session. Answers are slower. Settings → Engine → Safe mode keeps it on the CPU.
         </Callout>
       )}
       <textarea

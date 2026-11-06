@@ -53,13 +53,23 @@ aios_backend/          the API (import as aios_backend.*)
   __main__.py          backend.exe entry: handshake, migrate, serve, READY line
   main.py              App factory: logging, error handlers, routers, token middleware
   config.py            Settings and the three profiles
-  cli.py               aios-backend: serve, migrate, makemigrations, check, openapi, sql, …
+  cli.py               aios-backend: serve, serve-e2e, migrate, makemigrations, check, openapi, sql, …
   routes.py            System routes (/health)
+  errors.py            AppError: what services raise; main.py returns {"error": code}
+  deps.py              Shared FastAPI dependencies (AppSettings)
   gateway/             OpenAI-compatible inference gateway (security-relevant path)
   apps/                One package per feature, named like apps/ui/src/features
-    setup/             First-run wizard
-    workspace/         App shell: projects, counts, status
+    chat/              Conversations and messages
+    evidence/          Evidence log as the app shows it
+    models/            Model manager and catalogue
+    projects/          Projects, classification, packages
+    search/            Search across projects
+    settings/          Settings and the network allowlist
+    setup/             First run (store, recovery key) and restore
 db/                    chats.db (import as db.*): engine, sessions, base, models, registry, migrations
+  models.py            The shared tables (projects, conversations, messages, summaries, outbox)
+  outbox.py            record(): queue a content-free evidence event in the caller's transaction
+  lookups.py           One-value reads/writes of another app's table in plain SQL (default model)
 tests/                 pytest suite (pytest.ini puts this folder on the path)
 alembic.ini            Plain `alembic` access to db/migrations
 .dev/                  Dev database and log (not committed)
@@ -70,29 +80,57 @@ alembic.ini            Plain `alembic` access to db/migrations
 
 ### Apps
 
-Each backend app mirrors its UI feature folder and has the same five modules. They contain only a
-docstring today: no endpoints, tables or logic yet, and no router is mounted in `main.py`.
+Each backend app mirrors its UI feature folder and has the same five modules. An app may add
+helper modules with pure logic (no HTTP, no database), such as `projects/package.py`.
 
 | Module | Holds | May import |
 | --- | --- | --- |
 | `router.py` | HTTP endpoints. Thin: validate, call the service, return a schema | `service`, `schemas` |
 | `schemas.py` | Pydantic request/response bodies, the shape the UI gets through the bridge | — |
-| `service.py` | The app's rules | `repository`, `schemas` |
-| `repository.py` | Reads and writes `chats.db` through the session | `models` |
-| `models.py` | SQLAlchemy tables owned by the app | `db.base` |
+| `service.py` | The app's rules; raises `AppError("code", status)` | `repository`, `schemas` |
+| `repository.py` | Reads and writes `chats.db` through the session | `models`, `db.*` |
+| `models.py` | Tables only this app uses (setup: `store_identity`, `setup_state`; settings: `settings`; models: `installed_models`, `hardware_profile`). Shared tables are in `db/models.py` | `db.base` |
 
-| Backend package | UI folder | Will cover |
+All seven apps have endpoints. Not in this build: download from the model mirror, the local
+engine (llama-server, benchmark, the real chat answer source) and the evidence writer.
+
+| Backend app | Endpoints | Notes |
 | --- | --- | --- |
-| `apps/setup` | `apps/ui/src/features/setup` | Hardware check, model download/import and verification, store and recovery key, benchmark, first-run state |
-| `apps/workspace` | `apps/ui/src/features/workspace` | Projects and classification, conversation and evidence counts, engine and writer status |
+| `apps/setup` | `GET /setup/status`, `POST /setup/store`, `POST /setup/complete`, `POST /restore` | Store creation writes `recovery.pkg` (Recovery Package v1, `recovery_package.py`) and returns the recovery key once. Restore unwraps the package, checks the backup belongs to it, then swaps `chats.db` and the keys, all or nothing. State in `store_identity` and `setup_state` |
+| `apps/projects` | `GET/POST /projects`, `GET/PATCH/DELETE /projects/{id}`, `POST /projects/{id}/reclassify`, `PUT /projects/{id}/company-ai`, `POST /projects/{id}/export`, `POST /projects/import` | Lowering a class makes a reviewed copy (M-04). Project Package v1 in `package.py`, with every ZIP and checksum rule of the contract |
+| `apps/chat` | `GET/POST /projects/{id}/conversations`, `PATCH/DELETE /conversations/{id}`, `POST /conversations/{id}/provider`, `GET/POST /conversations/{id}/messages`, `POST /conversations/{id}/regenerate`, `GET /providers/status` | Answers come from an `AnswerSource` (`answers.py`). None exists yet, so sending returns `409 no_model`; tests use a fake. Commitments per Evidence Wire Format v1 §8 |
+| `apps/search` | `GET /search?q=` | Substring match over messages, newest first, at most 60 hits |
+| `apps/evidence` | `GET /evidence`, `GET /projects/{id}/evidence`, `GET /evidence/status`, `POST /evidence/export` | Lists the outbox. Until the evidence writer exists, events stay pending and export returns `503 writer_unavailable` |
+| `apps/settings` | `GET/PATCH /settings`, `POST /settings/update-check`, `GET /system/network` | One typed row in `settings`. Electron main's updater records each check result. A test keeps the allowlist equal to `contracts/network-allowlist/v1` |
+| `apps/models` | `GET /models/catalogue`, `GET /models`, `POST /models/import`, `POST /models/download/{entry_id}`, `DELETE /models/{id}`, `GET /system/hardware`, `GET /engine/status` | Catalogue from `catalogue_dev.json` (unsigned until I-01; equal to the UI's, a test checks). Import installs a .gguf only if size and SHA-256 match an entry, then copies it into the models folder. Hardware read from Windows (`hardware.py`). Download answers `503 mirror_unavailable` |
 
-**Adding the first endpoint to an app:** write the schema, service and route, then
-`app.include_router(...)` in `main.py`. Run `uv run aios-backend openapi` and commit
+Full list: `uv run aios-backend routes`. Request and response shapes:
+`contracts/local-api/openapi.json`.
+
+### Evidence from the backend
+
+The backend never opens `evidence.db`. Every change the log covers calls
+`db.outbox.record(session, "type", body=...)` inside the same transaction, so the change and its
+event are saved together or not at all. The body may only hold ids, enum values, digests,
+counts and flags: a string with spaces or over 128 characters is refused. The evidence writer
+will drain the outbox, chain and sign the events, and set `seq`; until then events are pending.
+
+### Keys
+
+| Key | Where it lives |
+| --- | --- |
+| Database key | Credential Manager `AIOS` / `db-key` (desktop); fixed in dev/test |
+| Evidence signing seed | Credential Manager `AIOS` / `evidence-signing-seed` (desktop); fixed in dev/test |
+| Recovery key | Nowhere. Returned once by `POST /setup/store`; it wraps the two keys above in `recovery.pkg` |
+
+**Adding an endpoint:** write the schema, service and route (for a new app, also
+`app.include_router(...)` in `main.py`). Run `uv run aios-backend openapi` and commit
 `contracts/local-api/openapi.json`. Add the call to the bridge contract, desktop IPC, preload and
-`apps/ui/src/bridge` in the same pull request.
+`apps/ui/src/bridge/api.ts` in the same pull request.
 
-**Adding a table:** define it in the app's `models.py` (already listed in
-`db/registry.py`), then `uv run aios-backend makemigrations -m "..."` and review the file.
+**Adding a table:** shared tables go in `db/models.py`, tables only one app uses in that app's
+`models.py` (listed in `db/registry.py`). Then `uv run aios-backend makemigrations -m "..."` and
+review the file.
 
 ## Rules (checked in CI by import-linter, `pyproject.toml`)
 
@@ -108,7 +146,7 @@ docstring today: no endpoints, tables or logic yet, and no router is mounted in 
 | Command (repo root) | What it does |
 | --- | --- |
 | `pnpm dev:backend` | Dev server on http://127.0.0.1:8765 (`/health`, `/docs`) |
-| `pnpm check:py` | ruff, import rules, mypy, tests |
+| `pnpm check:py` | ruff, import rules, mypy, OpenAPI file, tests |
 | `uv run aios-backend routes` | List routes |
 | `uv run aios-backend migrate` / `check` | Upgrade the dev database / check key, version and migrations |
 | `uv run aios-backend makemigrations -m "..."` | Next numbered migration after a model change |

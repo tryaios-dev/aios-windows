@@ -1,10 +1,12 @@
-import os
+"""AIOS folders on this machine (10.1 installed layout). The base folder comes from the platform."""
+
 from pathlib import Path
+
+from aios_common import platforms
 
 
 def data_dir() -> Path:
-    base = os.environ.get("LOCALAPPDATA") or str(Path.home() / ".local" / "share")
-    return Path(base) / "AIOS"
+    return platforms.current().data_dir()
 
 
 def chats_db() -> Path:
@@ -24,6 +26,6 @@ def logs_dir() -> Path:
 
 
 def ensure_dirs() -> None:
-    """Create the per-user data folders on first start (10.1 installed layout)."""
+    """Create the per-user data folders on first start."""
     for d in (data_dir() / "data", models_dir(), logs_dir(), data_dir() / "backups"):
         d.mkdir(parents=True, exist_ok=True)

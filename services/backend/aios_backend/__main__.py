@@ -20,6 +20,7 @@ from collections.abc import Callable
 import psutil
 import uvicorn
 
+from aios_backend.apps.chat.answers import AnswerSource
 from aios_backend.config import Profile, Settings, load
 from aios_backend.main import configure_logging, create_app
 from aios_common.handshake import HandshakeError, read_handshake
@@ -64,11 +65,12 @@ async def serve(
     port: int,
     on_ready: Callable[[int], None] = print_ready,
     parent: psutil.Process | None = None,
+    answers: AnswerSource | None = None,
 ) -> None:
     sock = bind_loopback(port)
     server = uvicorn.Server(
         uvicorn.Config(
-            create_app(settings, db), host="127.0.0.1", log_config=None, access_log=False
+            create_app(settings, db, answers), host="127.0.0.1", log_config=None, access_log=False
         )
     )
     task = asyncio.create_task(server.serve(sockets=[sock]))

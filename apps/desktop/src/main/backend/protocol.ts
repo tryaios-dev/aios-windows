@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * Process and IPC Contract v1, section 4: the frame Electron main writes to backend.exe's stdin
+ * Process and IPC Contract v1, section 4: the frame Electron main writes to the backend's stdin
  * and the READY line it reads back. Checked against contracts/process-ipc/v1/golden-vectors/.
  */
 

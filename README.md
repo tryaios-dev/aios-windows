@@ -14,17 +14,31 @@ React UI (apps/ui)  --window.aios-->  Electron main (apps/desktop)  --HTTP + tok
 | Frontend: React screens + Electron shell | `apps/ui`, `apps/desktop` | [apps/ui/README.md](apps/ui/README.md), [apps/desktop/README.md](apps/desktop/README.md) |
 | Backend: FastAPI + encrypted database | `services/backend` | [services/backend/README.md](services/backend/README.md) |
 | Shared plumbing | `packages/ts/bridge-contract`, `packages/py/aios-common` | [bridge-contract](packages/ts/bridge-contract/README.md), [aios-common](packages/py/aios-common/README.md) |
-| Why things are built this way | `docs/adr/` | e.g. [0008 UI stack](docs/adr/0008-ui-stack.md), [0009 backend layout](docs/adr/0009-backend-layout.md) |
+| Why things are built this way | `docs/adr/` | e.g. [0008 UI stack](docs/adr/0008-ui-stack.md), [0009 backend layout](docs/adr/0009-backend-layout.md), [0010 backend data](docs/adr/0010-backend-data.md), [0011 setup and settings live](docs/adr/0011-setup-settings-live.md), [0012 all apps live](docs/adr/0012-all-apps-live.md), [0013 platform layer](docs/adr/0013-platform-layer.md); OS support: [docs/platforms.md](docs/platforms.md) |
 
 Features are named the same on both sides, one folder each:
 
 | Feature | UI (`features/`) | Backend (`apps/`) |
 | --- | --- | --- |
-| First-run setup (6 steps) | `apps/ui/src/features/setup` | `services/backend/aios_backend/apps/setup` |
-| Workspace shell | `apps/ui/src/features/workspace` | `services/backend/aios_backend/apps/workspace` |
+| First-run setup and restore | `apps/ui/src/features/setup` | `services/backend/aios_backend/apps/setup` |
+| Conversations and chat | `apps/ui/src/features/chat` | `services/backend/aios_backend/apps/chat` |
+| Evidence log | `apps/ui/src/features/evidence` | `services/backend/aios_backend/apps/evidence` |
+| Projects, classification, packages | `apps/ui/src/features/projects` | `services/backend/aios_backend/apps/projects` |
+| Model manager | `apps/ui/src/features/models` | `services/backend/aios_backend/apps/models` |
+| Settings | `apps/ui/src/features/settings` | `services/backend/aios_backend/apps/settings` |
+| Search (Ctrl K) | `apps/ui/src/features/search` | `services/backend/aios_backend/apps/search` |
 
-The UI screens are built; they run on simulated data until the backend apps get endpoints.
-The backend app packages are the layout only (no endpoints, tables or logic yet).
+Every screen of the `aios-product-designs` prototype is built in the UI. In the desktop app all
+seven areas (setup, settings, projects, chat, search, evidence, models) run on the real backend
+(UI → `window.aios` → Electron IPC → backend; `uv run aios-backend routes`). In a plain browser
+the UI uses its simulated backend (`apps/ui/src/bridge/sim/`). Not in this build: model download
+from the mirror, the local engine (so chat answers "no local model is ready") and the evidence
+writer (events stay pending). `pnpm test:e2e` runs the whole chain against a real backend. The
+app shell (sidebar, project header) lives in `apps/ui/src/app/`.
+
+AIOS ships for Windows only. Everything OS-specific sits behind one platform layer per
+language (Python, Electron main, UI wording), so another OS can be added later with one new file
+per layer; see [docs/platforms.md](docs/platforms.md).
 
 ## 1. Install the tools (once per machine)
 
@@ -73,14 +87,15 @@ cd aios-windows
 
 uv sync --frozen --all-packages --all-extras    # Python 3.12 + packages exactly from uv.lock
 pnpm install --frozen-lockfile                  # Node packages exactly from pnpm-lock.yaml (includes Electron)
-pnpm check:all                                  # must end green
+pnpm check:all                                  # must end green (includes pnpm test:e2e)
 ```
 
 `pnpm check:all` runs the same checks as CI: lock-file check, ruff lint and format, import rules,
-mypy, `openapi.json` up to date, Python tests (17 backend + shared, including a check that every
-file CI runs is committed), TypeScript typecheck, eslint and vitest. Expected ending:
-`Tasks: 10 successful, 10 total`. Run it before every push; if it is green, CI's lint and test
-jobs should be too.
+mypy, `openapi.json` up to date, Python tests (78 backend + 18 shared, including a check that every
+file CI runs is committed), TypeScript typecheck, eslint, vitest, and the end-to-end test
+(UI → preload → main → a real backend). Expected ending: `Tests  13 passed (13)` from the
+end-to-end test. Run it before every push; if it is green, CI's lint, test and e2e jobs should be
+too.
 
 ## 3. Run and verify
 
@@ -112,7 +127,9 @@ pnpm dev:ui
 ```
 
 Open http://localhost:5173. Expected: the first-run wizard, *Private AI on this computer.*
-Click through the six steps to reach the workspace (setup data is simulated). The UI is not
+Click through the six steps to reach the workspace; every page (chat, evidence, project settings,
+models, settings, search) then works on simulated data. The workspace is kept in browser storage, so
+to run setup again, clear site data in DevTools. The UI is not
 allowed to call the network, and `window.aios` (its only way to the backend) exists only inside
 Electron. Use this mode for layout work; edits reload instantly.
 
@@ -162,7 +179,7 @@ Dev database: `services/backend/.dev/chats.db` (fixed dev key, throw-away data).
 | `uv run aios-backend makemigrations -m "add tags"` | After editing `db/models.py`: write the next numbered migration; review it |
 | `uv run aios-backend showmigrations` / `downgrade -1` | List migrations / undo the newest |
 | `uv run aios-backend check` | Opens with its key, SQLCipher version, at head, models match migrations |
-| `uv run aios-backend sql "SELECT * FROM preferences"` | One SQL statement on the encrypted dev database |
+| `uv run aios-backend sql "SELECT * FROM settings"` | One SQL statement on the encrypted dev database |
 | `uv run aios-backend reset-db --yes` | Delete the dev database |
 
 ## Troubleshooting

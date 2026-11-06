@@ -1,25 +1,32 @@
-"""Settings in chats.db, as JSON values in the preferences table."""
-
-import json
+"""chats.db access for settings: the single row of the ``settings`` table."""
 
 from sqlalchemy.orm import Session
 
-from db.models import Preference
+from aios_backend.apps.settings.models import SINGLE_ROW, UserSettings
+from db import migrate
 
-SAFE_MODE = "engine.safe_mode"
 
-
-def get_bool(session: Session, key: str, default: bool) -> bool:
-    row = session.get(Preference, key)
+def load(session: Session) -> UserSettings:
+    """The settings row, created with the defaults the first time it is read."""
+    row = session.get(UserSettings, SINGLE_ROW)
     if row is None:
-        return default
-    value = json.loads(row.value)
-    return value if isinstance(value, bool) else default
+        row = UserSettings(
+            id=SINGLE_ROW, update_check=True, catalogue_check=True, safe_mode_cpu=False
+        )
+        session.add(row)
+        session.flush()
+    return row
 
 
-def set_bool(session: Session, key: str, value: bool) -> None:
-    row = session.get(Preference, key)
-    if row is None:
-        session.add(Preference(key=key, value=json.dumps(value)))
-    else:
-        row.value = json.dumps(value)
+def find(session: Session) -> UserSettings | None:
+    """The settings row, or None before it is first created. Never writes."""
+    return session.get(UserSettings, SINGLE_ROW)
+
+
+def save(session: Session) -> None:
+    session.flush()
+
+
+def schema_version() -> int:
+    head = migrate.head()
+    return int(head) if head and head.isdigit() else 0

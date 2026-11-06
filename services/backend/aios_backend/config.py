@@ -2,15 +2,16 @@
 
 Three profiles:
 
-* ``desktop`` - the shipped backend.exe. Forced by ``__main__``; the environment cannot change
-  it. Data in %LOCALAPPDATA%\\AIOS, DB key in Windows Credential Manager. Every request
-  needs the launch token. No docs pages.
+* ``desktop`` - the shipped app (backend.exe on Windows). Forced by ``__main__``; the
+  environment cannot change it. Starts only on an OS AIOS ships for (Windows); folders and the
+  key store come from ``aios_common.platforms`` (Windows: the user's local app-data folder and
+  Credential Manager). Every request needs the launch token. No docs pages.
 * ``dev``     - a developer machine (``aios-backend serve``). Database in
   ``services/backend/.dev/``, fixed dev key, fixed port, and ``/health`` and ``/docs`` open
   without a token so you can check the backend in a browser.
 * ``test``    - pytest. Database in a temp folder, fixed test key.
 
-The dev/test keys are not secrets: they only protect throw-away development data.
+The dev/test keys (database key and evidence signing seed) are not secrets: they only protect throw-away development data.
 """
 
 import os
@@ -20,13 +21,15 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from aios_common import paths
+from aios_common import paths, platforms
 
+APP_VERSION = "0.1.0"  # also in pyproject.toml and apps/desktop/package.json
 PROFILE_ENV = "AIOS_ENV"
 DEV_DIR = Path(__file__).resolve().parents[1] / ".dev"  # services/backend/.dev
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEV_DB_KEY = "de" * 32  # 256-bit hex; development data only
 TEST_DB_KEY = "00" * 32
+DEV_SIGNING_SEED = "5e" * 32  # Ed25519 seed for the dev/test evidence stream; not a secret
 
 
 class Profile(StrEnum):
@@ -42,9 +45,14 @@ class Settings:
     db_key: str | None  # None -> key from the OS keystore
     log_file: Path | None
     backups_dir: Path
-    # llama-server builds (engine_root/cpu, engine_root/vulkan) and the user's models folder.
+    recovery_pkg: Path  # written at store creation (Recovery Package v1)
+    models_dir: Path  # verified GGUF files (models app)
+    # Evidence signing seed as 64 hex characters. None -> created in / read from the OS keystore.
+    signing_seed: str | None = None
+    # Operator flag for the Company provider (lab only). Off: conversations can only run locally.
+    company_ai: bool = False
+    # llama-server builds (engine_root/cpu, engine_root/vulkan); idle engines are unloaded.
     engine_root: Path = Path()
-    models_dir: Path = Path()
     engine_idle_unload_s: float = 300.0
     # Paths reachable without the token. Empty in the shipped app.
     public_paths: frozenset[str] = frozenset()
@@ -64,6 +72,7 @@ def load(profile: Profile | str | None = None) -> Settings:
     chosen = Profile(profile or os.environ.get(PROFILE_ENV) or Profile.DEV)
 
     if chosen is Profile.DESKTOP:
+        platforms.require_shipped()  # Windows only, until another OS is ported
         paths.ensure_dirs()
         return Settings(
             profile=chosen,
@@ -72,6 +81,7 @@ def load(profile: Profile | str | None = None) -> Settings:
             log_file=paths.logs_dir() / "backend.log",
             backups_dir=paths.data_dir() / "backups",
             engine_root=_engine_root(),
+            recovery_pkg=paths.recovery_pkg(),
             models_dir=paths.models_dir(),
         )
 
@@ -84,7 +94,9 @@ def load(profile: Profile | str | None = None) -> Settings:
             log_file=DEV_DIR / "backend.log",
             backups_dir=DEV_DIR / "backups",
             engine_root=_engine_root(),
+            recovery_pkg=DEV_DIR / "recovery.pkg",
             models_dir=DEV_DIR / "models",
+            signing_seed=DEV_SIGNING_SEED,
             public_paths=frozenset({"/health", "/docs", "/openapi.json"}),
             docs_enabled=True,
         )
@@ -98,5 +110,7 @@ def load(profile: Profile | str | None = None) -> Settings:
         log_file=None,
         backups_dir=tmp / "backups",
         engine_root=_engine_root(),
+        recovery_pkg=tmp / "recovery-test.pkg",
         models_dir=tmp / "models",
+        signing_seed=DEV_SIGNING_SEED,
     )

@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { app } from "electron";
 import path from "node:path";
 import { createInterface } from "node:readline";
+import { currentPlatform } from "../platform/index.js";
 import { launchToken } from "./token.js";
 import { BackendClient } from "./client.js";
 import { handshakeFrame, parseReadyLine, type Ready } from "./protocol.js";
@@ -15,26 +16,15 @@ let child: ChildProcess | undefined;
 
 const repoRoot = () => path.join(import.meta.dirname, "../../../../..");
 
-/** Packaged: the bundled backend.exe. Dev: the repo's Python venv (`uv sync` first). */
-function backendCommand(): { cmd: string; args: string[]; env: NodeJS.ProcessEnv } {
-  if (app.isPackaged) {
-    return {
-      cmd: path.join(process.resourcesPath, "backend", "backend.exe"),
-      args: [],
-      env: { SystemRoot: process.env.SystemRoot ?? "", LOCALAPPDATA: process.env.LOCALAPPDATA ?? "" },
-    };
-  }
-  return {
-    cmd: path.join(repoRoot(), ".venv", "Scripts", "python.exe"),
-    args: ["-m", "aios_backend"],
-    env: { ...process.env, PYTHONUNBUFFERED: "1" },
-  };
-}
-
-/** Start the backend; the token goes over stdin, then stdin is closed (Process and IPC Contract v1). */
+/** Start the backend; the token goes over stdin, then stdin is closed (Process and IPC Contract v1).
+ * Which program starts, and with which environment, comes from the platform layer (../platform). */
 export async function startBackend(): Promise<BackendHandle> {
   const token = launchToken();
-  const { cmd, args, env } = backendCommand();
+  const { cmd, args, env } = currentPlatform().backendCommand({
+    packaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    repoRoot: repoRoot(),
+  });
   const proc = spawn(cmd, args, { stdio: ["pipe", "pipe", "inherit"], windowsHide: true, env });
   child = proc;
   proc.stdin?.end(handshakeFrame(token));
@@ -57,6 +47,6 @@ export async function startBackend(): Promise<BackendHandle> {
 }
 
 export async function stopBackend(): Promise<void> {
-  child?.kill();
+  if (child) currentPlatform().stopProcessTree(child);
   child = undefined;
 }

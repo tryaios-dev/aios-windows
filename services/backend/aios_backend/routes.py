@@ -7,9 +7,10 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from aios_backend.components import Components, ComponentState
+from aios_backend.config import APP_VERSION
 from db.session import Db
 
-VERSION = "0.1.0"
+VERSION = APP_VERSION
 
 router = APIRouter(tags=["system"])
 

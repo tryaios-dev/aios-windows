@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, Dialect, MetaData
+from sqlalchemy import DateTime, Dialect, MetaData, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
 
@@ -14,6 +14,9 @@ NAMING_CONVENTION = {
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
     "pk": "pk_%(table_name)s",
 }
+
+
+ID = String(36)  # UUID, lowercase 8-4-4-4-12
 
 
 class Base(DeclarativeBase):

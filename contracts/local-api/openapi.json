@@ -1,6 +1,213 @@
 {
   "components": {
     "schemas": {
+      "AllowlistEntry": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "fixed",
+              "configured"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "port": {
+            "title": "Port",
+            "type": "integer"
+          },
+          "purpose": {
+            "title": "Purpose",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "host",
+          "port",
+          "purpose",
+          "kind",
+          "enabled"
+        ],
+        "title": "AllowlistEntry",
+        "type": "object"
+      },
+      "CatalogueEntryOut": {
+        "properties": {
+          "artifact_digest": {
+            "title": "Artifact Digest",
+            "type": "string"
+          },
+          "context_length": {
+            "title": "Context Length",
+            "type": "integer"
+          },
+          "conversion_tool": {
+            "title": "Conversion Tool",
+            "type": "string"
+          },
+          "conversion_version": {
+            "title": "Conversion Version",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "deviation_approval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DeviationApproval"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "entry_id": {
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "licence": {
+            "title": "Licence",
+            "type": "string"
+          },
+          "licence_reference": {
+            "title": "Licence Reference",
+            "type": "string"
+          },
+          "min_ram_gb": {
+            "title": "Min Ram Gb",
+            "type": "integer"
+          },
+          "min_vram_gb": {
+            "title": "Min Vram Gb",
+            "type": "integer"
+          },
+          "mirror_url": {
+            "title": "Mirror Url",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "pipeline": {
+            "enum": [
+              "own",
+              "third-party"
+            ],
+            "title": "Pipeline",
+            "type": "string"
+          },
+          "publisher": {
+            "title": "Publisher",
+            "type": "string"
+          },
+          "quantisation_method": {
+            "title": "Quantisation Method",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "source_weight_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Weight Digest"
+          },
+          "tier": {
+            "enum": [
+              "small",
+              "medium"
+            ],
+            "title": "Tier",
+            "type": "string"
+          },
+          "upstream_model": {
+            "title": "Upstream Model",
+            "type": "string"
+          },
+          "upstream_revision": {
+            "title": "Upstream Revision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entry_id",
+          "name",
+          "tier",
+          "upstream_model",
+          "upstream_revision",
+          "source_weight_digest",
+          "conversion_tool",
+          "conversion_version",
+          "quantisation_method",
+          "artifact_digest",
+          "size_bytes",
+          "file_name",
+          "licence",
+          "licence_reference",
+          "publisher",
+          "pipeline",
+          "deviation_approval",
+          "context_length",
+          "min_ram_gb",
+          "min_vram_gb",
+          "mirror_url",
+          "description"
+        ],
+        "title": "CatalogueEntryOut",
+        "type": "object"
+      },
+      "CatalogueOut": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogueEntryOut"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "signed": {
+            "title": "Signed",
+            "type": "boolean"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "signed",
+          "entries"
+        ],
+        "title": "CatalogueOut",
+        "type": "object"
+      },
       "ChatCompletionRequest": {
         "properties": {
           "max_tokens": {
@@ -50,6 +257,37 @@
         "title": "ChatMessage",
         "type": "object"
       },
+      "CompanyAi": {
+        "properties": {
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "CompanyAi",
+        "type": "object"
+      },
+      "Completed": {
+        "properties": {
+          "default_project_id": {
+            "title": "Default Project Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "default_project_id"
+        ],
+        "title": "Completed",
+        "type": "object"
+      },
       "ComponentState": {
         "enum": [
           "not_started",
@@ -61,18 +299,455 @@
         "title": "ComponentState",
         "type": "string"
       },
-      "EngineSettings": {
-        "additionalProperties": false,
+      "ConversationCreate": {
         "properties": {
-          "safe_mode": {
-            "title": "Safe Mode",
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "ConversationCreate",
+        "type": "object"
+      },
+      "ConversationOut": {
+        "properties": {
+          "archived": {
+            "title": "Archived",
             "type": "boolean"
+          },
+          "classification_effective": {
+            "enum": [
+              "restricted",
+              "internal",
+              "public"
+            ],
+            "title": "Classification Effective",
+            "type": "string"
+          },
+          "classification_source": {
+            "enum": [
+              "project",
+              "import",
+              "review"
+            ],
+            "title": "Classification Source",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current_provider": {
+            "enum": [
+              "local",
+              "company"
+            ],
+            "title": "Current Provider",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "last_message_preview": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Message Preview"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Id"
+          },
+          "moves": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderMoveOut"
+            },
+            "title": "Moves",
+            "type": "array"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "provider_mode": {
+            "enum": [
+              "local",
+              "company"
+            ],
+            "title": "Provider Mode",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
           }
         },
         "required": [
-          "safe_mode"
+          "id",
+          "project_id",
+          "title",
+          "classification_effective",
+          "classification_source",
+          "provider_mode",
+          "current_provider",
+          "model_id",
+          "archived",
+          "created_at",
+          "updated_at",
+          "last_message_preview",
+          "moves"
         ],
-        "title": "EngineSettings",
+        "title": "ConversationOut",
+        "type": "object"
+      },
+      "ConversationPatch": {
+        "properties": {
+          "archived": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "ConversationPatch",
+        "type": "object"
+      },
+      "DeviationApproval": {
+        "properties": {
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "quality_threshold_result": {
+            "title": "Quality Threshold Result",
+            "type": "string"
+          },
+          "reviewer": {
+            "title": "Reviewer",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reviewer",
+          "date",
+          "quality_threshold_result"
+        ],
+        "title": "DeviationApproval",
+        "type": "object"
+      },
+      "EngineStatus": {
+        "description": "The local engine (llama-server) is not part of this build yet.",
+        "properties": {
+          "installed": {
+            "title": "Installed",
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "not_built",
+              "no_model"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "installed"
+        ],
+        "title": "EngineStatus",
+        "type": "object"
+      },
+      "EvidenceEventOut": {
+        "properties": {
+          "actor": {
+            "enum": [
+              "user",
+              "app",
+              "operator"
+            ],
+            "title": "Actor",
+            "type": "string"
+          },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
+          "event_id": {
+            "title": "Event Id",
+            "type": "string"
+          },
+          "event_type": {
+            "title": "Event Type",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "payload": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Payload",
+            "type": "object"
+          },
+          "pending": {
+            "title": "Pending",
+            "type": "boolean"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seq"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "event_id",
+          "event_type",
+          "actor",
+          "ts",
+          "project_id",
+          "conversation_id",
+          "payload",
+          "seq",
+          "pending"
+        ],
+        "title": "EvidenceEventOut",
+        "type": "object"
+      },
+      "EvidenceStatus": {
+        "properties": {
+          "pending": {
+            "title": "Pending",
+            "type": "integer"
+          },
+          "writer": {
+            "enum": [
+              "ok",
+              "unavailable"
+            ],
+            "title": "Writer",
+            "type": "string"
+          }
+        },
+        "required": [
+          "writer",
+          "pending"
+        ],
+        "title": "EvidenceStatus",
+        "type": "object"
+      },
+      "Exchange": {
+        "description": "The user's message and the answer it produced.",
+        "properties": {
+          "assistant": {
+            "$ref": "#/components/schemas/MessageOut"
+          },
+          "user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MessageOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "user",
+          "assistant"
+        ],
+        "title": "Exchange",
+        "type": "object"
+      },
+      "ExportIn": {
+        "description": "``path``: where Electron main's save dialog says to write the ``.aiosproj`` file.",
+        "properties": {
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "path": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "ExportIn",
+        "type": "object"
+      },
+      "ExportOut": {
+        "properties": {
+          "checksum": {
+            "title": "Checksum",
+            "type": "string"
+          },
+          "evidence_seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Seq"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "package_id": {
+            "title": "Package Id",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "file_name",
+          "path",
+          "size_bytes",
+          "checksum",
+          "package_id",
+          "evidence_seq"
+        ],
+        "title": "ExportOut",
+        "type": "object"
+      },
+      "Gpu": {
+        "properties": {
+          "driver_ok": {
+            "title": "Driver Ok",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "vram_gb": {
+            "title": "Vram Gb",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "vram_gb",
+          "driver_ok"
+        ],
+        "title": "Gpu",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -86,6 +761,72 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HardwareOut": {
+        "properties": {
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "cores": {
+            "title": "Cores",
+            "type": "integer"
+          },
+          "cpu": {
+            "title": "Cpu",
+            "type": "string"
+          },
+          "free_disk_gb": {
+            "title": "Free Disk Gb",
+            "type": "integer"
+          },
+          "gpu": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Gpu"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "os": {
+            "title": "Os",
+            "type": "string"
+          },
+          "ram_gb": {
+            "title": "Ram Gb",
+            "type": "integer"
+          },
+          "recommended_tier": {
+            "anyOf": [
+              {
+                "enum": [
+                  "small",
+                  "medium"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Tier"
+          }
+        },
+        "required": [
+          "cpu",
+          "cores",
+          "ram_gb",
+          "gpu",
+          "free_disk_gb",
+          "os",
+          "recommended_tier",
+          "checked_at"
+        ],
+        "title": "HardwareOut",
         "type": "object"
       },
       "Health": {
@@ -153,6 +894,894 @@
         "title": "Health",
         "type": "object"
       },
+      "ImportOut": {
+        "properties": {
+          "conversations": {
+            "title": "Conversations",
+            "type": "integer"
+          },
+          "messages": {
+            "title": "Messages",
+            "type": "integer"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "project_name": {
+            "title": "Project Name",
+            "type": "string"
+          },
+          "remapped": {
+            "title": "Remapped",
+            "type": "boolean"
+          },
+          "summaries": {
+            "title": "Summaries",
+            "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "project_id",
+          "project_name",
+          "conversations",
+          "messages",
+          "summaries",
+          "warnings",
+          "remapped"
+        ],
+        "title": "ImportOut",
+        "type": "object"
+      },
+      "InstalledModelOut": {
+        "properties": {
+          "artifact_digest": {
+            "title": "Artifact Digest",
+            "type": "string"
+          },
+          "catalogue_entry_id": {
+            "title": "Catalogue Entry Id",
+            "type": "string"
+          },
+          "context_length": {
+            "title": "Context Length",
+            "type": "integer"
+          },
+          "file_path": {
+            "title": "File Path",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "installed_at": {
+            "format": "date-time",
+            "title": "Installed At",
+            "type": "string"
+          },
+          "licence": {
+            "title": "Licence",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "source": {
+            "enum": [
+              "download",
+              "offline"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "tier": {
+            "enum": [
+              "small",
+              "medium"
+            ],
+            "title": "Tier",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "catalogue_entry_id",
+          "name",
+          "file_path",
+          "artifact_digest",
+          "size_bytes",
+          "context_length",
+          "licence",
+          "tier",
+          "installed_at",
+          "source"
+        ],
+        "title": "InstalledModelOut",
+        "type": "object"
+      },
+      "MessageOut": {
+        "properties": {
+          "classification_effective": {
+            "enum": [
+              "restricted",
+              "internal",
+              "public"
+            ],
+            "title": "Classification Effective",
+            "type": "string"
+          },
+          "classification_source": {
+            "enum": [
+              "project",
+              "import",
+              "review"
+            ],
+            "title": "Classification Source",
+            "type": "string"
+          },
+          "completion_tokens": {
+            "title": "Completion Tokens",
+            "type": "integer"
+          },
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "continued_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Continued From"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "evidence_pending": {
+            "title": "Evidence Pending",
+            "type": "boolean"
+          },
+          "evidence_seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Seq"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Id"
+          },
+          "previous_versions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Previous Versions",
+            "type": "array"
+          },
+          "prompt_tokens": {
+            "title": "Prompt Tokens",
+            "type": "integer"
+          },
+          "provider": {
+            "enum": [
+              "local",
+              "company"
+            ],
+            "title": "Provider",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "complete",
+              "partial",
+              "error",
+              "stopped"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "conversation_id",
+          "role",
+          "content",
+          "classification_effective",
+          "classification_source",
+          "status",
+          "provider",
+          "model_id",
+          "prompt_tokens",
+          "completion_tokens",
+          "created_at",
+          "evidence_pending",
+          "evidence_seq",
+          "previous_versions",
+          "continued_from"
+        ],
+        "title": "MessageOut",
+        "type": "object"
+      },
+      "ProjectCreate": {
+        "properties": {
+          "classification": {
+            "enum": [
+              "restricted",
+              "internal",
+              "public"
+            ],
+            "title": "Classification",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 200,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "classification"
+        ],
+        "title": "ProjectCreate",
+        "type": "object"
+      },
+      "ProjectOut": {
+        "properties": {
+          "archived": {
+            "title": "Archived",
+            "type": "boolean"
+          },
+          "classification": {
+            "enum": [
+              "restricted",
+              "internal",
+              "public"
+            ],
+            "title": "Classification",
+            "type": "string"
+          },
+          "classification_source": {
+            "enum": [
+              "project",
+              "import",
+              "review"
+            ],
+            "title": "Classification Source",
+            "type": "string"
+          },
+          "company_ai_enabled": {
+            "title": "Company Ai Enabled",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "derived_from_project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Derived From Project Id"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "classification",
+          "classification_source",
+          "derived_from_project_id",
+          "company_ai_enabled",
+          "archived",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ProjectOut",
+        "type": "object"
+      },
+      "ProjectPatch": {
+        "description": "Rename and/or archive. Classification changes go through /reclassify.",
+        "properties": {
+          "archived": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "title": "ProjectPatch",
+        "type": "object"
+      },
+      "ProviderChange": {
+        "properties": {
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "to": {
+            "enum": [
+              "local",
+              "company"
+            ],
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "to"
+        ],
+        "title": "ProviderChange",
+        "type": "object"
+      },
+      "ProviderMoveOut": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "to": {
+            "enum": [
+              "local",
+              "company"
+            ],
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "to",
+          "at"
+        ],
+        "title": "ProviderMoveOut",
+        "type": "object"
+      },
+      "ProvidersStatus": {
+        "properties": {
+          "company_enabled": {
+            "title": "Company Enabled",
+            "type": "boolean"
+          },
+          "local_ready": {
+            "title": "Local Ready",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "local_ready",
+          "company_enabled"
+        ],
+        "title": "ProvidersStatus",
+        "type": "object"
+      },
+      "Reclassify": {
+        "properties": {
+          "to": {
+            "enum": [
+              "restricted",
+              "internal",
+              "public"
+            ],
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "to"
+        ],
+        "title": "Reclassify",
+        "type": "object"
+      },
+      "ReclassifyOut": {
+        "properties": {
+          "project": {
+            "$ref": "#/components/schemas/ProjectOut"
+          },
+          "reviewed_copy": {
+            "title": "Reviewed Copy",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "project",
+          "reviewed_copy"
+        ],
+        "title": "ReclassifyOut",
+        "type": "object"
+      },
+      "RestoreIn": {
+        "description": "``backup_path``: the backed-up data folder holding ``chats.db`` and ``recovery.pkg``.",
+        "properties": {
+          "backup_path": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Backup Path",
+            "type": "string"
+          },
+          "recovery_key": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Recovery Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "backup_path",
+          "recovery_key"
+        ],
+        "title": "RestoreIn",
+        "type": "object"
+      },
+      "Restored": {
+        "properties": {
+          "stream_id": {
+            "title": "Stream Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stream_id"
+        ],
+        "title": "Restored",
+        "type": "object"
+      },
+      "SearchHit": {
+        "properties": {
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "snippet": {
+            "title": "Snippet",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_id",
+          "conversation_id",
+          "project_id",
+          "snippet",
+          "created_at",
+          "role"
+        ],
+        "title": "SearchHit",
+        "type": "object"
+      },
+      "SendIn": {
+        "properties": {
+          "text": {
+            "maxLength": 200000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "SendIn",
+        "type": "object"
+      },
+      "SettingsOut": {
+        "properties": {
+          "app_version": {
+            "title": "App Version",
+            "type": "string"
+          },
+          "catalogue_check": {
+            "title": "Catalogue Check",
+            "type": "boolean"
+          },
+          "catalogue_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalogue Version"
+          },
+          "default_model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Model Id"
+          },
+          "last_catalogue_check": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Catalogue Check"
+          },
+          "last_update_check": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Update Check"
+          },
+          "safe_mode_cpu": {
+            "title": "Safe Mode Cpu",
+            "type": "boolean"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "update_available": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UpdateAvailable"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "update_check": {
+            "title": "Update Check",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "update_check",
+          "catalogue_check",
+          "safe_mode_cpu",
+          "default_model_id",
+          "last_update_check",
+          "last_catalogue_check",
+          "update_available",
+          "app_version",
+          "catalogue_version",
+          "schema_version"
+        ],
+        "title": "SettingsOut",
+        "type": "object"
+      },
+      "SettingsPatch": {
+        "description": "Only the fields sent change. ``default_model_id: null`` clears the default.",
+        "properties": {
+          "catalogue_check": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalogue Check"
+          },
+          "default_model_id": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Model Id"
+          },
+          "safe_mode_cpu": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Safe Mode Cpu"
+          },
+          "update_check": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Update Check"
+          }
+        },
+        "title": "SettingsPatch",
+        "type": "object"
+      },
+      "SetupStatus": {
+        "description": "Where first run stands. The UI opens setup until ``first_run_complete`` is true.",
+        "properties": {
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "default_project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Project Id"
+          },
+          "first_run_complete": {
+            "title": "First Run Complete",
+            "type": "boolean"
+          },
+          "last_restore_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Restore At"
+          },
+          "package_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Package Id"
+          },
+          "recovery_package_present": {
+            "title": "Recovery Package Present",
+            "type": "boolean"
+          },
+          "signing_key_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signing Key Id"
+          },
+          "store_created": {
+            "title": "Store Created",
+            "type": "boolean"
+          },
+          "stream_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stream Id"
+          }
+        },
+        "required": [
+          "first_run_complete",
+          "store_created",
+          "stream_id",
+          "signing_key_id",
+          "package_id",
+          "default_project_id",
+          "completed_at",
+          "last_restore_at",
+          "recovery_package_present"
+        ],
+        "title": "SetupStatus",
+        "type": "object"
+      },
+      "StoreCreated": {
+        "description": "``recovery_key`` is in this response exactly once and stored nowhere by AIOS.",
+        "properties": {
+          "package_id": {
+            "title": "Package Id",
+            "type": "string"
+          },
+          "recovery_key": {
+            "title": "Recovery Key",
+            "type": "string"
+          },
+          "signing_key_id": {
+            "title": "Signing Key Id",
+            "type": "string"
+          },
+          "stream_id": {
+            "title": "Stream Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "recovery_key",
+          "package_id",
+          "stream_id",
+          "signing_key_id"
+        ],
+        "title": "StoreCreated",
+        "type": "object"
+      },
+      "UpdateAvailable": {
+        "properties": {
+          "size_bytes": {
+            "minimum": 0.0,
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "version": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "size_bytes"
+        ],
+        "title": "UpdateAvailable",
+        "type": "object"
+      },
+      "UpdateCheckIn": {
+        "description": "What Electron main's updater found. ``null``: no update waiting.",
+        "properties": {
+          "update_available": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UpdateAvailable"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "update_available"
+        ],
+        "title": "UpdateCheckIn",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -192,6 +1821,49 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "aios_backend__apps__models__schemas__ImportIn": {
+        "description": "``path``: the .gguf file the user picked. ``entry_id``: the entry they chose it for.",
+        "properties": {
+          "entry_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Id"
+          },
+          "path": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "ImportIn",
+        "type": "object"
+      },
+      "aios_backend__apps__projects__schemas__ImportIn": {
+        "properties": {
+          "path": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "ImportIn",
+        "type": "object"
       }
     }
   },
@@ -201,6 +1873,395 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/conversations/{conversation_id}": {
+      "delete": {
+        "operationId": "delete_conversation_conversations__conversation_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete a conversation and its messages",
+        "tags": [
+          "chat"
+        ]
+      },
+      "patch": {
+        "operationId": "update_conversation_conversations__conversation_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rename, archive or change model",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
+    "/conversations/{conversation_id}/messages": {
+      "get": {
+        "operationId": "list_messages_conversations__conversation_id__messages_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MessageOut"
+                  },
+                  "title": "Response List Messages Conversations  Conversation Id  Messages Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Messages in order",
+        "tags": [
+          "chat"
+        ]
+      },
+      "post": {
+        "operationId": "send_conversations__conversation_id__messages_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Exchange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Send a message and get the answer",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
+    "/conversations/{conversation_id}/provider": {
+      "post": {
+        "operationId": "change_provider_conversations__conversation_id__provider_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Move between Local and Company (Company needs confirmation)",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
+    "/conversations/{conversation_id}/regenerate": {
+      "post": {
+        "operationId": "regenerate_conversations__conversation_id__regenerate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Exchange"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Answer the last question again",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
+    "/engine/status": {
+      "get": {
+        "operationId": "engine_status_engine_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngineStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "State of the local engine",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/evidence": {
+      "get": {
+        "operationId": "list_events_evidence_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EvidenceEventOut"
+                  },
+                  "title": "Response List Events Evidence Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Recorded events, oldest first (optionally for one project)",
+        "tags": [
+          "evidence"
+        ]
+      }
+    },
+    "/evidence/export": {
+      "post": {
+        "operationId": "export_evidence_export_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Export a verifiable bundle (done by the evidence writer)",
+        "tags": [
+          "evidence"
+        ]
+      }
+    },
+    "/evidence/status": {
+      "get": {
+        "operationId": "status_evidence_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Evidence writer state and pending events",
+        "tags": [
+          "evidence"
+        ]
+      }
+    },
     "/health": {
       "get": {
         "operationId": "health_health_get",
@@ -222,44 +2283,111 @@
         ]
       }
     },
-    "/settings/engine": {
+    "/models": {
       "get": {
-        "operationId": "get_engine_settings_settings_engine_get",
+        "operationId": "list_models_models_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngineSettings"
+                  "items": {
+                    "$ref": "#/components/schemas/InstalledModelOut"
+                  },
+                  "title": "Response List Models Models Get",
+                  "type": "array"
                 }
               }
             },
             "description": "Successful Response"
           }
         },
-        "summary": "Engine settings (Safe mode)",
+        "summary": "Installed models",
         "tags": [
-          "settings"
+          "models"
         ]
-      },
-      "put": {
-        "operationId": "put_engine_settings_settings_engine_put",
+      }
+    },
+    "/models/catalogue": {
+      "get": {
+        "operationId": "get_catalogue_models_catalogue_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogueOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Models AIOS may install (Model Catalogue v1)",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/models/download/{entry_id}": {
+      "post": {
+        "operationId": "download_models_download__entry_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "title": "Entry Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download from the model mirror (not available in this build: 503)",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/models/import": {
+      "post": {
+        "operationId": "import_model_models_import_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/EngineSettings"
+                "$ref": "#/components/schemas/aios_backend__apps__models__schemas__ImportIn"
               }
             }
           },
           "required": true
         },
         "responses": {
-          "200": {
+          "201": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngineSettings"
+                  "$ref": "#/components/schemas/InstalledModelOut"
                 }
               }
             },
@@ -276,9 +2404,846 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Change engine settings; Safe mode applies at once and persists",
+        "summary": "Install a .gguf file from disk if it matches a catalogue entry byte for byte",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/models/{model_id}": {
+      "delete": {
+        "operationId": "delete_model_models__model_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete an installed model and its file",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/projects": {
+      "get": {
+        "operationId": "list_projects_projects_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectOut"
+                  },
+                  "title": "Response List Projects Projects Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "All projects, newest first",
+        "tags": [
+          "projects"
+        ]
+      },
+      "post": {
+        "operationId": "create_project_projects_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create a project",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/import": {
+      "post": {
+        "operationId": "import_project_projects_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/aios_backend__apps__projects__schemas__ImportIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import a Project Package v1 file (all or nothing)",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{project_id}": {
+      "delete": {
+        "operationId": "delete_project_projects__project_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete a project and everything in it",
+        "tags": [
+          "projects"
+        ]
+      },
+      "get": {
+        "operationId": "get_project_projects__project_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "One project",
+        "tags": [
+          "projects"
+        ]
+      },
+      "patch": {
+        "operationId": "update_project_projects__project_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rename or archive a project",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{project_id}/company-ai": {
+      "put": {
+        "operationId": "set_company_ai_projects__project_id__company_ai_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanyAi"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Use Company AI for new conversations",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{project_id}/conversations": {
+      "get": {
+        "operationId": "list_conversations_projects__project_id__conversations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ConversationOut"
+                  },
+                  "title": "Response List Conversations Projects  Project Id  Conversations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Conversations of a project, newest first",
+        "tags": [
+          "chat"
+        ]
+      },
+      "post": {
+        "operationId": "create_conversation_projects__project_id__conversations_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start a conversation",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
+    "/projects/{project_id}/evidence": {
+      "get": {
+        "operationId": "project_events_projects__project_id__evidence_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EvidenceEventOut"
+                  },
+                  "title": "Response Project Events Projects  Project Id  Evidence Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Events of one project",
+        "tags": [
+          "evidence"
+        ]
+      }
+    },
+    "/projects/{project_id}/export": {
+      "post": {
+        "operationId": "export_project_projects__project_id__export_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Write a Project Package v1 file",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{project_id}/reclassify": {
+      "post": {
+        "operationId": "reclassify_projects__project_id__reclassify_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Reclassify"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReclassifyOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Change classification; lowering creates a reviewed copy",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/providers/status": {
+      "get": {
+        "operationId": "providers_status_providers_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProvidersStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Whether Local and Company can answer now",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
+    "/restore": {
+      "post": {
+        "operationId": "restore_restore_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Restored"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Restore a backup with its recovery key (all or nothing)",
+        "tags": [
+          "setup"
+        ]
+      }
+    },
+    "/search": {
+      "get": {
+        "operationId": "search_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 200,
+              "title": "Q",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SearchHit"
+                  },
+                  "title": "Response Search Search Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Messages containing the query, newest first",
+        "tags": [
+          "search"
+        ]
+      }
+    },
+    "/settings": {
+      "get": {
+        "operationId": "get_settings_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "User settings",
         "tags": [
           "settings"
+        ]
+      },
+      "patch": {
+        "operationId": "update_settings_settings_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Change some settings; omitted fields stay as they are",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/settings/update-check": {
+      "post": {
+        "operationId": "record_update_check_settings_update_check_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCheckIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Record the result of an update check (sent by Electron main's updater)",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/setup/complete": {
+      "post": {
+        "operationId": "complete_setup_complete_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Completed"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Finish first run and create the default project",
+        "tags": [
+          "setup"
+        ]
+      }
+    },
+    "/setup/status": {
+      "get": {
+        "operationId": "setup_status_setup_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Whether first run is done and the store exists",
+        "tags": [
+          "setup"
+        ]
+      }
+    },
+    "/setup/store": {
+      "post": {
+        "operationId": "create_store_setup_store_post",
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Create the store: signing key, recovery key (returned once), recovery.pkg",
+        "tags": [
+          "setup"
         ]
       }
     },
@@ -324,6 +3289,74 @@
         "summary": "TEMPORARY (D-04): stream one local answer; replaced by the gateway (G-01)",
         "tags": [
           "spike (temporary, D-04)"
+        ]
+      }
+    },
+    "/system/hardware": {
+      "get": {
+        "operationId": "get_hardware_system_hardware_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "refresh",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Refresh",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HardwareOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "This machine's hardware and the recommended tier",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/system/network": {
+      "get": {
+        "operationId": "network_system_network_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AllowlistEntry"
+                  },
+                  "title": "Response Network System Network Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Every host AIOS may connect to",
+        "tags": [
+          "settings"
         ]
       }
     }

@@ -14,12 +14,13 @@
     "package:win": "pnpm build:llama && pnpm build:backend && turbo run build && pnpm --filter @aios/desktop package",
     "build:llama": "uv run python build/llama/build.py",
     "check:py": "uv lock --check && uv run ruff check . && uv run ruff format --check . && uv run lint-imports && uv run mypy packages/py/aios-common/src services/backend/aios_backend services/backend/db && uv run aios-backend openapi --check && uv run python tools/contracts/gen_process_ipc_vectors.py --check && uv run python tools/run_tests.py",
-    "check:all": "pnpm check:py && pnpm check",
+    "check:all": "pnpm check:py && pnpm check && pnpm test:e2e",
     "build:backend": "uv run pyinstaller build/pyinstaller/backend.spec --distpath build/out --workpath build/out/work --noconfirm",
     "dev:backend": "uv run aios-backend serve",
     "dev:ui": "pnpm --filter @aios/bridge-contract build && pnpm --filter @aios/ui dev",
     "dev:desktop": "pnpm --filter @aios/desktop dev",
-    "sbom": "uv run python tools/release/sbom.py"
+    "sbom": "uv run python tools/release/sbom.py",
+    "test:e2e": "pnpm --filter @aios/bridge-contract build && pnpm --filter @aios/ui test:e2e"
   },
   "devDependencies": {
     "turbo": "^2.2.3",
