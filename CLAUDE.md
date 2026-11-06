@@ -34,7 +34,8 @@ TypeScript (eslint, `packages/ts/config`):
   factory), `config.py`, `cli.py`, `routes.py`, and `apps/` (one package per UI feature:
   router, schemas, service, repository, models). `services/backend/db/` is the separate `db`
   package (chats.db on SQLCipher, imported as `db.*`). A new app's router is included in
-  `main.py`. Keep routes thin.
+  `main.py`. Keep routes thin. Tables several apps read live in `db/models.py`; evidence is
+  queued with `db.outbox.record` in the same transaction; services raise `AppError`.
 - Schema changes only through numbered Alembic migrations (`aios-backend makemigrations`);
   never edit an applied migration. New model modules are imported in `db/registry.py`.
 - The SQLCipher build is pinned in `services/backend/pyproject.toml` and `build/sqlcipher/pin.json`;
@@ -46,4 +47,7 @@ TypeScript (eslint, `packages/ts/config`):
   name in `services/backend/aios_backend/apps/`.
 - New dependency = lock file updated in the same PR (`uv lock`, `pnpm install`); CI installs
   with `--frozen` and fails otherwise.
+- Windows only, behind a platform layer (docs/platforms.md): never check the OS or name Windows
+  paths, programs or wording outside `aios_common/platforms/`, `apps/desktop/src/main/platform/`
+  and `apps/ui/src/lib/platform.ts`. Guard tests enforce it.
 - Security-relevant paths (see `.github/CODEOWNERS`) need the technical reviewer.

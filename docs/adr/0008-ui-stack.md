@@ -36,3 +36,16 @@ primitives live in `src/components/ui/`. `src/bridge/index.ts` stays the only fi
   only if start-up time shows a problem.
 - Screens are ported from the prototype's code, so design changes are made there first and then
   copied across.
+
+**Update (2026-11-05): all prototype screens ported, one simulated store.**
+- Every remaining screen was ported from the prototype's code: chat, evidence, project settings
+  and project dialogs, models, settings, search and restore.
+- The per-feature stores were replaced by the prototype's single simulated backend, now in
+  `src/bridge/sim/`, behind the endpoint façade `src/bridge/api.ts`. One store keeps the screens
+  consistent (a model installed in setup appears in Models; an archived project leaves the
+  sidebar). As endpoints land, `api.ts` functions become `window.aios` calls.
+- The app shell (sidebar, project header, global dialogs, toasts) moved to `src/app/`, which is
+  the only code that imports features. Pieces two features share live in `src/components/app/`.
+- New dependencies for chat: `react-markdown`, `remark-gfm` and `prism-react-renderer`. The
+  bundle is about 1.1 MB, still loaded from disk.
+- Shortcut hints read "Ctrl" (Windows) where the prototype shows "⌘".

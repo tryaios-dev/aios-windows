@@ -14,6 +14,7 @@ import sys
 
 import uvicorn
 
+from aios_backend.apps.chat.answers import AnswerSource
 from aios_backend.config import Profile, Settings, load
 from aios_backend.main import configure_logging, create_app
 from aios_common.handshake import read_handshake
@@ -27,11 +28,12 @@ def free_port() -> int:
         return int(s.getsockname()[1])
 
 
-async def serve(settings: Settings, db: Database, port: int) -> None:
+async def serve(
+    settings: Settings, db: Database, port: int, answers: AnswerSource | None = None
+) -> None:
+    app = create_app(settings, db, answers)
     server = uvicorn.Server(
-        uvicorn.Config(
-            create_app(settings, db), host="127.0.0.1", port=port, log_config=None, access_log=False
-        )
+        uvicorn.Config(app, host="127.0.0.1", port=port, log_config=None, access_log=False)
     )
     sys.stdout.write("READY " + json.dumps({"api_port": port}) + "\n")
     sys.stdout.flush()

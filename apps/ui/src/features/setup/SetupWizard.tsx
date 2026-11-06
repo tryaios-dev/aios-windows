@@ -1,22 +1,20 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import type { ModelTier, Project } from "@/lib/types";
-import { EASE } from "@/lib/motion";
-import { catalogueEntry, tierFor } from "./catalogue";
+import { api } from "@/bridge/api";
+import { selectRecommendedTier, useStore } from "@/bridge/sim/store";
+import type { ModelTier } from "@/lib/types";
 import { SetupFrame, type RailStep } from "./SetupFrame";
-import { useSetupStore } from "./store";
-import type { FirstRunResult, ModelSource } from "./types";
-import { EngineStep } from "./steps/EngineStep";
-import { MachineStep } from "./steps/MachineStep";
-import { ModelStep } from "./steps/ModelStep";
-import { SecureStep } from "./steps/SecureStep";
-import { VerifiedStep } from "./steps/VerifiedStep";
 import { WelcomeStep } from "./steps/WelcomeStep";
+import { MachineStep } from "./steps/MachineStep";
+import { ModelStep, type ModelSource } from "./steps/ModelStep";
+import { VerifiedStep } from "./steps/VerifiedStep";
+import { SecureStep } from "./steps/SecureStep";
+import { EngineStep } from "./steps/EngineStep";
 
 /**
  * First-run wizard (MVP 4.1; tickets K-05, K-03, I-02). Renders without the
- * app shell. "Get a model" and "Verified" are skipped on a below-minimum
- * machine; "Verified" is skipped whenever no model was installed.
+ * app shell. Steps 3 and 4 are skipped on a below-minimum machine; step 4 is
+ * skipped whenever no model was installed.
  */
 
 type StepId = "welcome" | "machine" | "model" | "verified" | "secure" | "engine";
@@ -32,16 +30,12 @@ const LABELS: Record<StepId, string> = {
   engine: "Start the engine",
 };
 
-export interface SetupWizardProps {
-  /** The project the app creates once setup completes; shown on the last step. */
-  defaultProject: Project;
-  onComplete: (result: FirstRunResult) => void;
-  onRestore: () => void;
-}
+export function SetupWizard() {
+  // Setup is always a fresh install: clear the sample data so the app starts empty
+  // once setup is complete. A setup already in progress (e.g. after a reload) is kept.
+  useEffect(() => api.firstRun.begin(), []);
 
-export function SetupWizard({ defaultProject, onComplete, onRestore }: SetupWizardProps) {
-  const hardware = useSetupStore((s) => s.hardware);
-  const recommended = tierFor(hardware);
+  const recommended = useStore(selectRecommendedTier);
   const [step, setStep] = useState<StepId>("welcome");
   const [tier, setTier] = useState<ModelTier | null>(null);
   const [machineChecked, setMachineChecked] = useState(false);
@@ -53,6 +47,7 @@ export function SetupWizard({ defaultProject, onComplete, onRestore }: SetupWiza
 
   const belowMinimum = machineChecked && recommended === null;
   const noModel = belowMinimum || (skippedModel && !installedModelId);
+
   const isSkipped = (id: StepId) => (id === "model" && belowMinimum) || (id === "verified" && noModel);
 
   const index = ORDER.indexOf(step);
@@ -61,8 +56,7 @@ export function SetupWizard({ defaultProject, onComplete, onRestore }: SetupWiza
   const move = (dir: 1 | -1) => {
     let i = index + dir;
     while (i >= 0 && i < total && isSkipped(ORDER[i]!)) i += dir;
-    const target = ORDER[i];
-    if (target) setStep(target);
+    if (i >= 0 && i < total) setStep(ORDER[i]!);
   };
   const back = () => move(-1);
   const next = () => move(1);
@@ -75,9 +69,6 @@ export function SetupWizard({ defaultProject, onComplete, onRestore }: SetupWiza
   const onPrepared = useCallback(() => setPrepared(true), []);
   const onTierChange = useCallback((t: ModelTier) => setTier(t), []);
 
-  const entry = noModel ? undefined : catalogueEntry(installedModelId);
-  const installedModel = entry ? { id: entry.entry_id, name: entry.name } : null;
-
   const rail: RailStep[] = ORDER.map((id, i) => ({
     id,
     label: LABELS[id],
@@ -89,10 +80,20 @@ export function SetupWizard({ defaultProject, onComplete, onRestore }: SetupWiza
   let content: ReactNode;
   switch (step) {
     case "welcome":
-      content = <WelcomeStep onContinue={next} onRestore={onRestore} />;
+      content = <WelcomeStep onContinue={next} />;
       break;
     case "machine":
-      content = <MachineStep eyebrow={eyebrow} tier={tier} onTierChange={onTierChange} checked={machineChecked} onChecked={onChecked} onBack={back} onContinue={next} />;
+      content = (
+        <MachineStep
+          eyebrow={eyebrow}
+          tier={tier}
+          onTierChange={onTierChange}
+          checked={machineChecked}
+          onChecked={onChecked}
+          onBack={back}
+          onContinue={next}
+        />
+      );
       break;
     case "model":
       content = (
@@ -117,17 +118,23 @@ export function SetupWizard({ defaultProject, onComplete, onRestore }: SetupWiza
       break;
     case "secure":
       content = (
-        <SecureStep eyebrow={eyebrow} acknowledged={acknowledged} onAcknowledge={setAcknowledged} prepared={prepared} onPrepared={onPrepared} onBack={back} onContinue={next} />
+        <SecureStep
+          eyebrow={eyebrow}
+          acknowledged={acknowledged}
+          onAcknowledge={setAcknowledged}
+          prepared={prepared}
+          onPrepared={onPrepared}
+          onBack={back}
+          onContinue={next}
+        />
       );
       break;
     case "engine":
       content = (
         <EngineStep
           eyebrow={eyebrow}
-          model={installedModel}
-          project={defaultProject}
-          networkUsed={!!installedModel && source === "mirror"}
-          onOpen={() => onComplete({ installedModel })}
+          installedModelId={noModel ? null : installedModelId}
+          networkUsed={!!installedModelId && source === "mirror"}
         />
       );
       break;
@@ -142,7 +149,7 @@ export function SetupWizard({ defaultProject, onComplete, onRestore }: SetupWiza
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -3, transition: { duration: 0.12 } }}
-          transition={{ duration: 0.24, ease: EASE }}
+          transition={{ duration: 0.24, ease: [0.2, 0.7, 0.2, 1] }}
         >
           {content}
         </motion.div>

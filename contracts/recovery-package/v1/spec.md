@@ -6,7 +6,7 @@
 | Status | draft |
 | Extension rule | Later versions add optional fields only; semantics never change. |
 | Freezes | week 2, by ticket E-03 (reference package as golden vector + `FROZEN`) |
-| Owner of the code | Backend recovery app (`services/backend/aios_backend/apps/recovery/`); keys from `aios_common.keystore` |
+| Owner of the code | Backend setup app (`services/backend/aios_backend/apps/setup/recovery_package.py`, restore in `service.py`); keys from `aios_common.keystore` |
 | Schemas | `recovery-package.schema.json` (file `recovery.pkg`), `recovery-payload.schema.json` (decrypted payload) |
 
 ## 1 Purpose

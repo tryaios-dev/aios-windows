@@ -1,11 +1,16 @@
 """Download pinned llama-server CPU/Vulkan builds and verify SHA-256 against manifest.json into build/out/llama.
 
-    uv run python build/llama/fetch.py            # -> build/out/llama/cpu, build/out/llama/vulkan
+    uv run python build/llama/fetch.py            # Windows -> build/out/llama/cpu, build/out/llama/vulkan
+    uv run python build/llama/fetch.py --platform windows
+
+Builds are listed per platform in manifest.json. AIOS ships for Windows only; another OS adds
+its own entry (zip URLs, digests and the binary name) and is fetched with --platform.
 
 A download whose size or SHA-256 differs from the manifest is deleted and the script fails (B-02).
 Already-verified zips are reused, so repeated runs do not download again.
 """
 
+import argparse
 import hashlib
 import json
 import shutil
@@ -27,7 +32,7 @@ def sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def fetch(name: str, build: dict[str, object]) -> None:
+def fetch(name: str, build: dict[str, object], binary: str) -> None:
     url, want = str(build["url"]), str(build["sha256"])
     if not url.startswith("https://github.com/ggml-org/llama.cpp/releases/download/"):
         raise SystemExit(f"{name}: url is not a llama.cpp release asset: {url}")
@@ -44,16 +49,22 @@ def fetch(name: str, build: dict[str, object]) -> None:
     shutil.rmtree(target, ignore_errors=True)
     with zipfile.ZipFile(zip_path) as z:
         z.extractall(target)
-    if not any(target.rglob("llama-server.exe")):
-        raise SystemExit(f"{name}: llama-server.exe not found in the zip")
+    if not any(target.rglob(binary)):
+        raise SystemExit(f"{name}: {binary} not found in the zip")
     print(f"{name}: verified {want[:12]}..., extracted to {target.relative_to(ROOT)}")
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--platform", default="windows", help="platform id from manifest.json")
+    args = parser.parse_args()
     manifest = json.loads((HERE / "manifest.json").read_text("utf-8"))
+    if args.platform not in manifest["platforms"]:
+        raise SystemExit(f"no llama.cpp builds pinned for platform {args.platform!r}")
+    target = manifest["platforms"][args.platform]
     OUT.mkdir(parents=True, exist_ok=True)
-    for name, build in manifest["builds"].items():
-        fetch(name, build)
+    for name, build in target["builds"].items():
+        fetch(name, build, target["binary"])
     (OUT / "release.txt").write_text(f"{manifest['llama_cpp_release']} {manifest['commit']}\n")
     return 0
 

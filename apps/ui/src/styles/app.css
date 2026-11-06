@@ -234,13 +234,22 @@
   }
 
   .shimmer {
-    background: linear-gradient(90deg, var(--color-paper-deep) 0%, var(--color-paper-raised) 50%, var(--color-paper-deep) 100%);
+    background: linear-gradient(
+      90deg,
+      var(--color-paper-deep) 0%,
+      var(--color-paper-raised) 50%,
+      var(--color-paper-deep) 100%
+    );
     background-size: 200% 100%;
     animation: shimmer 1.6s linear infinite;
   }
   @keyframes shimmer {
-    from { background-position: 200% 0; }
-    to { background-position: -200% 0; }
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
   }
 
   .mask-fade-b {
@@ -283,34 +292,203 @@
   --animate-rise: rise 280ms var(--ease-out) both;
 
   @keyframes ui-in {
-    from { opacity: 0; transform: translateY(-2px) scale(0.98); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
+    from {
+      opacity: 0;
+      transform: translateY(-2px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
   }
   @keyframes ui-out {
-    from { opacity: 1; transform: translateY(0) scale(1); }
-    to { opacity: 0; transform: translateY(-2px) scale(0.98); }
+    from {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(-2px) scale(0.98);
+    }
   }
-  @keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
-  @keyframes overlay-out { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes overlay-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes overlay-out {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
   /* Centering uses the CSS `translate` property (Tailwind -translate-x-1/2); keyframes only scale. */
   @keyframes dialog-in {
-    from { opacity: 0; transform: scale(0.975); }
-    to { opacity: 1; transform: scale(1); }
+    from {
+      opacity: 0;
+      transform: scale(0.975);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
   }
   @keyframes dialog-out {
-    from { opacity: 1; transform: scale(1); }
-    to { opacity: 0; transform: scale(0.98); }
+    from {
+      opacity: 1;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.98);
+    }
   }
-  @keyframes sheet-in-right { from { transform: translateX(24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-  @keyframes sheet-out-right { from { transform: translateX(0); opacity: 1; } to { transform: translateX(24px); opacity: 0; } }
-  @keyframes sheet-in-left { from { transform: translateX(-24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-  @keyframes sheet-out-left { from { transform: translateX(0); opacity: 1; } to { transform: translateX(-24px); opacity: 0; } }
-  @keyframes toast-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
-  @keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes sheet-in-right {
+    from {
+      transform: translateX(24px);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+  @keyframes sheet-out-right {
+    from {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    to {
+      transform: translateX(24px);
+      opacity: 0;
+    }
+  }
+  @keyframes sheet-in-left {
+    from {
+      transform: translateX(-24px);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+  @keyframes sheet-out-left {
+    from {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    to {
+      transform: translateX(-24px);
+      opacity: 0;
+    }
+  }
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 }
 
 @keyframes indeterminate {
-  0% { left: -35%; }
-  100% { left: 100%; }
+  0% {
+    left: -35%;
+  }
+  100% {
+    left: 100%;
+  }
 }
 
+/* ------------------------------------------------------------------
+   Markdown typography for model answers. Kept here so every surface that
+   renders an answer looks the same.
+   ------------------------------------------------------------------ */
+.prose-aios {
+  font-size: var(--text-md);
+  line-height: 1.6;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+.prose-aios > :first-child {
+  margin-top: 0;
+}
+.prose-aios > :last-child {
+  margin-bottom: 0;
+}
+.prose-aios p {
+  margin: 0.6em 0;
+}
+.prose-aios h1,
+.prose-aios h2,
+.prose-aios h3,
+.prose-aios h4 {
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 1.1em 0 0.4em;
+  color: var(--color-ink);
+}
+.prose-aios h1 {
+  font-size: 1.25em;
+}
+.prose-aios h2 {
+  font-size: 1.125em;
+}
+.prose-aios h3 {
+  font-size: 1em;
+}
+.prose-aios h4 {
+  font-size: 0.9375em;
+  text-transform: none;
+}
+.prose-aios ul,
+.prose-aios ol {
+  margin: 0.5em 0;
+  padding-left: 1.4em;
+}
+.prose-aios ul {
+  list-style: disc;
+}
+.prose-aios ol {
+  list-style: decimal;
+}
+.prose-aios li {
+  margin: 0.22em 0;
+  padding-left: 0.15em;
+}
+.prose-aios li::marker {
+  color: var(--color-ink-50);
+}
+.prose-aios li > p {
+  margin: 0.2em 0;
+}
+.prose-aios ul.contains-task-list,
+.prose-aios li.task-list-item {
+  list-style: none;
+  padding-left: 0;
+}
+.prose-aios strong {
+  font-weight: 600;
+}
+.prose-aios em {
+  font-style: italic;
+}

@@ -18,6 +18,8 @@ extraResources:
   # licence texts for bundled binaries and models (licenses/README.md)
   - from: ../../licenses
     to: licenses
+# Windows only. Another OS adds its own section here (mac:/linux:) and a package:<os> script;
+# see docs/platforms.md.
 win:
   target: [nsis]
   # Every .exe/.dll is signed through build/signing/azure-sign.js (B-04); credentials come

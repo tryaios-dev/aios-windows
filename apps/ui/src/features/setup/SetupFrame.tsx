@@ -2,15 +2,14 @@ import type * as React from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, ArrowRight, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { EASE } from "@/lib/motion";
 import { Wordmark } from "@/components/ui/brand";
 import { Button } from "@/components/ui/button";
 
 /**
- * Full-screen stage for the first-run wizard. Warm paper with a faint grain,
- * the wordmark alone top-left, a quiet step rail on the left (a top progress
- * line below 1024px), and a content column (max 640px) that each step fills
- * with <StepBody> and <StepFooter>.
+ * Full-screen stage shared by the first-run wizard and the Restore screen.
+ * Warm paper with a faint grain, the wordmark alone top-left, a quiet step
+ * rail on the left (a top progress line below 1024px), and a content column
+ * (max 640px) that steps fill with <StepBody> and <StepFooter>.
  */
 
 export type RailState = "done" | "current" | "todo" | "skipped";
@@ -23,8 +22,19 @@ export interface RailStep {
 
 /** Height of one rail row in px; the progress line is measured against it. */
 const RAIL_ROW = 44;
+const EASE: [number, number, number, number] = [0.2, 0.7, 0.2, 1];
 
-export function SetupFrame({ steps, current = 0, eyebrow, children }: { steps?: RailStep[]; current?: number; eyebrow?: React.ReactNode; children: React.ReactNode }) {
+export function SetupFrame({
+  steps,
+  current = 0,
+  eyebrow,
+  children,
+}: {
+  steps?: RailStep[] | undefined;
+  current?: number | undefined;
+  eyebrow?: React.ReactNode | undefined;
+  children: React.ReactNode;
+}) {
   const total = steps?.length ?? 0;
   const currentLabel = steps?.[current]?.label;
   const topPct = total ? ((current + 1) / total) * 100 : 0;
@@ -43,7 +53,12 @@ export function SetupFrame({ steps, current = 0, eyebrow, children }: { steps?: 
         )}
         {steps && (
           <div aria-hidden className="absolute inset-x-0 bottom-0 h-px bg-line-soft lg:hidden">
-            <motion.div className="h-px bg-green" initial={false} animate={{ width: `${topPct}%` }} transition={{ duration: 0.28, ease: EASE }} />
+            <motion.div
+              className="h-px bg-green"
+              initial={false}
+              animate={{ width: `${topPct}%` }}
+              transition={{ duration: 0.28, ease: EASE }}
+            />
           </div>
         )}
       </header>
@@ -87,11 +102,25 @@ export function SetupFrame({ steps, current = 0, eyebrow, children }: { steps?: 
 function RailRow({ step, index }: { step: RailStep; index: number }) {
   const { state } = step;
   return (
-    <li aria-current={state === "current" ? "step" : undefined} className="flex items-center gap-3 pl-6" style={{ height: RAIL_ROW }}>
-      <span className={cn("flex w-5 shrink-0 items-center font-mono text-2xs tabular", state === "current" ? "font-medium text-green" : state === "done" ? "text-green" : "text-ink-50")}>
+    <li
+      aria-current={state === "current" ? "step" : undefined}
+      className="flex items-center gap-3 pl-6"
+      style={{ height: RAIL_ROW }}
+    >
+      <span
+        className={cn(
+          "flex w-5 shrink-0 items-center font-mono text-2xs tabular",
+          state === "current" ? "font-medium text-green" : state === "done" ? "text-green" : "text-ink-50",
+        )}
+      >
         {state === "done" ? <DrawnCheck className="size-3.5" label="Done" /> : String(index + 1).padStart(2, "0")}
       </span>
-      <span className={cn("truncate text-sm transition-colors duration-(--duration-micro)", state === "current" ? "font-medium text-ink" : state === "done" ? "text-ink-soft" : "text-ink-50")}>
+      <span
+        className={cn(
+          "truncate text-sm transition-colors duration-(--duration-micro)",
+          state === "current" ? "font-medium text-ink" : state === "done" ? "text-ink-soft" : "text-ink-50",
+        )}
+      >
         {step.label}
       </span>
       {state === "skipped" && <span className="font-mono text-2xs text-ink-50">skipped</span>}
@@ -102,9 +131,23 @@ function RailRow({ step, index }: { step: RailStep; index: number }) {
 /* ---------------- Marks ---------------- */
 
 /** A check mark whose stroke is drawn in over ~280ms. Collapses to a fade under reduced motion. */
-export function DrawnCheck({ className, label, strokeWidth = 2.5 }: { className?: string; label?: string; strokeWidth?: number }) {
+export function DrawnCheck({
+  className,
+  label,
+  strokeWidth = 2.5,
+}: {
+  className?: string | undefined;
+  label?: string | undefined;
+  strokeWidth?: number | undefined;
+}) {
   return (
-    <svg viewBox="0 0 12 12" className={cn("shrink-0 overflow-visible", className)} role={label ? "img" : undefined} aria-label={label} aria-hidden={label ? undefined : true}>
+    <svg
+      viewBox="0 0 12 12"
+      className={cn("shrink-0 overflow-visible", className)}
+      role={label ? "img" : undefined}
+      aria-label={label}
+      aria-hidden={label ? undefined : true}
+    >
       <motion.path
         d="M2.25 6.4 L4.9 9 L9.75 3.3"
         fill="none"
@@ -122,7 +165,7 @@ export function DrawnCheck({ className, label, strokeWidth = 2.5 }: { className?
 
 /* ---------------- Content column pieces ---------------- */
 
-export function StepBody({ children, className }: { children: React.ReactNode; className?: string }) {
+export function StepBody({ children, className }: { children: React.ReactNode; className?: string | undefined }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className={cn("mx-auto w-full max-w-[640px] px-6 pb-12 pt-10 sm:px-8 lg:pt-14", className)}>{children}</div>
@@ -130,7 +173,19 @@ export function StepBody({ children, className }: { children: React.ReactNode; c
   );
 }
 
-export function StepHeading({ eyebrow, title, lede, rule, className }: { eyebrow?: React.ReactNode; title: React.ReactNode; lede?: React.ReactNode; rule?: boolean; className?: string }) {
+export function StepHeading({
+  eyebrow,
+  title,
+  lede,
+  rule,
+  className,
+}: {
+  eyebrow?: React.ReactNode | undefined;
+  title: React.ReactNode;
+  lede?: React.ReactNode | undefined;
+  rule?: boolean | undefined;
+  className?: string | undefined;
+}) {
   return (
     <header className={cn("mb-8", className)}>
       {eyebrow && <div className="label-mono mb-4">{eyebrow}</div>}
@@ -154,6 +209,7 @@ export function Plate({
   tone?: "white" | "paper" | "success";
   as?: "div" | "section";
   "aria-label"?: string;
+  "aria-labelledby"?: string;
 }) {
   return (
     <Tag
@@ -174,13 +230,25 @@ export function Plate({
 export interface FooterPrimary {
   label: string;
   onClick: () => void;
-  disabled?: boolean;
-  loading?: boolean;
+  disabled?: boolean | undefined;
+  loading?: boolean | undefined;
   /** Hide the trailing arrow (for final actions such as "Open AIOS"). */
-  arrow?: boolean;
+  arrow?: boolean | undefined;
 }
 
-export function StepFooter({ onBack, backLabel = "Back", note, secondary, primary }: { onBack?: () => void; backLabel?: string; note?: React.ReactNode; secondary?: React.ReactNode; primary?: FooterPrimary }) {
+export function StepFooter({
+  onBack,
+  backLabel = "Back",
+  note,
+  secondary,
+  primary,
+}: {
+  onBack?: (() => void) | undefined;
+  backLabel?: string | undefined;
+  note?: React.ReactNode | undefined;
+  secondary?: React.ReactNode | undefined;
+  primary?: FooterPrimary | undefined;
+}) {
   return (
     <div className="shrink-0 border-t border-line-soft bg-paper/90 backdrop-blur-[2px]">
       <div className="mx-auto flex w-full max-w-[640px] items-center justify-between gap-3 px-6 py-4 sm:px-8">
@@ -218,23 +286,47 @@ export function StepFooter({ onBack, backLabel = "Back", note, secondary, primar
 export interface SequenceItem {
   label: React.ReactNode;
   /** Shown in the mono register once the row is done. */
-  detail?: React.ReactNode;
+  detail?: React.ReactNode | undefined;
 }
 
 type RowState = "done" | "current" | "todo" | "failed";
 
 /**
- * A ledger of timed rows: hairline-divided, a stroke-drawn check as each one
- * completes, the detail set in mono on the right. Rows reveal with a 40ms
- * stagger on first render.
+ * A ledger of timed rows: hairline-divided, a stroke-drawn check as each
+ * one completes, the detail set in mono on the right. Rows reveal with a
+ * 40ms stagger on first render.
  */
-export function Sequence({ items, done, failedAt, className, label }: { items: SequenceItem[]; done: number; failedAt?: number | null; className?: string; label?: string }) {
+export function Sequence({
+  items,
+  done,
+  failedAt,
+  className,
+  label,
+}: {
+  items: SequenceItem[];
+  done: number;
+  failedAt?: number | null;
+  className?: string | undefined;
+  label?: string | undefined;
+}) {
   return (
-    <ol className={cn("flex flex-col divide-y divide-line-soft", className)} role="status" aria-live="polite" aria-label={label}>
+    <ol
+      className={cn("flex flex-col divide-y divide-line-soft", className)}
+      role="status"
+      aria-live="polite"
+      aria-label={label}
+    >
       {items.map((it, i) => {
-        const state: RowState = failedAt === i ? "failed" : i < done ? "done" : i === done && failedAt == null ? "current" : "todo";
+        const state: RowState =
+          failedAt === i ? "failed" : i < done ? "done" : i === done && failedAt == null ? "current" : "todo";
         return (
-          <motion.li key={i} className="flex items-start gap-3 py-3" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24, ease: EASE, delay: i * 0.04 }}>
+          <motion.li
+            key={i}
+            className="flex items-start gap-3 py-3"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.24, ease: EASE, delay: i * 0.04 }}
+          >
             <span
               className={cn(
                 "mt-px flex size-[18px] shrink-0 items-center justify-center rounded-full border transition-colors duration-(--duration-micro)",
@@ -253,17 +345,31 @@ export function Sequence({ items, done, failedAt, className, label }: { items: S
               <span
                 className={cn(
                   "text-sm leading-5 transition-colors duration-(--duration-micro)",
-                  state === "todo" ? "text-ink-50" : state === "failed" ? "font-medium text-deny" : state === "current" ? "font-medium text-ink" : "text-ink",
+                  state === "todo"
+                    ? "text-ink-50"
+                    : state === "failed"
+                      ? "font-medium text-deny"
+                      : state === "current"
+                        ? "font-medium text-ink"
+                        : "text-ink",
                 )}
               >
                 {it.label}
-                <span className="sr-only">{state === "done" ? " (done)" : state === "current" ? " (in progress)" : state === "failed" ? " (failed)" : ""}</span>
+                <span className="sr-only">
+                  {state === "done"
+                    ? " (done)"
+                    : state === "current"
+                      ? " (in progress)"
+                      : state === "failed"
+                        ? " (failed)"
+                        : ""}
+                </span>
               </span>
               <AnimatePresence initial={false}>
                 {it.detail && state === "done" && (
                   <motion.span
                     key="detail"
-                    className="min-w-0 break-all font-mono text-xs leading-4.5 tabular text-ink-50 sm:max-w-[52%] sm:shrink-0 sm:text-right"
+                    className="min-w-0 font-mono text-xs leading-4.5 tabular text-ink-50 sm:max-w-[52%] sm:shrink-0 sm:text-right break-all"
                     initial={{ opacity: 0, y: 2 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.2, ease: EASE }}
@@ -282,7 +388,17 @@ export function Sequence({ items, done, failedAt, className, label }: { items: S
 
 /* ---------------- Figures ---------------- */
 
-export function Stat({ label, value, unit, hint }: { label: React.ReactNode; value: React.ReactNode; unit?: React.ReactNode; hint?: React.ReactNode }) {
+export function Stat({
+  label,
+  value,
+  unit,
+  hint,
+}: {
+  label: React.ReactNode;
+  value: React.ReactNode;
+  unit?: React.ReactNode | undefined;
+  hint?: React.ReactNode | undefined;
+}) {
   return (
     <div className="rounded-lg border border-line bg-white p-5 shadow-card">
       <div className="label-mono">{label}</div>
@@ -296,29 +412,45 @@ export function Stat({ label, value, unit, hint }: { label: React.ReactNode; val
 }
 
 /** A determinate progress bar drawn as segments; the live segment fills continuously. */
-export function SegmentedProgress({ value, tone = "green", segments = 24, label, className }: { value: number; tone?: "green" | "brass" | "deny"; segments?: number; label?: string; className?: string }) {
+export function SegmentedProgress({
+  value,
+  tone = "green",
+  segments = 24,
+  label,
+  className,
+}: {
+  value: number;
+  tone?: "green" | "brass" | "deny";
+  segments?: number | undefined;
+  label?: string | undefined;
+  className?: string | undefined;
+}) {
   const pct = Math.max(0, Math.min(100, value));
   const filled = (pct / 100) * segments;
   const bar = { green: "bg-green", brass: "bg-brass", deny: "bg-deny" }[tone];
   return (
-    <div className={cn("flex h-2 w-full gap-[3px]", className)} role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
+    <div
+      className={cn("flex h-2 w-full gap-[3px]", className)}
+      role="progressbar"
+      aria-valuenow={Math.round(pct)}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label={label}
+    >
       {Array.from({ length: segments }, (_, i) => {
         const fill = Math.max(0, Math.min(1, filled - i));
         return (
           <span key={i} className="relative h-full min-w-0 flex-1 overflow-hidden rounded-[2px] bg-ink-12">
-            <span className={cn("absolute inset-y-0 left-0 rounded-[2px] transition-[width] duration-300 ease-(--ease-out)", bar)} style={{ width: `${fill * 100}%` }} />
+            <span
+              className={cn(
+                "absolute inset-y-0 left-0 rounded-[2px] transition-[width] duration-300 ease-(--ease-out)",
+                bar,
+              )}
+              style={{ width: `${fill * 100}%` }}
+            />
           </span>
         );
       })}
     </div>
-  );
-}
-
-/** Fades a block in from 4px below; used for panels that swap in place. */
-export function Reveal({ children }: { children: React.ReactNode }) {
-  return (
-    <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: { duration: 0.12 } }} transition={{ duration: 0.24, ease: EASE }}>
-      {children}
-    </motion.div>
   );
 }

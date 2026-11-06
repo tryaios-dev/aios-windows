@@ -17,7 +17,7 @@ gained one folder per feature (ADR 0008) with no matching structure on the backe
   (`build/pyinstaller/backend.spec`).
 - `aios_backend/apps/<name>/` is one package per UI feature, with the same name as its folder in
   `apps/ui/src/features/`. Each has `router.py`, `schemas.py`, `service.py`, `repository.py` and
-  `models.py`. The first two are `setup` and `workspace`, layout only.
+  `models.py`. The first two were `setup` and `workspace`, layout only (see the update below).
 - Import rules (import-linter, root `pyproject.toml`):
   - apps never import each other;
   - inside an app, imports only go down: router → service → repository → models;
@@ -36,3 +36,13 @@ gained one folder per feature (ADR 0008) with no matching structure on the backe
   package is still linted.
 - The Developer Brief and Backend Commands documents, CODEOWNERS, CI and the contract specs'
   owner paths were updated to the new paths.
+
+**Update (2026-11-05): one backend app per UI feature.**
+The UI now has seven features (ADR 0008 update), so `aios_backend/apps/` has seven layout-only
+packages with the same names: `chat`, `evidence`, `models`, `projects`, `search`, `settings` and
+`setup`. `workspace` was removed: the UI shell moved to `apps/ui/src/app/`, and what it was meant to
+cover belongs to `projects` (projects and counts) and the system routes (`/health`). The import
+rules and `db/registry.py` list all seven. `evidence` only talks to the evidence writer; it never
+opens the evidence database (CLAUDE.md invariant 5).
+
+Six of the seven apps have endpoints since 2026-11-05; see [ADR 0010](0010-backend-data.md).

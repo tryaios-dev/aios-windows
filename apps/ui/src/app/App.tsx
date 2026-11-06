@@ -1,7 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HashRouter } from "react-router";
 import { MotionConfig } from "motion/react";
-import { EASE } from "@/lib/motion";
 import { TooltipProvider } from "@/components/ui/overlays";
 import { AppRoutes } from "./AppRoutes";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -14,7 +13,7 @@ export function App() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <HashRouter>
-          <MotionConfig reducedMotion="user" transition={{ duration: 0.22, ease: EASE }}>
+          <MotionConfig reducedMotion="user" transition={{ duration: 0.22, ease: [0.2, 0.7, 0.2, 1] }}>
             <TooltipProvider>
               <AppRoutes />
             </TooltipProvider>
