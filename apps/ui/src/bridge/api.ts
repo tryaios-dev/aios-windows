@@ -20,6 +20,7 @@ import {
   refreshConversation,
   refreshConversations,
   refreshEvents,
+  refreshHealth,
   refreshModels,
   refreshProjects,
   refreshSettings,
@@ -224,7 +225,8 @@ export const api = {
       if (!isLive()) return s().sendMessage(id, text);
       try {
         await bridge().conversations.send(id, text);
-        await Promise.all([loadMessages(id), afterConversation(id)()]);
+        // refreshHealth: a GPU-to-CPU fallback during this answer shows its notice now (D-06).
+        await Promise.all([loadMessages(id), afterConversation(id)(), refreshHealth()]);
         return { ok: true };
       } catch (err) {
         await Promise.all([loadMessages(id), refreshEvents()]).catch(() => undefined); // a refusal is recorded
@@ -242,7 +244,7 @@ export const api = {
             () => bridge().conversations.regenerate(id),
             async () => {
               await loadMessages(id);
-              await refreshEvents();
+              await Promise.all([refreshEvents(), refreshHealth()]);
             },
           )
         : s().regenerate(id),
