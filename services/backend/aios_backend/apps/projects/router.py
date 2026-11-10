@@ -9,6 +9,7 @@ from aios_backend.apps.projects.schemas import (
     ExportOut,
     ImportIn,
     ImportOut,
+    PackageRecordOut,
     ProjectCreate,
     ProjectOut,
     ProjectPatch,
@@ -21,9 +22,9 @@ from db.session import DbSession
 router = APIRouter(tags=["projects"])
 
 
-@router.get("/projects", summary="All projects, newest first")
-def list_projects(session: DbSession) -> list[ProjectOut]:
-    return [ProjectOut.model_validate(p) for p in service.list_projects(session)]
+@router.get("/projects", summary="All projects, newest first (optionally only archived or active)")
+def list_projects(session: DbSession, archived: bool | None = None) -> list[ProjectOut]:
+    return [ProjectOut.model_validate(p) for p in service.list_projects(session, archived)]
 
 
 @router.post("/projects", status_code=status.HTTP_201_CREATED, summary="Create a project")
@@ -81,3 +82,8 @@ def export_project(project_id: str, body: ExportIn, session: DbSession) -> Expor
 )
 def import_project(body: ImportIn, session: DbSession) -> ImportOut:
     return service.import_project(session, body.path)
+
+
+@router.get("/projects/{project_id}/packages", summary="Export and import history, newest first")
+def package_history(project_id: str, session: DbSession) -> list[PackageRecordOut]:
+    return service.package_history(session, project_id)

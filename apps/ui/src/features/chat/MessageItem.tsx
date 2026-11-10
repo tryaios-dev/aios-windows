@@ -144,7 +144,7 @@ export function AssistantMessage({
       {!streaming && !empty && (
         <div className="mt-1.5 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
           <Tooltip content={copied ? "Copied" : "Copy answer"}>
-            <IconButton label="Copy answer" size="sm" onClick={() => copy(message.content)}>
+            <IconButton label="Copy answer" size="sm" onClick={() => void copy(message.content)}>
               {copied ? <Check className="text-green" /> : <Copy />}
             </IconButton>
           </Tooltip>

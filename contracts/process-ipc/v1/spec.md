@@ -208,7 +208,7 @@ Implemented once in `aios_common.asgi_auth.LoopbackTokenMiddleware`, before rout
 | Condition | Required behaviour |
 | --- | --- |
 | Frame missing, not one JSON line, invalid against the schema, or larger than 4096 bytes | Child exits with code 2 before opening any database; prints no READY line (IPC-13) |
-| READY not seen within 30 s | Main reports `backend_start_timeout` and kills the child |
+| READY not seen within 120 s (the first start after install is slow while the OS scans the new program) | Main reports `backend_start_timeout`, kills the child and shows "AIOS could not start" with Retry and Quit; a "Starting AIOS…" window is on screen from launch, so the app never runs without a window (`apps/desktop/tests/unit/startup.test.ts`) |
 | Child exits before READY | Main reports `backend_exit_<code>` |
 | Second READY line, or any line that is not a valid READY line | Ignored by the parent |
 | Engine `/health` not 200 within the engine start timeout | Backend kills it, reports `engine: failed`, falls back from Vulkan to CPU where allowed (FR-38) |
@@ -285,5 +285,5 @@ new version.
 - [x] MVP 5.1 / 5.2 / 11.1: process table, trust path, the writer refusing other callers, the
   engine in a Job Object, orphan clean-up — matched in sections 2, 7, 8, 9.
 - [x] M-19 / SR-08 / AC-10: where the token may not appear — section 3, IPC-11.
-- [ ] Confirm whether the Master fixes the 30 s backend start timeout and an engine start
-  timeout.
+- [ ] Confirm whether the Master fixes the backend start timeout (120 s, raised from 30 s after
+  the first start on a clean machine took longer) and an engine start timeout.

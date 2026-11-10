@@ -13,6 +13,9 @@ from starlette.exceptions import HTTPException
 from aios_backend.apps.chat.answers import AnswerSource
 from aios_backend.apps.chat.router import router as chat_router
 from aios_backend.apps.evidence.router import router as evidence_router
+from aios_backend.apps.models.downloads import Downloads
+from aios_backend.apps.models.engine import LocalEngine
+from aios_backend.apps.models.mirror import ModelMirror
 from aios_backend.apps.models.router import router as models_router
 from aios_backend.apps.projects.router import router as projects_router
 from aios_backend.apps.search.router import router as search_router
@@ -26,6 +29,7 @@ from aios_backend.engine import EngineManager
 from aios_backend.errors import AppError
 from aios_backend.routes import VERSION
 from aios_backend.routes import router as system_router
+from aios_backend.runtime import Generations
 from aios_common.asgi_auth import LoopbackTokenMiddleware
 from aios_common.logging import ContentFreeFormatter, get_logger, log_event
 from db.session import Database
@@ -88,9 +92,18 @@ def load_safe_mode(database: Database) -> bool:
 
 
 def create_app(
-    settings: Settings, db: Database | None = None, answers: AnswerSource | None = None
+    settings: Settings,
+    db: Database | None = None,
+    answers: AnswerSource | None = None,
+    local_engine: LocalEngine | None = None,
+    mirror: ModelMirror | None = None,
 ) -> FastAPI:
-    """``answers``: what produces chat answers. None until the local model module exists."""
+    """The seams below are None until their modules exist; the endpoints then answer 409/503.
+
+    ``answers``: what produces chat answers. ``local_engine``: start / benchmark / status for the
+    models app (apps/models/engine.py); the process manager itself is ``app.state.engine``.
+    ``mirror``: the AIOS model mirror (downloads, catalogue check).
+    """
     database = db or Database(settings)
     components = Components()
     engine = EngineManager(
@@ -124,6 +137,10 @@ def create_app(
     app.state.components = components
     app.state.engine = engine
     app.state.answers = answers
+    app.state.generations = Generations()
+    app.state.local_engine = local_engine
+    app.state.mirror = mirror
+    app.state.downloads = Downloads()
     register_error_handlers(app)
     app.include_router(system_router)
     for router in (

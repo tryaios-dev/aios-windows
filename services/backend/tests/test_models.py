@@ -190,6 +190,24 @@ def test_hardware_is_read_from_this_machine_and_kept(client: TestClient) -> None
 
 
 def test_engine_status(client: TestClient, tmp_path: Path, tiny_entry: catalogue.Entry) -> None:
-    assert client.get("/engine/status").json() == {"state": "no_model", "installed": 0}
+    no_engine = {"build": None, "loaded_model_id": None, "fallback": None}
+    assert client.get("/engine/status").json() == {
+        "state": "no_model",
+        "installed": 0,
+        **no_engine,
+    }
     client.post("/models/import", json={"path": str(gguf(tmp_path))})
-    assert client.get("/engine/status").json() == {"state": "not_built", "installed": 1}
+    assert client.get("/engine/status").json() == {
+        "state": "not_started",
+        "installed": 1,
+        **no_engine,
+    }
+
+
+def test_ac_02_a_third_party_entry_without_a_passed_review_is_not_downloaded(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, tiny_entry: catalogue.Entry
+) -> None:
+    entry = dataclasses.replace(tiny_entry, pipeline="third-party", deviation_review=None)
+    monkeypatch.setattr(catalogue, "entries", lambda: (entry,))
+    r = client.post(f"/models/download/{entry.id}")
+    assert (r.status_code, r.json()) == (422, {"error": "deviation_not_approved"})

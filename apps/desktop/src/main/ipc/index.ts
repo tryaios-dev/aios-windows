@@ -26,6 +26,7 @@ export const handlers: Record<string, Handler> = {
 
 /** One registry of allowed calls. */
 export function registerIpc(backend: BackendHandle): void {
+  ipcMain.removeHandler(Channels.invoke); // a retried start registers again with the new backend
   ipcMain.handle(Channels.invoke, async (_event, method: unknown, ...args: unknown[]) => {
     if (typeof method !== "string" || !Object.hasOwn(handlers, method)) throw new Error("unknown_method");
     return handlers[method]!(backend, ...args);
