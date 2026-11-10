@@ -110,3 +110,14 @@ describe("second launch", () => {
     expect(w.focus).toHaveBeenCalled();
   });
 });
+
+describe("start-up window text", () => {
+  it("says why it is slow only once the start is slow", async () => {
+    vi.doMock("electron", () => ({ app: {}, BrowserWindow: class {}, shell: {} }));
+    const { startupPage, SLOW_START_HINT_MS } = await import("../../src/main/window.js");
+    expect(startupPage(false)).toContain("Starting AIOS");
+    expect(startupPage(false)).not.toContain("first time");
+    expect(startupPage(true)).toContain("first time after installing");
+    expect(SLOW_START_HINT_MS).toBe(5_000);
+  });
+});
