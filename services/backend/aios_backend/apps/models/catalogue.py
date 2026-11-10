@@ -1,8 +1,10 @@
 """The model catalogue (contracts/model-catalogue/v1): which models AIOS may install.
 
 Pure logic, no HTTP or database. Until the signed catalogue and its key exist (ticket I-01),
-the backend reads ``catalogue_dev.json``: the same entries the UI shows, unsigned, with
-placeholder digests. A file is installed only if its size and SHA-256 match an entry.
+the backend reads ``catalogue_dev.json``: the same entries the UI shows, unsigned, with the real
+size and SHA-256 of each file (the mirror host is still a placeholder). A file is installed only
+if its size and SHA-256 match an entry, and a third-party entry only with a passed deviation
+review.
 """
 
 import hashlib
@@ -89,6 +91,19 @@ def version() -> str:
 
 def find(entry_id: str) -> Entry | None:
     return next((e for e in entries() if e.id == entry_id), None)
+
+
+def installable(entry: Entry) -> bool:
+    """Own-pipeline entries always; third-party ones only with a complete, passed deviation
+    review (contract model-catalogue/v1 section 6, C_REVIEW; AC-02)."""
+    if entry.pipeline == "own":
+        return True
+    review = entry.deviation_review or {}
+    return (
+        bool(str(review.get("reviewer") or "").strip())
+        and bool(review.get("date"))
+        and review.get("quality_threshold_result") == "pass"
+    )
 
 
 def sha256_file(path: Path) -> str:

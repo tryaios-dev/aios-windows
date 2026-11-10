@@ -93,6 +93,14 @@ def main() -> None:
                 body,
             )
 
+            status, body = get(port, "/models/catalogue", token)
+            entries = json.loads(body).get("entries", []) if status == 200 else []
+            check(
+                "GET /models/catalogue reads the bundled catalogue",
+                status == 200 and len(entries) > 0,
+                body[:200],
+            )
+
             listen = powershell(
                 f"(Get-NetTCPConnection -LocalPort {port} -State Listen).LocalAddress | Sort-Object -Unique"
             )

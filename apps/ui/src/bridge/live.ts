@@ -77,6 +77,8 @@ const MESSAGES: Record<string, string> = {
     "The evidence writer is not part of this build yet, so the log can't be exported. Every event is kept and waits for it.",
   size_mismatch: "That file is not the model you chose: its size is different from the catalogue entry.",
   digest_mismatch: "That file does not match the catalogue: its SHA-256 is different. It was not installed.",
+  deviation_not_approved:
+    "That model file matches the catalogue, but its third-party review has not passed yet, so it can't be installed.",
   not_gguf: "Choose a .gguf model file.",
   model_installed: "That model is already installed.",
   mirror_unavailable:

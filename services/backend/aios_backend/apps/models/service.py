@@ -1,7 +1,8 @@
 """Model rules: only catalogue models are installed, byte for byte; deleting the default clears it.
 
 Offline import (MVP 4.1, M-07): the user picks a .gguf file; it is installed only if its size
-and SHA-256 equal a catalogue entry, then copied into the models folder. A download from the
+and SHA-256 equal a catalogue entry, and, for a third-party file, the entry's deviation review
+passed (C_REVIEW, AC-02); then it is copied into the models folder. A download from the
 mirror ends in the same check. The mirror (``mirror.py``) and the local engine (``engine.py``)
 are seams: ``None`` in this build, so those endpoints answer ``503`` until they exist.
 """
@@ -140,6 +141,8 @@ def import_model(
     if path.suffix.lower() != ".gguf":
         raise AppError("not_gguf", 422)
     entry = _match(path, entry_id)
+    if not catalogue.installable(entry):
+        raise AppError("deviation_not_approved", 422)
     if repo.get(session, entry.id) is not None:
         raise AppError("model_installed", 409)
     target = _copy_into(path, settings.models_dir, entry.file_name)
@@ -436,6 +439,9 @@ class Installer:
 
     def __call__(self, part: Path) -> None:
         entry = _match(part, self.entry_id)  # size, then SHA-256, like an offline import
+        if not catalogue.installable(entry):
+            part.unlink(missing_ok=True)
+            raise AppError("deviation_not_approved", 422)
         with self.db.session() as session:
             if repo.get(session, entry.id) is not None:
                 part.unlink(missing_ok=True)
@@ -464,6 +470,8 @@ def start_download(
     entry = catalogue.find(entry_id)
     if entry is None:
         raise not_found("catalogue_entry")
+    if not catalogue.installable(entry):
+        raise AppError("deviation_not_approved", 422)
     if repo.get(session, entry.id) is not None:
         raise AppError("model_installed", 409)
     if mirror is None:

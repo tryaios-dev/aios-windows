@@ -1,146 +1,82 @@
 {
   "catalogue_version": 1,
-  "issued_at": "2026-11-05T00:00:00.000Z",
+  "issued_at": "2026-11-10T00:00:00.000Z",
   "entries": [
     {
-      "id": "gemma4-12b-q4km",
-      "tier": "medium",
-      "display_name": "Gemma 4 12B",
+      "id": "minicpm5-2b-q4_k_m-openbmb-gguf",
+      "tier": "small",
+      "display_name": "MiniCPM5 2B",
       "upstream": {
-        "repo": "google/gemma-4-12b-it",
-        "revision": "3b2a1c0d3b2a1c0d3b2a1c0d3b2a1c0d3b2a1c0d"
+        "repo": "openbmb/MiniCPM5-2B-GGUF",
+        "revision": "2079a22f3beaa4e306449978533478fe0522f4b3"
       },
-      "source_weights_digest": "1e3b5d7f9a1c3e5b7d9f1a3c5e7b9d1f3a5c7e9b1d3f5a7c9e1b3d5f7a9c1e3b",
+      "source_weights_digest": null,
       "conversion": {
-        "tool": "llama.cpp llama-quantize (third-party artefact)",
-        "version": "b6402"
+        "tool": "llama.cpp (as published upstream; exact build not stated)",
+        "version": "unknown — not stated in upstream repo"
       },
       "quantisation": {
         "method": "Q4_K_M"
       },
       "artefact": {
-        "filename": "gemma4-12b-q4_k_m.gguf",
-        "size_bytes": 7340000000,
-        "sha256": "6a8c0e2b4d6f8a0c2e4b6d8f0a2c4e6b8d0f2a4c6e8b0d2f4a6c8e0b2d4f6a8c",
-        "mirror_url": "https://models.example.eu/v1/gemma4-12b-q4_k_m.gguf"
+        "filename": "MiniCPM5-2B-Q4_K_M.gguf",
+        "size_bytes": 1561318368,
+        "sha256": "ec2d5801640099e97d8d7e8003ad4d81f336e757811f03a26173dddf386602fd",
+        "mirror_url": "https://models.example.eu/v1/MiniCPM5-2B-Q4_K_M.gguf"
       },
       "licence": {
         "spdx": "Apache-2.0",
-        "reference": "licences/gemma4-apache-2.0.txt"
+        "reference": "licenses/models/MiniCPM5-2B-GGUF-LICENSE.txt"
       },
-      "publisher": "Community quantisation (reviewed)",
+      "publisher": "OpenBMB (official GGUF)",
       "pipeline": "third-party",
       "deviation_review": {
-        "reviewer": "Technical reviewer",
-        "date": "2026-09-30",
+        "reviewer": "Andrea Rossetti",
+        "date": "2026-11-06",
+        "quality_threshold_result": "pass"
+      },
+      "min_ram_gb": 8,
+      "context_length": 32768,
+      "min_vram_gb": 0,
+      "description": "Runs on 8 GB machines without a GPU: about 15 words per second on a 4-core CPU."
+    },
+    {
+      "id": "ornith-1.5-9b-q4_k_m-ornith-gguf",
+      "tier": "medium",
+      "display_name": "Ornith 1.5 9B",
+      "upstream": {
+        "repo": "ornith-ai/Ornith-1.5-9B-GGUF",
+        "revision": "abdd624b12ebf020b767fff532ff44fe552b28c3"
+      },
+      "source_weights_digest": null,
+      "conversion": {
+        "tool": "llama.cpp (as published upstream; exact build not stated)",
+        "version": "unknown — not stated in upstream repo"
+      },
+      "quantisation": {
+        "method": "Q4_K_M"
+      },
+      "artefact": {
+        "filename": "Ornith-1.5-9B-Q4_K_M.gguf",
+        "size_bytes": 5780090816,
+        "sha256": "70c112196e0b7023803c9762752e46d29e612a92c83f995bc3ba1ceb07e8fab6",
+        "mirror_url": "https://models.example.eu/v1/Ornith-1.5-9B-Q4_K_M.gguf"
+      },
+      "licence": {
+        "spdx": "MIT",
+        "reference": "licenses/models/Ornith-1.5-9B-GGUF-LICENSE.txt"
+      },
+      "publisher": "Ornith AI (official GGUF)",
+      "pipeline": "third-party",
+      "deviation_review": {
+        "reviewer": "Andrea Rossetti",
+        "date": "2026-11-10",
         "quality_threshold_result": "pass"
       },
       "min_ram_gb": 16,
       "context_length": 32768,
-      "min_vram_gb": 10,
-      "description": "Largest option in the catalogue. Needs a GPU with 10 GB or more for comfortable speed."
-    },
-    {
-      "id": "gemma4-e4b-q4km",
-      "tier": "small",
-      "display_name": "Gemma 4 E4B",
-      "upstream": {
-        "repo": "google/gemma-4-e4b-it",
-        "revision": "0c9d8e7f0c9d8e7f0c9d8e7f0c9d8e7f0c9d8e7f"
-      },
-      "source_weights_digest": "5d7f9b1d3f5a7c9e1b3d5f7a9c1e3b5d7f9a1c3e5b7d9f1a3c5e7b9d1f3a5c7e",
-      "conversion": {
-        "tool": "llama.cpp convert_hf_to_gguf + llama-quantize",
-        "version": "b6471"
-      },
-      "quantisation": {
-        "method": "Q4_K_M"
-      },
-      "artefact": {
-        "filename": "gemma4-e4b-q4_k_m.gguf",
-        "size_bytes": 2980000000,
-        "sha256": "8c0e2a4c6e8b0d2f4a6c8e0b2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a2c4e6b8d0f",
-        "mirror_url": "https://models.example.eu/v1/gemma4-e4b-q4_k_m.gguf"
-      },
-      "licence": {
-        "spdx": "Apache-2.0",
-        "reference": "licences/gemma4-apache-2.0.txt"
-      },
-      "publisher": "AIOS (own quantisation)",
-      "pipeline": "own",
-      "deviation_review": null,
-      "min_ram_gb": 8,
-      "context_length": 32768,
-      "min_vram_gb": 0,
-      "description": "Compact alternative for 8 GB machines. Strong at short answers and rewriting."
-    },
-    {
-      "id": "qwen3-4b-q4km",
-      "tier": "small",
-      "display_name": "Qwen3 4B",
-      "upstream": {
-        "repo": "Qwen/Qwen3-4B",
-        "revision": "e5f6a7b8e5f6a7b8e5f6a7b8e5f6a7b8e5f6a7b8"
-      },
-      "source_weights_digest": "7a3c5e9f1b2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a2c4e6b8d0f2a4c6e8b0d2f4a",
-      "conversion": {
-        "tool": "llama.cpp convert_hf_to_gguf + llama-quantize",
-        "version": "b6471"
-      },
-      "quantisation": {
-        "method": "Q4_K_M"
-      },
-      "artefact": {
-        "filename": "qwen3-4b-q4_k_m.gguf",
-        "size_bytes": 2560000000,
-        "sha256": "2b8e4d6f0a1c3e5b7d9f1a3c5e7b9d1f3a5c7e9b1d3f5a7c9e1b3d5f7a9c1e3b",
-        "mirror_url": "https://models.example.eu/v1/qwen3-4b-q4_k_m.gguf"
-      },
-      "licence": {
-        "spdx": "Apache-2.0",
-        "reference": "licences/qwen3-apache-2.0.txt"
-      },
-      "publisher": "AIOS (own quantisation)",
-      "pipeline": "own",
-      "deviation_review": null,
-      "min_ram_gb": 8,
-      "context_length": 32768,
-      "min_vram_gb": 0,
-      "description": "Runs on 8 GB machines without a GPU. Usable speed on a modern CPU."
-    },
-    {
-      "id": "qwen3-8b-q4km",
-      "tier": "medium",
-      "display_name": "Qwen3 8B",
-      "upstream": {
-        "repo": "Qwen/Qwen3-8B",
-        "revision": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4"
-      },
-      "source_weights_digest": "4c1f6a9e2b7d3e8f0a5c6b1d9e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f",
-      "conversion": {
-        "tool": "llama.cpp convert_hf_to_gguf + llama-quantize",
-        "version": "b6471"
-      },
-      "quantisation": {
-        "method": "Q4_K_M"
-      },
-      "artefact": {
-        "filename": "qwen3-8b-q4_k_m.gguf",
-        "size_bytes": 5260000000,
-        "sha256": "9f2d7c1e4b6a8d0f3e5c7a9b1d3f5e7c9a1b3d5f7e9c1a3b5d7f9e1c3a5b7d9f",
-        "mirror_url": "https://models.example.eu/v1/qwen3-8b-q4_k_m.gguf"
-      },
-      "licence": {
-        "spdx": "Apache-2.0",
-        "reference": "licences/qwen3-apache-2.0.txt"
-      },
-      "publisher": "AIOS (own quantisation)",
-      "pipeline": "own",
-      "deviation_review": null,
-      "min_ram_gb": 16,
-      "context_length": 32768,
       "min_vram_gb": 8,
-      "description": "Good quality for drafting, summarising and reasoning. Fast on a GPU with 8 GB or more."
+      "description": "Good quality for drafting, summarising and reasoning. Fits fully on a GPU with 8 GB."
     }
   ]
 }

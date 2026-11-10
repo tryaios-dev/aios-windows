@@ -340,7 +340,7 @@ function hardwareFor(sim: SimFlags): Hardware {
       os: "Windows 11 Home 24H2 (build 26100)",
       recommended_tier: "small",
       benchmark: {
-        model_id: "qwen3-4b-q4km",
+        model_id: "minicpm5-2b-q4_k_m-openbmb-gguf",
         engine: "cpu",
         tokens_per_second: 9.6,
         time_to_first_token_ms: 4_200,
@@ -352,7 +352,7 @@ function hardwareFor(sim: SimFlags): Hardware {
   return {
     ...DEFAULT_HARDWARE,
     benchmark: {
-      model_id: "qwen3-8b-q4km",
+      model_id: "ornith-1.5-9b-q4_k_m-ornith-gguf",
       engine: "vulkan",
       tokens_per_second: 38.4,
       time_to_first_token_ms: 420,
@@ -1289,7 +1289,7 @@ export const useStore = create<Store>()(
           hardware: {
             ...st.hardware,
             benchmark: {
-              model_id: st.settings.default_model_id ?? "qwen3-8b-q4km",
+              model_id: st.settings.default_model_id ?? "ornith-1.5-9b-q4_k_m-ornith-gguf",
               engine: st.health.engine_build,
               tokens_per_second: st.health.engine_build === "cpu" ? 9.2 + Math.random() : 36 + Math.random() * 5,
               time_to_first_token_ms:
@@ -1378,7 +1378,7 @@ export const useStore = create<Store>()(
             classification_source: "import" as const,
             status: "complete" as const,
             provider: "local" as const,
-            model_id: "qwen3-8b-q4km",
+            model_id: "ornith-1.5-9b-q4_k_m-ornith-gguf",
             prompt_tokens: 230,
             completion_tokens: 0,
             created_at: now,
@@ -1392,7 +1392,7 @@ export const useStore = create<Store>()(
             classification_source: "import" as const,
             status: "complete" as const,
             provider: "local" as const,
-            model_id: "qwen3-8b-q4km",
+            model_id: "ornith-1.5-9b-q4_k_m-ornith-gguf",
             prompt_tokens: 230,
             completion_tokens: 310,
             created_at: now,

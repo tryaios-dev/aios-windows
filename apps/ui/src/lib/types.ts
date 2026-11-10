@@ -103,7 +103,8 @@ export interface CatalogueEntry {
   tier: ModelTier;
   upstream_model: string;
   upstream_revision: string;
-  source_weight_digest: string;
+  /** null for a third-party GGUF whose upstream publishes no safetensors (catalogue v1). */
+  source_weight_digest: string | null;
   conversion_tool: string;
   conversion_version: string;
   quantisation_method: string;

@@ -17,7 +17,7 @@ describe("app shell", () => {
   });
 
   it("opens the default project once first run is complete", async () => {
-    act(() => useStore.getState().completeFirstRun({ installedModelId: "qwen3-8b-q4km" }));
+    act(() => useStore.getState().completeFirstRun({ installedModelId: "ornith-1.5-9b-q4_k_m-ornith-gguf" }));
     render(<App />);
     expect(await screen.findByText("Start your first conversation")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "My workspace" })).toBeTruthy();
@@ -25,7 +25,7 @@ describe("app shell", () => {
   });
 
   it("records the first-run events in the evidence log", () => {
-    act(() => useStore.getState().completeFirstRun({ installedModelId: "qwen3-8b-q4km" }));
+    act(() => useStore.getState().completeFirstRun({ installedModelId: "ornith-1.5-9b-q4_k_m-ornith-gguf" }));
     const types = useStore.getState().events.map((e) => e.event_type);
     expect(types).toEqual([
       "install",

@@ -140,7 +140,14 @@ function ProvenanceLine({ entry }: { entry: CatalogueEntry }) {
       ),
     },
     { k: "Quantisation", v: <Mono className="text-ink">{entry.quantisation_method}</Mono> },
-    { k: "Source weights", v: <Hash value={entry.source_weight_digest} head={10} tail={6} /> },
+    {
+      k: "Source weights",
+      v: entry.source_weight_digest ? (
+        <Hash value={entry.source_weight_digest} head={10} tail={6} />
+      ) : (
+        <span className="text-xs leading-4.5">Not published upstream; covered by the deviation approval</span>
+      ),
+    },
     { k: "Artefact digest", v: <Hash value={entry.artifact_digest} head={10} tail={6} /> },
     {
       k: "Licence",

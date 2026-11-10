@@ -212,12 +212,12 @@ describe("desktop app against the real backend", () => {
     const fake = path.join(data, "not-a-model.gguf");
     writeFileSync(fake, "GGUF fake");
     io.nextOpen.push(fake);
-    await ui.api.models.importOffline("qwen3-4b-q4km");
+    await ui.api.models.importOffline("minicpm5-2b-q4_k_m-openbmb-gguf");
     await vi.waitFor(() => expect(lastToast()?.title).toBe("Model not installed"));
     expect(lastToast()?.description).toMatch(/size is different/);
     expect(store().installedModels).toEqual([]);
 
-    ui.api.models.download("qwen3-4b-q4km");
+    ui.api.models.download("minicpm5-2b-q4_k_m-openbmb-gguf");
     await vi.waitFor(() => expect(lastToast()?.description).toMatch(/model mirror is not set up/));
   });
 

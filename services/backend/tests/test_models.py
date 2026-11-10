@@ -58,7 +58,54 @@ def test_backend_catalogue_equals_the_one_the_ui_shows() -> None:
 def test_catalogue_endpoint(client: TestClient) -> None:
     out = client.get("/models/catalogue").json()
     assert out["signed"] is False
-    assert {e["entry_id"] for e in out["entries"]} >= {"qwen3-4b-q4km", "qwen3-8b-q4km"}
+    assert {e["entry_id"] for e in out["entries"]} == {SMALL, MEDIUM}
+
+
+REPO = Path(__file__).resolve().parents[3]
+SMALL = "minicpm5-2b-q4_k_m-openbmb-gguf"
+MEDIUM = "ornith-1.5-9b-q4_k_m-ornith-gguf"
+
+
+def test_catalogue_lists_only_real_installable_files() -> None:
+    """Bug 2: no placeholder sizes or hashes. Every entry is a real published file with its
+    licence text in the repository, and can be installed (third-party: passed review)."""
+    entries = catalogue.entries()
+    assert {e.tier for e in entries} == {"small", "medium"}
+    for e in entries:
+        assert re.fullmatch(r"[0-9a-f]{64}", e.artifact_digest), e.id
+        assert len(set(e.artifact_digest)) > 4, e.id  # not a made-up repeating pattern
+        assert re.fullmatch(r"[0-9a-f]{40}", e.upstream_revision), e.id
+        assert (REPO / e.licence_reference).is_file(), e.licence_reference
+        assert catalogue.installable(e), e.id
+    small = catalogue.find(SMALL)
+    assert small is not None and small.size_bytes == 1561318368
+    assert small.artifact_digest.startswith("ec2d5801")
+
+
+@pytest.mark.parametrize(
+    "review",
+    [
+        None,
+        {"reviewer": "", "date": "2026-11-06", "quality_threshold_result": "pass"},
+        {"reviewer": "Reviewer", "date": "", "quality_threshold_result": "pass"},
+        {"reviewer": "Reviewer", "date": "2026-11-06", "quality_threshold_result": "pending"},
+        {"reviewer": "Reviewer", "date": "2026-11-06", "quality_threshold_result": "fail"},
+    ],
+)
+def test_ac_02_a_third_party_file_without_a_passed_review_is_refused(
+    client: TestClient,
+    settings: Settings,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tiny_entry: catalogue.Entry,
+    review: dict[str, str] | None,
+) -> None:
+    entry = dataclasses.replace(tiny_entry, pipeline="third-party", deviation_review=review)
+    monkeypatch.setattr(catalogue, "entries", lambda: (entry,))
+    r = client.post("/models/import", json={"path": str(gguf(tmp_path)), "entry_id": entry.id})
+    assert (r.status_code, r.json()) == (422, {"error": "deviation_not_approved"})
+    assert client.get("/models").json() == []
+    assert not (settings.models_dir / entry.file_name).exists()
 
 
 def test_import_installs_a_matching_file_and_records_evidence(
@@ -86,7 +133,11 @@ def test_import_without_entry_finds_it_by_size_and_digest(
 
 @pytest.mark.parametrize(
     ("content", "error"),
-    [(b"GGUF" + b"\x01" * 1020, "digest_mismatch"), (b"GGUF short", "size_mismatch")],
+    [
+        (b"GGUF" + b"\x01" * 1020, "digest_mismatch"),
+        (CONTENT[:-1] + b"\x01", "digest_mismatch"),  # one byte changed
+        (b"GGUF short", "size_mismatch"),
+    ],
 )
 def test_a_file_that_is_not_byte_for_byte_the_entry_is_refused(
     client: TestClient,
@@ -125,7 +176,7 @@ def test_deleting_the_default_model_removes_the_file_and_clears_the_default(
 
 
 def test_download_is_not_available_in_this_build(client: TestClient) -> None:
-    r = client.post("/models/download/qwen3-4b-q4km")
+    r = client.post(f"/models/download/{SMALL}")
     assert (r.status_code, r.json()) == (503, {"error": "mirror_unavailable"})
     assert client.post("/models/download/nope").status_code == 404
 
@@ -151,3 +202,12 @@ def test_engine_status(client: TestClient, tmp_path: Path, tiny_entry: catalogue
         "installed": 1,
         **no_engine,
     }
+
+
+def test_ac_02_a_third_party_entry_without_a_passed_review_is_not_downloaded(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, tiny_entry: catalogue.Entry
+) -> None:
+    entry = dataclasses.replace(tiny_entry, pipeline="third-party", deviation_review=None)
+    monkeypatch.setattr(catalogue, "entries", lambda: (entry,))
+    r = client.post(f"/models/download/{entry.id}")
+    assert (r.status_code, r.json()) == (422, {"error": "deviation_not_approved"})
