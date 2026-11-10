@@ -1,7 +1,8 @@
 """Model rules: only catalogue models are installed, byte for byte; deleting the default clears it.
 
 Offline import (MVP 4.1, M-07): the user picks a .gguf file; it is installed only if its size
-and SHA-256 equal a catalogue entry, then copied into the models folder. Download from the
+and SHA-256 equal a catalogue entry, and, for a third-party file, the entry's deviation review
+passed (C_REVIEW, AC-02); then it is copied into the models folder. Download from the
 mirror and the engine (llama-server, benchmark) are not part of this build.
 """
 
@@ -124,6 +125,8 @@ def import_model(
     if path.suffix.lower() != ".gguf":
         raise AppError("not_gguf", 422)
     entry = _match(path, entry_id)
+    if not catalogue.installable(entry):
+        raise AppError("deviation_not_approved", 422)
     if repo.get(session, entry.id) is not None:
         raise AppError("model_installed", 409)
     target = _copy_into(path, settings.models_dir, entry.file_name)

@@ -28,8 +28,8 @@ const LIMITS: Array<{ title: string; text: string }> = [
 
 const LICENCES: Array<{ name: string; role: string; licence: string }> = [
   { name: "llama.cpp", role: "Local inference engine", licence: "MIT" },
-  { name: "Qwen3", role: "Model weights", licence: "Apache-2.0" },
-  { name: "Gemma 4", role: "Model weights", licence: "Apache-2.0" },
+  { name: "MiniCPM5 2B", role: "Model weights (Small)", licence: "Apache-2.0" },
+  { name: "Ornith 1.5 9B", role: "Model weights (Medium)", licence: "MIT" },
   { name: "SQLCipher", role: "Encrypted database", licence: "BSD-style" },
   { name: "Electron", role: "Desktop shell", licence: "MIT" },
 ];
