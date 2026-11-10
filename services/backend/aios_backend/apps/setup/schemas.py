@@ -41,7 +41,10 @@ class RestoreIn(BaseModel):
 
     backup_path: str = Field(min_length=1, max_length=1024)
     recovery_key: str = Field(min_length=1, max_length=100)
+    # Must be true when a finished installation would be replaced (the confirm dialog).
+    confirmed: bool = False
 
 
 class Restored(BaseModel):
     stream_id: str
+    epoch: int | None = None  # the evidence epoch the restore started

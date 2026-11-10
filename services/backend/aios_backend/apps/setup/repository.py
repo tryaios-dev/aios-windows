@@ -37,6 +37,12 @@ def state(session: Session) -> SetupState:
     return row
 
 
+def first_run_done(session: Session) -> bool:
+    """Read-only: whether first run finished (no row is created)."""
+    row = session.get(SetupState, SINGLE_ROW)
+    return bool(row and row.first_run_complete)
+
+
 def set_first_run_complete(session: Session, default_project_id: str | None) -> None:
     row = state(session)
     if not row.first_run_complete:

@@ -101,17 +101,54 @@ export function Kbd({ children, className }: { children: React.ReactNode; classN
 
 /* ---------------- Mono / hash ---------------- */
 
+/** Older path for when the Clipboard API is missing or refused: copy from a hidden text field. */
+function copyWithSelection(text: string): boolean {
+  const field = document.createElement("textarea");
+  field.value = text;
+  field.setAttribute("readonly", "");
+  field.style.position = "fixed";
+  field.style.opacity = "0";
+  document.body.appendChild(field);
+  field.select();
+  try {
+    return document.execCommand("copy");
+  } catch {
+    return false;
+  } finally {
+    field.remove();
+  }
+}
+
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // Refused (no permission, window not focused): try the older path below.
+  }
+  return copyWithSelection(text);
+}
+
+/** `copied` turns true only once the text is really on the clipboard; `failed` when it is not. */
 export function useCopy(timeout = 1600) {
   const [copied, setCopied] = React.useState(false);
+  const [failed, setFailed] = React.useState(false);
   const copy = React.useCallback(
-    (text: string) => {
-      navigator.clipboard?.writeText(text).catch(() => undefined);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), timeout);
+    async (text: string) => {
+      const ok = await copyText(text);
+      setCopied(ok);
+      setFailed(!ok);
+      window.setTimeout(() => {
+        setCopied(false);
+        setFailed(false);
+      }, timeout);
+      return ok;
     },
     [timeout],
   );
-  return { copied, copy };
+  return { copied, failed, copy };
 }
 
 export function Hash({
@@ -141,7 +178,7 @@ export function Hash({
     <Tooltip content={copied ? "Copied" : "Copy full value"}>
       <button
         type="button"
-        onClick={() => copy(value)}
+        onClick={() => void copy(value)}
         className="group inline-flex max-w-full items-center gap-1.5 rounded-xs text-left hover:text-ink"
         aria-label="Copy full value"
       >

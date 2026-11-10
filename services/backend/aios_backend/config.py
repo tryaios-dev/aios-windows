@@ -54,6 +54,10 @@ class Settings:
     # llama-server builds (engine_root/cpu, engine_root/vulkan); idle engines are unloaded.
     engine_root: Path = Path()
     engine_idle_unload_s: float = 300.0
+    # Shown in Settings > Network and the composer while the flag is on. Set by an operator;
+    # the API key is never here (it lives in the OS keystore, read only by the gateway).
+    company_base_url: str | None = None
+    company_model_name: str | None = None
     # Paths reachable without the token. Empty in the shipped app.
     public_paths: frozenset[str] = frozenset()
     docs_enabled: bool = False

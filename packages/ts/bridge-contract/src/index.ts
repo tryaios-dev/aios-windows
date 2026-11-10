@@ -76,10 +76,16 @@ export type Completed = z.infer<typeof Completed>;
 export const RestoreInput = z.object({
   backup_path: z.string().min(1).max(1024),
   recovery_key: z.string().min(1).max(100),
+  /** Required (true) by the backend when a finished installation would be replaced. */
+  confirmed: z.boolean().optional(),
 });
 export type RestoreInput = z.infer<typeof RestoreInput>;
 
-export const Restored = z.object({ stream_id: z.string() });
+export const Restored = z.object({
+  stream_id: z.string(),
+  /** The evidence epoch the restore started. */
+  epoch: z.number().int().nullable().optional(),
+});
 export type Restored = z.infer<typeof Restored>;
 
 /** A folder the user picked in the system dialog, with what main found in it. */
