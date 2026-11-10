@@ -39,8 +39,37 @@ export async function createMainWindow(): Promise<BrowserWindow> {
   const ui = app.isPackaged
     ? path.join(process.resourcesPath, "ui", "index.html")
     : path.join(import.meta.dirname, "../../../ui/dist/index.html");
-  await win.loadFile(ui);
+  // Listen before loading: ready-to-show can fire before loadFile resolves.
   win.once("ready-to-show", () => win.show());
+  await win.loadFile(ui);
   void shell; // external links go through links.ts with a confirmation dialog
+  return win;
+}
+
+/** The page shown while the backend starts: static text, no script, no preload. */
+export const STARTUP_PAGE = `<!doctype html><html><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<title>AIOS</title><style>
+body{margin:0;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+font-family:system-ui,sans-serif;background:#f6f6f4;color:#222}
+@media (prefers-color-scheme:dark){body{background:#1c1c1c;color:#eee}}
+h1{font-size:18px;font-weight:600;margin:0 0 6px}p{font-size:13px;margin:0;opacity:.7}
+</style></head><body><h1>Starting AIOS…</h1><p>The first start after installing can take a minute.</p></body></html>`;
+
+/** Small window shown right after launch, so AIOS is never running without a window. */
+export function createStartupWindow(): BrowserWindow {
+  const win = new BrowserWindow({
+    width: 420,
+    height: 200,
+    resizable: false,
+    maximizable: false,
+    minimizable: true,
+    autoHideMenuBar: true,
+    title: "AIOS",
+    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, javascript: false },
+  });
+  win.webContents.on("will-navigate", (e) => e.preventDefault());
+  win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  void win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(STARTUP_PAGE)}`);
   return win;
 }
