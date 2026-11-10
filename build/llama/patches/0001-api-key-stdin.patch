@@ -1,0 +1,68 @@
+Subject: [PATCH] server: --api-key-stdin, and never log any part of a key
+
+AIOS patch for llama.cpp b12111 (D-03, M-19/SR-08).
+
+llama-server only takes its API key from --api-key (command line),
+LLAMA_API_KEY (environment) or --api-key-file (a file). M-19 forbids all
+three. --api-key-stdin reads one key from the first line of stdin, the same
+way backend.exe receives its token. The flag carries no secret itself.
+
+The trace log line that printed the last four characters of the key is
+reduced to a key count.
+
+Security-relevant: changes need the named technical reviewer.
+---
+diff --git a/common/arg.cpp b/common/arg.cpp
+index 67b492e..8d1de4a 100644
+--- a/common/arg.cpp
++++ b/common/arg.cpp
+@@ -19,6 +19,7 @@
+ #include <cstdarg>
+ #include <filesystem>
+ #include <fstream>
++#include <iostream>
+ #include <list>
+ #include <numeric>
+ #include <regex>
+@@ -3504,6 +3505,24 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
+             key_file.close();
+         }
+     ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_API_KEY_FILE"));
++    add_opt(common_arg(
++        {"--api-key-stdin"},
++        "read one API key from the first line of stdin at start-up, so the key never appears in\n"
++        "arguments, the environment or a file (default: disabled)",
++        [](common_params & params) {
++            std::string key;
++            if (!std::getline(std::cin, key)) {
++                throw std::runtime_error("error: --api-key-stdin: no key on stdin\n");
++            }
++            if (!key.empty() && key.back() == '\r') {
++                key.pop_back();
++            }
++            if (key.empty()) {
++                throw std::runtime_error("error: --api-key-stdin: empty key on stdin\n");
++            }
++            params.api_keys.push_back(key);
++        }
++    ).set_examples({LLAMA_EXAMPLE_SERVER}));
+     add_opt(common_arg(
+         {"--ssl-key-file"}, "FNAME",
+         "path to file a PEM-encoded SSL private key",
+diff --git a/tools/server/server-http.cpp b/tools/server/server-http.cpp
+index cf147c7..55f4f5c 100644
+--- a/tools/server/server-http.cpp
++++ b/tools/server/server-http.cpp
+@@ -227,11 +227,7 @@ bool server_http_context::init_listener(const common_params & params) {
+         }
+     });
+ 
+-    if (params.api_keys.size() == 1) {
+-        const auto key = params.api_keys[0];
+-        const std::string substr = key.substr(std::max(static_cast<int>(key.length() - 4), 0));
+-        SRV_TRC("api_keys: ****%s\n", substr.c_str());
+-    } else if (params.api_keys.size() > 1) {
++    if (!params.api_keys.empty()) {
+         SRV_TRC("api_keys: %zu keys loaded\n", params.api_keys.size());
+     }
+ 

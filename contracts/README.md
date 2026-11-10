@@ -5,7 +5,7 @@ TypeScript code implement these files; `apps/verifier-cli` reads only `contracts
 
 | Contract | Folder | Version | Status | Freezes (week / ticket) | Owner of the code |
 | --- | --- | --- | --- | --- | --- |
-| Process and IPC | `process-ipc/v1` | 1 | draft | week 1 / D-02 | Electron main, backend, evidence writer |
+| Process and IPC | `process-ipc/v1` | 1 | ready for review (vectors in CI; `FROZEN` on reviewer approval) | week 1 / D-02 | Electron main, backend, evidence writer |
 | Evidence Wire Format | `evidence-wire-format/v1` | 1 | draft | week 2 / F-02 | Evidence writer (Python), verifier (TypeScript) |
 | Recovery Package | `recovery-package/v1` | 1 | draft | week 2 / E-03 | Backend recovery app |
 | Model Catalogue | `model-catalogue/v1` | 1 | draft | week 4 / I-01 | Backend catalogue app, `tools/catalogue/sign.py` |

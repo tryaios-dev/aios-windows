@@ -5,6 +5,7 @@ import { createInterface } from "node:readline";
 import { currentPlatform } from "../platform/index.js";
 import { launchToken } from "./token.js";
 import { BackendClient } from "./client.js";
+import { handshakeFrame, parseReadyLine, type Ready } from "./protocol.js";
 
 export interface BackendHandle {
   apiPort: number;
@@ -26,15 +27,16 @@ export async function startBackend(): Promise<BackendHandle> {
   });
   const proc = spawn(cmd, args, { stdio: ["pipe", "pipe", "inherit"], windowsHide: true, env });
   child = proc;
-  proc.stdin?.end(JSON.stringify({ token, api_port: 0 }) + "\n");
+  proc.stdin?.end(handshakeFrame(token));
 
-  const ready = await new Promise<{ api_port: number }>((resolve, reject) => {
+  const ready = await new Promise<Ready>((resolve, reject) => {
     const rl = createInterface({ input: proc.stdout! });
     const timer = setTimeout(() => reject(new Error("backend_start_timeout")), 30_000);
     rl.on("line", (line) => {
-      if (line.startsWith("READY ")) {
+      const payload = parseReadyLine(line);
+      if (payload) {
         clearTimeout(timer);
-        resolve(JSON.parse(line.slice(6)));
+        resolve(payload);
       }
     });
     proc.once("error", (err) => reject(err));

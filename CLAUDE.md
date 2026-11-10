@@ -7,7 +7,9 @@
 3. Secrets live only in the OS keystore and the wrapped Recovery Package — never in files,
    logs, evidence, settings or environment variables.
 4. The per-launch token is generated in Electron main and sent over stdin. Never argv, env,
-   logs or files. Only Electron main and the backend ever hold it.
+   logs or files. Only Electron main and the backend ever hold it. How every process starts,
+   authenticates and gets its secret (including the engine key and the evidence writer):
+   [contracts/process-ipc/v1/spec.md](contracts/process-ipc/v1/spec.md), rules IPC-01 to IPC-62.
 5. Only `services/evidence-writer` opens `evidence.db`. The backend settings declare exactly
    one database (`chats.db`).
 6. Logs contain no content: no message text, prompts, tokens, keys or recovery material.

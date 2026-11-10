@@ -68,7 +68,11 @@ export function EngineSection() {
           <Ledger
             dense
             rows={[
-              { k: "Build", v: health.engine_build === "cpu" ? "CPU" : "GPU (Vulkan)", mono: true },
+              {
+                k: "Build",
+                v: health.engine_build === "vulkan" ? "GPU (Vulkan)" : settings.safe_mode_cpu ? "CPU (Safe mode)" : "CPU",
+                mono: true,
+              },
               {
                 k: "Loaded model",
                 v:

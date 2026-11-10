@@ -6,6 +6,7 @@ import { modelsHandlers } from "./models.js";
 import { projectsHandlers } from "./projects.js";
 import { settingsHandlers } from "./settings.js";
 import { setupHandlers } from "./setup.js";
+import { spikeHandlers } from "./spike.js"; // SPIKE-D04
 import { systemHandlers } from "./system.js";
 
 export type Handler = (backend: BackendHandle, ...args: unknown[]) => Promise<unknown>;
@@ -20,6 +21,7 @@ export const handlers: Record<string, Handler> = {
   ...searchHandlers,
   ...evidenceHandlers,
   ...modelsHandlers,
+  ...spikeHandlers, // SPIKE-D04: temporary
 };
 
 /** One registry of allowed calls. */

@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 
 from aios_backend.config import Settings
+from aios_backend.engine import EngineManager
 
 
 def get_settings(request: Request) -> Settings:
@@ -13,3 +14,11 @@ def get_settings(request: Request) -> Settings:
 
 
 AppSettings = Annotated[Settings, Depends(get_settings)]
+
+
+def get_engine(request: Request) -> EngineManager:
+    engine: EngineManager = request.app.state.engine
+    return engine
+
+
+Engine = Annotated[EngineManager, Depends(get_engine)]

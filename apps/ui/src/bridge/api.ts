@@ -20,6 +20,7 @@ import {
   refreshConversation,
   refreshConversations,
   refreshEvents,
+  refreshHealthQuietly,
   refreshModels,
   refreshProjects,
   refreshSettings,
@@ -70,8 +71,9 @@ async function updateSettings(patch: SettingsChange): Promise<void> {
   }
   try {
     const saved = await bridge().settings.update(patch);
-    s().updateSettings(patch); // keeps the engine state shown in step (Safe mode)
     applySettings(saved);
+    // The engine state comes from the backend, never from the simulation's guess (D-06).
+    if (patch.safe_mode_cpu !== undefined) await refreshHealthQuietly();
   } catch (err) {
     reportFailure(err, "Setting not saved");
   }
@@ -224,7 +226,8 @@ export const api = {
       if (!isLive()) return s().sendMessage(id, text);
       try {
         await bridge().conversations.send(id, text);
-        await Promise.all([loadMessages(id), afterConversation(id)()]);
+        // refreshHealth: a GPU-to-CPU fallback during this answer shows its notice now (D-06).
+        await Promise.all([loadMessages(id), afterConversation(id)(), refreshHealthQuietly()]);
         return { ok: true };
       } catch (err) {
         await Promise.all([loadMessages(id), refreshEvents()]).catch(() => undefined); // a refusal is recorded
@@ -242,7 +245,7 @@ export const api = {
             () => bridge().conversations.regenerate(id),
             async () => {
               await loadMessages(id);
-              await refreshEvents();
+              await Promise.all([refreshEvents(), refreshHealthQuietly()]);
             },
           )
         : s().regenerate(id),

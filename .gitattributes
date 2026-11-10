@@ -1,0 +1,3 @@
+# Patches are applied byte for byte and pinned by SHA-256 in build/llama/manifest.json:
+# Git must never convert their line endings (Windows checkouts default to CRLF).
+*.patch -text

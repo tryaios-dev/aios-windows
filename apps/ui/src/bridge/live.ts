@@ -11,13 +11,25 @@ import {
   type Conversation as LiveConversation,
   type EvidenceEvent as LiveEvent,
   type Hardware as LiveHardware,
+  type Health as LiveHealth,
   type InstalledModel as LiveModel,
   type Message as LiveMessage,
   type Project as LiveProject,
   type Settings as LiveSettings,
   type SetupStatus,
 } from "@aios/bridge-contract";
-import type { Conversation, EventType, EvidenceEvent, Hardware, InstalledModel, Message, Project } from "@/lib/types";
+import type {
+  Conversation,
+  EngineBuild,
+  EngineState,
+  EventType,
+  EvidenceEvent,
+  Hardware,
+  Health,
+  InstalledModel,
+  Message,
+  Project,
+} from "@/lib/types";
 import { ZERO_HASH } from "@/lib/hash";
 import { bridge, inElectron } from "./index";
 import { useStore } from "./sim/store";
@@ -276,18 +288,93 @@ export async function refreshModels(refreshHardware = false): Promise<void> {
     health: {
       ...s.health,
       backend: "ok",
-      // The local engine (llama-server) is not part of this build: it never starts.
-      engine: installed.length ? "not_started" : "no_model",
-      loaded_model_id: null,
       company: { ...s.health.company, enabled: providers.company_enabled },
     },
   }));
+}
+
+const ENGINE_STATE: Record<LiveHealth["engine"], EngineState> = {
+  not_started: "not_started",
+  starting: "loading",
+  ok: "ready",
+  degraded: "ready",
+  failed: "failed",
+};
+
+/** The build the engine ran on last in this session; null until it has run. */
+let lastBuild: EngineBuild | null = null;
+
+/** Tests only: start as if the app had just opened. */
+export function resetEngineMemory(): void {
+  lastBuild = null;
+}
+
+/** No engine running: the build the next start will use. CPU with Safe mode or after a fallback;
+ * otherwise the build it last ran on, or the GPU build only if a graphics card with its own memory
+ * and a working driver was found (a virtual display adapter has none). The backend decides for
+ * real when it starts the engine. */
+function nextBuild(h: LiveHealth, s: { safeMode: boolean; hardware: Hardware }): EngineBuild {
+  if (s.safeMode || h.engine_cpu_fallback) return "cpu";
+  if (lastBuild) return lastBuild;
+  const gpu = s.hardware.gpu;
+  return gpu && gpu.driver_ok && gpu.vram_gb > 0 ? "vulkan" : "cpu";
+}
+
+/** The backend's /health (process manager) as the engine state every screen shows (D-06). */
+export function toEngineHealth(
+  h: LiveHealth,
+  s: { health: Health; installedModels: InstalledModel[]; safeMode: boolean; hardware: Hardware },
+): Health {
+  if (h.engine_build) lastBuild = h.engine_build;
+  let engine = ENGINE_STATE[h.engine];
+  if (engine === "not_started" && h.engine_idle_unloaded) engine = "idle_unloaded";
+  if (engine === "not_started" && s.installedModels.length === 0) engine = "no_model";
+  const fileName = (path: string) => path.split(/[\\/]/).pop();
+  const loaded = h.engine_model ? s.installedModels.find((m) => fileName(m.file_path) === h.engine_model) : undefined;
+  return {
+    ...s.health,
+    engine,
+    engine_build: h.engine_build ?? nextBuild(h, s),
+    loaded_model_id: loaded?.id ?? null,
+  };
+}
+
+/** Engine state from the backend. A GPU-to-CPU fallback raises the shared notice once per session,
+ * so dismissing it is respected (the store is new each time the app starts). */
+export async function refreshHealth(): Promise<void> {
+  const newest = ticket("health");
+  const h = await bridge().system.health();
+  if (!newest()) return;
+  useStore.setState((s) => ({
+    health: toEngineHealth(h, {
+      health: s.health,
+      installedModels: s.installedModels,
+      safeMode: s.settings.safe_mode_cpu,
+      hardware: s.hardware,
+    }),
+    ...(h.engine_cpu_fallback && s.fallbackNotice === null
+      ? { fallbackNotice: { at: new Date().toISOString(), dismissed: false } }
+      : {}),
+  }));
+}
+
+/** For callers where the engine state is a bonus: a failed read never fails what they did. */
+export const refreshHealthQuietly = (): Promise<void> => refreshHealth().catch(() => undefined);
+
+export const HEALTH_POLL_MS = 10_000;
+let healthPoll: ReturnType<typeof setInterval> | undefined;
+
+/** Keep the engine state current on every screen. A missed poll is not an error worth a toast. */
+export function startHealthPoll(): void {
+  if (healthPoll !== undefined) return;
+  healthPoll = setInterval(() => void refreshHealthQuietly(), HEALTH_POLL_MS);
 }
 
 /** Everything a signed-in workspace shows. Messages load per conversation. */
 export async function refreshWorkspace(): Promise<void> {
   await refreshProjects();
   await Promise.all([refreshConversations(), refreshEvents(), refreshModels()]);
+  await refreshHealthQuietly(); // after the models: the loaded model is matched against them
 }
 
 /** Run a change against the backend, then reload what it touched. Failures become a toast. */
@@ -314,6 +401,7 @@ export async function hydrate(): Promise<void> {
     await refreshSettings();
     if (status.first_run_complete) await refreshWorkspace();
     else await refreshModels(true); // setup shows this machine's hardware and installed models
+    startHealthPoll();
   } catch (err) {
     reportFailure(err, "Could not reach the AIOS backend");
   }

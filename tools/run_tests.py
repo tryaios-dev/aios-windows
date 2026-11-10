@@ -6,7 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SUITES = [
-    (ROOT, ["packages/py", "tests/security"]),
+    (ROOT, ["packages/py", "tests/security", "tests/engine"]),  # engine: skipped without a build
     (ROOT / "services" / "backend", []),
 ]
 
