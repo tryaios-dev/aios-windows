@@ -1,5 +1,6 @@
 """HTTP endpoints for settings, the network allowlist, the support bundle and build facts."""
 
+from anyio import from_thread
 from fastapi import APIRouter, status
 
 from aios_backend.apps.settings import service
@@ -12,7 +13,7 @@ from aios_backend.apps.settings.schemas import (
     SystemInfo,
     UpdateCheckIn,
 )
-from aios_backend.deps import AppSettings
+from aios_backend.deps import AppSettings, Engine
 from db.session import DbSession
 
 router = APIRouter(tags=["settings"])
@@ -24,8 +25,13 @@ def get_settings(session: DbSession) -> SettingsOut:
 
 
 @router.patch("/settings", summary="Change some settings; omitted fields stay as they are")
-def update_settings(body: SettingsPatch, session: DbSession) -> SettingsOut:
-    return service.update(session, body.model_dump(exclude_unset=True))
+def update_settings(body: SettingsPatch, session: DbSession, engine: Engine) -> SettingsOut:
+    # Sync route (runs in a worker thread): the process manager lives on the event loop.
+    return service.update(
+        session,
+        body.model_dump(exclude_unset=True),
+        apply_safe_mode=lambda on: from_thread.run(engine.set_safe_mode, on),
+    )
 
 
 @router.post(

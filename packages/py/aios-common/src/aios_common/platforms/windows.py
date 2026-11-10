@@ -11,7 +11,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from aios_common.platforms.base import Hardware, Platform
+from aios_common.platforms.base import ChildJob, Hardware, Platform
 
 GIB = 1024**3
 CPU_KEY = r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
@@ -38,12 +38,28 @@ class WindowsPlatform(Platform):
     id = "windows"
     shipped = True
     keyring_backend = "keyring.backends.Windows.WinVaultKeyring"
+    exe_suffix = ".exe"
+    orphan_parent_pid = None  # Windows does not re-parent: an orphan's parent is gone
 
     def data_dir(self) -> Path:
         base = os.environ.get("LOCALAPPDATA")
         if not base:
             base = str(Path.home() / "AppData" / "Local")
         return Path(base) / "AIOS"
+
+    def child_env(self, bin_dir: Path, temp_dir: Path) -> dict[str, str]:
+        root = os.environ["SystemRoot"]
+        return {
+            "SystemRoot": root,
+            "PATH": f"{bin_dir};{root}\\System32",
+            "TEMP": str(temp_dir),
+            "TMP": str(temp_dir),
+        }
+
+    def kill_on_close_job(self) -> ChildJob:
+        from aios_common.platforms.windows_job import KillOnCloseJob
+
+        return KillOnCloseJob()
 
     def hardware(self, disk: Path) -> Hardware:
         disk.mkdir(parents=True, exist_ok=True)

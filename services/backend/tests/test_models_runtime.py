@@ -90,7 +90,7 @@ def runtime(
     settings: Settings, db: Database, mirror: FakeMirror, engine: FakeEngine
 ) -> Iterator[TestClient]:
     headers = {"Authorization": f"Bearer {LAUNCH_TOKEN}"}
-    app = create_app(settings, db, engine=engine, mirror=mirror)
+    app = create_app(settings, db, local_engine=engine, mirror=mirror)
     with TestClient(app, client=LOOPBACK, headers=headers) as c:
         yield c
 

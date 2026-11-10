@@ -67,11 +67,13 @@ def test_support_bundle_holds_logs_only(logged: TestClient, tmp_path: Path) -> N
     assert named.json()["file_name"] == "mine.zip"
 
 
-def test_support_bundle_checks_the_path(logged: TestClient, client: TestClient) -> None:
+def test_support_bundle_checks_the_path(
+    logged: TestClient, client: TestClient, tmp_path: Path
+) -> None:
     assert logged.post("/system/support-bundle", json={"path": "relative"}).json() == {
         "error": "invalid_path"
     }
-    no_logs = client.post("/system/support-bundle", json={"path": "C:/"})
+    no_logs = client.post("/system/support-bundle", json={"path": str(tmp_path)})
     assert no_logs.status_code == 404 and no_logs.json() == {"error": "log_folder_missing"}
 
 
@@ -122,13 +124,15 @@ def test_evidence_filters(client: TestClient) -> None:
     assert len(client.get("/evidence", params={"limit": 1}).json()) == 1
 
 
-def test_evidence_export_checks_then_waits_for_the_writer(client: TestClient) -> None:
+def test_evidence_export_checks_then_waits_for_the_writer(
+    client: TestClient, tmp_path: Path
+) -> None:
     # Without a body: the old call, answered as before.
     assert client.post("/evidence/export").json() == {"error": "writer_unavailable"}
 
     first_run(client)
     project = client.post("/projects", json={"name": "P", "classification": "public"}).json()
-    base = {"scope": "project", "project_id": project["id"], "path": "C:/out/e.zip"}
+    base = {"scope": "project", "project_id": project["id"], "path": str(tmp_path / "e.zip")}
     assert client.post("/evidence/export", json=base).json() == {"error": "confirmation_required"}
     ok = {**base, "confirmed": True}
     assert client.post("/evidence/export", json={**ok, "project_id": "nope"}).json() == {
@@ -140,7 +144,7 @@ def test_evidence_export_checks_then_waits_for_the_writer(client: TestClient) ->
     resp = client.post("/evidence/export", json=ok)
     assert resp.status_code == 503 and resp.json() == {"error": "writer_unavailable"}
 
-    rng = {"scope": "range", "path": "C:/out/e.zip", "confirmed": True}
+    rng = {"scope": "range", "path": str(tmp_path / "e.zip"), "confirmed": True}
     backwards = {**rng, "from": "2026-11-06T00:00:00Z", "to": "2026-11-01T00:00:00Z"}
     assert client.post("/evidence/export", json=backwards).json() == {"error": "invalid_range"}
     empty = {**rng, "from": "2001-01-01T00:00:00Z", "to": "2001-01-02T00:00:00Z"}

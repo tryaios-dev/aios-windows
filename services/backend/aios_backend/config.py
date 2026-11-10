@@ -15,6 +15,7 @@ The dev/test keys (database key and evidence signing seed) are not secrets: they
 """
 
 import os
+import sys
 import tempfile
 from dataclasses import dataclass
 from enum import StrEnum
@@ -25,6 +26,7 @@ from aios_common import paths, platforms
 APP_VERSION = "0.1.0"  # also in pyproject.toml and apps/desktop/package.json
 PROFILE_ENV = "AIOS_ENV"
 DEV_DIR = Path(__file__).resolve().parents[1] / ".dev"  # services/backend/.dev
+REPO_ROOT = Path(__file__).resolve().parents[3]
 DEV_DB_KEY = "de" * 32  # 256-bit hex; development data only
 TEST_DB_KEY = "00" * 32
 DEV_SIGNING_SEED = "5e" * 32  # Ed25519 seed for the dev/test evidence stream; not a secret
@@ -49,6 +51,9 @@ class Settings:
     signing_seed: str | None = None
     # Operator flag for the Company provider (lab only). Off: conversations can only run locally.
     company_ai: bool = False
+    # llama-server builds (engine_root/cpu, engine_root/vulkan); idle engines are unloaded.
+    engine_root: Path = Path()
+    engine_idle_unload_s: float = 300.0
     # Shown in Settings > Network and the composer while the flag is on. Set by an operator;
     # the API key is never here (it lives in the OS keystore, read only by the gateway).
     company_base_url: str | None = None
@@ -56,6 +61,14 @@ class Settings:
     # Paths reachable without the token. Empty in the shipped app.
     public_paths: frozenset[str] = frozenset()
     docs_enabled: bool = False
+
+
+def _engine_root() -> Path:
+    """Installed: resources/backend/backend.exe next to resources/llama/{cpu,vulkan}/
+    (electron-builder.yml). From source: the output of build/llama/build.py."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parents[1] / "llama"
+    return REPO_ROOT / "build" / "out" / "llama"
 
 
 def load(profile: Profile | str | None = None) -> Settings:
@@ -71,6 +84,7 @@ def load(profile: Profile | str | None = None) -> Settings:
             db_key=None,
             log_file=paths.logs_dir() / "backend.log",
             backups_dir=paths.data_dir() / "backups",
+            engine_root=_engine_root(),
             recovery_pkg=paths.recovery_pkg(),
             models_dir=paths.models_dir(),
         )
@@ -83,6 +97,7 @@ def load(profile: Profile | str | None = None) -> Settings:
             db_key=DEV_DB_KEY,
             log_file=DEV_DIR / "backend.log",
             backups_dir=DEV_DIR / "backups",
+            engine_root=_engine_root(),
             recovery_pkg=DEV_DIR / "recovery.pkg",
             models_dir=DEV_DIR / "models",
             signing_seed=DEV_SIGNING_SEED,
@@ -98,6 +113,7 @@ def load(profile: Profile | str | None = None) -> Settings:
         db_key=TEST_DB_KEY,
         log_file=None,
         backups_dir=tmp / "backups",
+        engine_root=_engine_root(),
         recovery_pkg=tmp / "recovery-test.pkg",
         models_dir=tmp / "models",
         signing_seed=DEV_SIGNING_SEED,

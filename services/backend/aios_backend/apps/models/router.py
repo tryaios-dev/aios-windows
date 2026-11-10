@@ -2,11 +2,11 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Body, status
+from fastapi import APIRouter, Body, Request, status
 
 from aios_backend.apps.models import service
 from aios_backend.apps.models.downloads import DownloadsDep
-from aios_backend.apps.models.engine import Engine
+from aios_backend.apps.models.engine import LocalEngineDep
 from aios_backend.apps.models.mirror import Mirror
 from aios_backend.apps.models.schemas import (
     BenchmarkOut,
@@ -153,20 +153,29 @@ def get_hardware(session: DbSession, settings: AppSettings, refresh: bool = Fals
 
 @router.post("/system/benchmark", summary="Run a short benchmark on the local engine")
 def run_benchmark(
-    session: DbSession, engine: Engine, generations: GenerationsDep, body: OptionalChoice = None
+    session: DbSession,
+    engine: LocalEngineDep,
+    generations: GenerationsDep,
+    body: OptionalChoice = None,
 ) -> BenchmarkOut:
     return service.run_benchmark(session, engine, generations, body.model_id if body else None)
 
 
 # ------------------------------------------------------------------ engine
 @router.get("/engine/status", summary="State of the local engine")
-def engine_status(session: DbSession, engine: Engine, generations: GenerationsDep) -> EngineStatus:
-    return service.engine_status(session, engine, generations)
+def engine_status(
+    request: Request, session: DbSession, engine: LocalEngineDep, generations: GenerationsDep
+) -> EngineStatus:
+    components = request.app.state.components
+    return service.engine_status(session, engine, generations, components)
 
 
 @router.post("/engine/start", summary="Start the local engine and load a model")
 def start_engine(
-    session: DbSession, engine: Engine, generations: GenerationsDep, body: OptionalChoice = None
+    session: DbSession,
+    engine: LocalEngineDep,
+    generations: GenerationsDep,
+    body: OptionalChoice = None,
 ) -> EngineStatus:
     return service.start_engine(session, engine, generations, body.model_id if body else None)
 
@@ -176,5 +185,5 @@ def start_engine(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Hide the GPU-to-CPU fallback notice",
 )
-def acknowledge_fallback(session: DbSession, engine: Engine) -> None:
+def acknowledge_fallback(session: DbSession, engine: LocalEngineDep) -> None:
     service.acknowledge_fallback(session, engine)

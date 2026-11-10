@@ -147,7 +147,7 @@ def test_engine_status(client: TestClient, tmp_path: Path, tiny_entry: catalogue
     }
     client.post("/models/import", json={"path": str(gguf(tmp_path))})
     assert client.get("/engine/status").json() == {
-        "state": "not_built",
+        "state": "not_started",
         "installed": 1,
         **no_engine,
     }

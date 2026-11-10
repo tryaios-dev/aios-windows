@@ -22,6 +22,8 @@ dev = [
     "mypy>=1.13",
     "import-linter>=2.1",
     "pip-audit>=2.7",
+    "jsonschema>=4.23",
+    "types-psutil>=6.1",
 ]
 
 [tool.ruff]
@@ -45,6 +47,7 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header", 
 "**/cli.py" = ["T201"]
 "**/db/migrations/**" = ["E501"]
 "**/tests/**" = ["S105", "S106"]
+"tests/engine/**" = ["S310", "S603", "S607"]   # starts llama-server, loopback HTTP
 
 [tool.mypy]
 strict = true
@@ -87,14 +90,14 @@ allow_indirect_imports = true
 name = "Backend apps never import each other (same rule as apps/ui/src/features)"
 type = "independence"
 modules = [
-    "aios_backend.apps.chat", "aios_backend.apps.evidence", "aios_backend.apps.models", "aios_backend.apps.projects", "aios_backend.apps.search", "aios_backend.apps.settings", "aios_backend.apps.setup",
+    "aios_backend.apps.chat", "aios_backend.apps.evidence", "aios_backend.apps.models", "aios_backend.apps.projects", "aios_backend.apps.search", "aios_backend.apps.settings", "aios_backend.apps.setup", "aios_backend.apps.spike",
 ]
 
 [[tool.importlinter.contracts]]
 name = "App layers: router -> service -> repository -> models"
 type = "layers"
 containers = [
-    "aios_backend.apps.chat", "aios_backend.apps.evidence", "aios_backend.apps.models", "aios_backend.apps.projects", "aios_backend.apps.search", "aios_backend.apps.settings", "aios_backend.apps.setup",
+    "aios_backend.apps.chat", "aios_backend.apps.evidence", "aios_backend.apps.models", "aios_backend.apps.projects", "aios_backend.apps.search", "aios_backend.apps.settings", "aios_backend.apps.setup", "aios_backend.apps.spike",
 ]
 layers = ["router", "service", "repository", "models"]
 
@@ -110,6 +113,7 @@ source_modules = [
     "aios_backend.apps.search.router",
     "aios_backend.apps.settings.router",
     "aios_backend.apps.setup.router",
+    "aios_backend.apps.spike.router",
 ]
 forbidden_modules = ["sqlalchemy", "sqlcipher3", "subprocess", "httpx", "socket"]
 allow_indirect_imports = true

@@ -8,11 +8,12 @@ new module here plus its entry in ``_BY_SYS_PLATFORM`` (docs/platforms.md).
 import sys
 from functools import cache
 
-from aios_common.platforms.base import Hardware, Platform, UnsupportedPlatform
+from aios_common.platforms.base import ChildJob, Hardware, Platform, UnsupportedPlatform
 from aios_common.platforms.generic import GenericPlatform
 from aios_common.platforms.windows import WindowsPlatform
 
 __all__ = [
+    "ChildJob",
     "GenericPlatform",
     "Hardware",
     "Platform",

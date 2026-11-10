@@ -8,6 +8,7 @@ It is read-only here: nothing in the backend can add a host.
 import os
 import re
 import zipfile
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -79,8 +80,21 @@ def get(session: Session) -> SettingsOut:
     )
 
 
-def update(session: Session, patch: dict[str, Any]) -> SettingsOut:
-    """Change the fields in ``patch``. Booleans may not be null; the default model may."""
+def safe_mode_cpu(session: Session) -> bool:
+    """Saved Safe mode (CPU), read at start-up before any engine can start. Off by default."""
+    row = repo.find(session)
+    return bool(row and row.safe_mode_cpu)
+
+
+def update(
+    session: Session,
+    patch: dict[str, Any],
+    apply_safe_mode: Callable[[bool], None] | None = None,
+) -> SettingsOut:
+    """Change the fields in ``patch``. Booleans may not be null; the default model may.
+
+    ``apply_safe_mode``: tells the engine's process manager. A Safe mode change is committed
+    first, so a crash right after cannot lose a switch-on, then applied at once (D-06)."""
     row = repo.load(session)
     for field in EDITABLE:
         if field not in patch:
@@ -90,6 +104,9 @@ def update(session: Session, patch: dict[str, Any]) -> SettingsOut:
             raise AppError("invalid_setting", 422)
         setattr(row, field, value)
     repo.save(session)
+    if apply_safe_mode is not None and "safe_mode_cpu" in patch:
+        session.commit()
+        apply_safe_mode(row.safe_mode_cpu)
     return get(session)
 
 

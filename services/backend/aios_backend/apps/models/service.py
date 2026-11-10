@@ -8,6 +8,7 @@ are seams: ``None`` in this build, so those endpoints answer ``503`` until they 
 
 import os
 import shutil
+from collections.abc import Sequence
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -33,6 +34,7 @@ from aios_backend.apps.models.schemas import (
     InstalledModelOut,
     ModelChecks,
 )
+from aios_backend.components import Components, ComponentState
 from aios_backend.config import Settings
 from aios_backend.errors import AppError, not_found
 from aios_backend.runtime import Generations
@@ -264,11 +266,51 @@ def _benchmark_out(b: Benchmark) -> BenchmarkOut:
     )
 
 
-def engine_status(
-    session: Session, engine: LocalEngine | None, generations: Generations | None = None
+COMPONENT_STATES = {
+    ComponentState.NOT_STARTED: "not_started",
+    ComponentState.STARTING: "loading",
+    ComponentState.OK: "ready",
+    ComponentState.DEGRADED: "ready",
+    ComponentState.FAILED: "failed",
+}
+
+
+def _from_components(
+    components: Components, installed: Sequence[InstalledModel], busy: bool
 ) -> EngineStatus:
-    count = len(repo.installed(session))
+    """The process manager's state, as /health reports it, in the shape of EngineStatus."""
+    if not installed:
+        state = "no_model"
+    elif components.engine_idle_unloaded:
+        state = "idle_unloaded"
+    else:
+        state = COMPONENT_STATES[components.engine]
+        if state == "ready" and busy:
+            state = "generating"
+    build = components.engine_build if components.engine_build in ("cpu", "vulkan") else None
+    loaded = next(
+        (m.id for m in installed if Path(m.file_path).name == components.engine_model), None
+    )
+    return EngineStatus(
+        state=state,
+        installed=len(installed),
+        build=build,
+        loaded_model_id=loaded,
+    )
+
+
+def engine_status(
+    session: Session,
+    engine: LocalEngine | None,
+    generations: Generations | None = None,
+    components: Components | None = None,
+) -> EngineStatus:
+    installed = repo.installed(session)
+    count = len(installed)
     if engine is None:
+        if components is not None:
+            busy = generations is not None and generations.busy()
+            return _from_components(components, installed, busy)
         return EngineStatus(state="not_built" if count else "no_model", installed=count)
     current = engine.state()
     state = current.state

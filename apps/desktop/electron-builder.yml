@@ -10,7 +10,7 @@ extraResources:
     to: ui
   - from: ../../build/out/backend
     to: backend
-  # llama-server CPU + Vulkan builds pinned in build/llama/manifest.json (fetched by build/llama/fetch.py)
+  # llama-server CPU + Vulkan, built from the source pinned in build/llama/manifest.json (build/llama/build.py)
   - from: ../../build/out/llama/cpu
     to: llama/cpu
   - from: ../../build/out/llama/vulkan

@@ -66,6 +66,9 @@ const bridge: AiosBridge = {
     hardware: (refresh) => invoke("models.hardware", refresh),
     engine: () => invoke("models.engine"),
   },
+  spike: {
+    ask: (prompt: string) => invoke("spike.ask", prompt), // SPIKE-D04 (temporary)
+  },
 };
 
 contextBridge.exposeInMainWorld("aios", bridge);

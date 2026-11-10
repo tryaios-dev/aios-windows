@@ -1,8 +1,9 @@
 """The seam between the models app and the local engine (llama-server), like chat/answers.py.
 
-``create_app`` puts a ``LocalEngine`` on ``app.state.engine``. Today that is ``None`` because the
-engine module is not built yet: status says ``not_built`` and start / benchmark answer
-``503 engine_unavailable``. Tests plug in a fake.
+``create_app`` puts a ``LocalEngine`` on ``app.state.local_engine`` (``app.state.engine`` is the
+process manager, ``aios_backend.engine``). It is ``None`` until an adapter over the process
+manager is written: status then comes from ``app.state.components`` (what /health shows) and
+start / benchmark answer ``503 engine_unavailable``. Tests plug in a fake.
 """
 
 from dataclasses import dataclass
@@ -50,9 +51,9 @@ class LocalEngine(Protocol):
     def acknowledge_fallback(self) -> None: ...
 
 
-def get_engine(request: Request) -> LocalEngine | None:
-    engine: LocalEngine | None = getattr(request.app.state, "engine", None)
+def get_local_engine(request: Request) -> LocalEngine | None:
+    engine: LocalEngine | None = getattr(request.app.state, "local_engine", None)
     return engine
 
 
-Engine = Annotated[LocalEngine | None, Depends(get_engine)]
+LocalEngineDep = Annotated[LocalEngine | None, Depends(get_local_engine)]

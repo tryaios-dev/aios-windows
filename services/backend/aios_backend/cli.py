@@ -149,7 +149,7 @@ def cmd_serve_e2e(args: argparse.Namespace) -> int:
     ``--data``, launch token over stdin and a READY line, exactly like backend.exe."""
     import dataclasses
 
-    from aios_backend.__main__ import free_port, serve
+    from aios_backend.__main__ import serve
     from aios_common.handshake import read_handshake
 
     hs = read_handshake()
@@ -165,7 +165,7 @@ def cmd_serve_e2e(args: argparse.Namespace) -> int:
     db = Database(settings)
     migrate.upgrade(db)
     answers = EchoAnswers() if args.echo else None
-    asyncio.run(serve(settings, db, hs.api_port or free_port(), answers))
+    asyncio.run(serve(settings, db, hs.api_port, answers=answers))
     return 0
 
 

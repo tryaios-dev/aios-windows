@@ -178,7 +178,9 @@ def app_client(
     settings: Settings, db: Database, mirror: FakeMirror, engine: FakeEngine | None = None
 ) -> TestClient:
     return TestClient(
-        create_app(settings, db, engine=engine, mirror=mirror), client=LOOPBACK, headers=HEADERS
+        create_app(settings, db, local_engine=engine, mirror=mirror),
+        client=LOOPBACK,
+        headers=HEADERS,
     )
 
 

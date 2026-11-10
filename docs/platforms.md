@@ -9,7 +9,7 @@ layers.
 
 | Layer | Where | Windows implementation | What it decides |
 | --- | --- | --- | --- |
-| Python (backend) | `packages/py/aios-common/src/aios_common/platforms/` | `windows.py` | Data folder, the key store the app must use, reading the hardware |
+| Python (backend) | `packages/py/aios-common/src/aios_common/platforms/` | `windows.py` | Data folder, the key store the app must use, reading the hardware, how the engine is started and tied to the backend (program suffix, minimal environment, kill-on-close job, orphan detection) |
 | Electron main | `apps/desktop/src/main/platform/` | `windows.ts` | How the backend starts (program, environment), stopping its process tree |
 | UI wording | `apps/ui/src/lib/platform.ts` | the `windows` entry | Every OS word the screens show: key store name, folders, disk encryption, installer |
 
@@ -52,7 +52,8 @@ File paths are built with `pathlib` and `node:path`, never with hard-coded separ
 1. **Python:** add `platforms/<os>.py` implementing `Platform`:
    - `data_dir`;
    - `hardware`;
-   - `keyring_backend`: for example `keyring.backends.macOS.Keyring`, or the Secret Service backend on Linux.
+   - `keyring_backend`: for example `keyring.backends.macOS.Keyring`, or the Secret Service backend on Linux;
+   - engine processes: `exe_suffix`, `child_env` (minimal environment, IPC-32), `kill_on_close_job` (the engine dies with the backend, IPC-50; Windows uses a Job Object) and `orphan_parent_pid` (IPC-52).
 
    Register it in `_BY_SYS_PLATFORM` and `_BY_ID` in `platforms/__init__.py`. Keep `shipped = False` until step 7.
 2. **Electron main:** add `src/main/platform/<os>.ts` implementing `DesktopPlatform`:

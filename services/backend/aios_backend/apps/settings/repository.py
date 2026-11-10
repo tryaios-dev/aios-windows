@@ -18,6 +18,11 @@ def load(session: Session) -> UserSettings:
     return row
 
 
+def find(session: Session) -> UserSettings | None:
+    """The settings row, or None before it is first created. Never writes."""
+    return session.get(UserSettings, SINGLE_ROW)
+
+
 def save(session: Session) -> None:
     session.flush()
 

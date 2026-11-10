@@ -7,6 +7,7 @@ import { ModelsView } from "@/features/models";
 import { ProjectSettingsView } from "@/features/projects";
 import { SearchView } from "@/features/search";
 import { SettingsView } from "@/features/settings";
+import { SpikeScreen } from "@/features/spike"; // SPIKE-D04
 import { RestoreScreen, SetupWizard } from "@/features/setup";
 import { AppLayout } from "./AppLayout";
 import { GlobalDialogs } from "./GlobalDialogs";
@@ -65,6 +66,7 @@ export function AppRoutes() {
           </Route>
           <Route path="search" element={<SearchView />} />
           <Route path="models" element={<ModelsView />} />
+          <Route path="spike" element={<SpikeScreen />} /> {/* SPIKE-D04: temporary */}
           <Route path="settings/:section?" element={<SettingsView />} />
           <Route path="*" element={<HomeRedirect />} />
         </Route>

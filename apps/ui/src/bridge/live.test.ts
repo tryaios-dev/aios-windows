@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AiosBridge, Settings, SetupStatus } from "@aios/bridge-contract";
+import type { AiosBridge, Exchange, Health, InstalledModel, Settings, SetupStatus } from "@aios/bridge-contract";
 import { api } from "./api";
-import { hydrate } from "./live";
+import { hydrate, refreshHealth, resetEngineMemory } from "./live";
 import { useStore } from "./sim/store";
 
 const STATUS: SetupStatus = {
@@ -42,15 +42,41 @@ const HARDWARE = {
   checked_at: "2026-11-05T10:00:00Z",
 };
 
+const HEALTH: Health = {
+  backend: "ok",
+  database: "ok",
+  engine: "not_started",
+  engine_build: null,
+  engine_model: null,
+  engine_cpu_fallback: false,
+  engine_idle_unloaded: false,
+  evidence_writer: "not_started",
+  version: "0.1.0",
+};
+
+const MODEL: InstalledModel = {
+  id: "inst-1",
+  catalogue_entry_id: "qwen3-4b-q4km",
+  name: "Qwen3 4B",
+  file_path: "C:\\Users\\a\\AppData\\Local\\AIOS\\models\\Qwen3-4B-Q4_K_M.gguf",
+  artifact_digest: "7485fe6f",
+  size_bytes: 2497280256,
+  context_length: 32768,
+  licence: "Apache-2.0",
+  tier: "small",
+  installed_at: "2026-11-06T10:00:00Z",
+  source: "offline",
+};
+
 /** Methods this unit test does not call. */
 const unused = <T>() => ({}) as T;
 
 /** A fake window.aios, as preload would expose it. Errors look like Electron's wrapped ones. */
 function fakeBridge() {
   const remote = (code: string) => new Error(`Error invoking remote method 'aios:invoke': Error: ${code}`);
-  const state = { status: { ...STATUS }, settings: { ...SETTINGS } };
+  const state = { status: { ...STATUS }, settings: { ...SETTINGS }, health: { ...HEALTH } };
   const bridge: AiosBridge = {
-    system: { health: async () => ({ backend: "ok", database: "ok", version: "0.1.0" }) },
+    system: { health: vi.fn(async () => state.health) },
     setup: {
       status: vi.fn(async () => state.status),
       createStore: vi.fn(async () => {
@@ -91,7 +117,13 @@ function fakeBridge() {
     },
     // An empty workspace: the full stack is covered by e2e/fullStack.e2e.ts.
     projects: { ...unused(), list: vi.fn(async () => []) },
-    conversations: { ...unused(), list: vi.fn(async () => []), providers: vi.fn(async () => PROVIDERS) },
+    conversations: {
+      ...unused(),
+      list: vi.fn(async () => []),
+      providers: vi.fn(async () => PROVIDERS),
+      send: vi.fn(async () => ({}) as Exchange),
+      messages: vi.fn(async () => []),
+    },
     search: unused(),
     evidence: { ...unused(), list: vi.fn(async () => []), status: vi.fn(async () => EVIDENCE) },
     models: {
@@ -99,6 +131,7 @@ function fakeBridge() {
       installed: vi.fn(async () => []),
       hardware: vi.fn(async () => HARDWARE),
     },
+    spike: unused(), // SPIKE-D04
   } as AiosBridge;
   return { bridge, state };
 }
@@ -107,6 +140,7 @@ let fake: ReturnType<typeof fakeBridge>;
 
 beforeEach(() => {
   useStore.getState().resetFirstRun("fresh");
+  resetEngineMemory();
   fake = fakeBridge();
   window.aios = fake.bridge;
 });
@@ -153,5 +187,105 @@ describe("desktop app: setup and settings come from the backend", () => {
     const r = await api.restore({ backup_path: "D:\\backup", recovery_key: "x", has_package: true });
     expect(r).toEqual({ ok: false, error: expect.stringContaining("doesn't match this Recovery Package") });
     expect(api.backup.keyLength()).toBe(36);
+  });
+});
+
+describe("desktop app: engine state comes from the backend's /health (D-06)", () => {
+  const ready = async (health: Partial<Health>) => {
+    fake.state.status = { ...STATUS, first_run_complete: true };
+    fake.state.health = { ...HEALTH, ...health };
+    await hydrate();
+  };
+
+  it("shows the real engine state, build and loaded model", async () => {
+    vi.mocked(fake.bridge.models.installed).mockResolvedValue([MODEL]);
+    await ready({ engine: "ok", engine_build: "vulkan", engine_model: "Qwen3-4B-Q4_K_M.gguf" });
+    const h = useStore.getState().health;
+    expect(h.engine).toBe("ready");
+    expect(h.engine_build).toBe("vulkan");
+    expect(h.loaded_model_id).toBe("inst-1");
+  });
+
+  it("maps starting, idle unload and failure", async () => {
+    vi.mocked(fake.bridge.models.installed).mockResolvedValue([MODEL]);
+    await ready({ engine: "starting", engine_build: "cpu" });
+    expect(useStore.getState().health.engine).toBe("loading");
+    fake.state.health = { ...HEALTH, engine_idle_unloaded: true };
+    await refreshHealth();
+    expect(useStore.getState().health.engine).toBe("idle_unloaded");
+    fake.state.health = { ...HEALTH, engine: "failed" };
+    await refreshHealth();
+    expect(useStore.getState().health.engine).toBe("failed");
+  });
+
+  it("raises the shared fallback notice when the backend fell back to CPU", async () => {
+    await ready({ engine: "ok", engine_build: "cpu", engine_cpu_fallback: true });
+    expect(useStore.getState().fallbackNotice).toEqual({ at: expect.any(String), dismissed: false });
+    expect(useStore.getState().health.engine_build).toBe("cpu");
+  });
+
+  it("keeps a dismissed notice hidden on later polls", async () => {
+    await ready({ engine: "ok", engine_build: "cpu", engine_cpu_fallback: true });
+    api.system.dismissFallbackNotice();
+    await refreshHealth();
+    await refreshHealth();
+    expect(useStore.getState().fallbackNotice?.dismissed).toBe(true);
+  });
+
+  it("checks /health right after an answer, so the notice comes with that answer", async () => {
+    await ready({});
+    fake.state.health = { ...HEALTH, engine: "ok", engine_build: "cpu", engine_cpu_fallback: true };
+    await api.conversations.send("conv-1", "hello");
+    expect(useStore.getState().fallbackNotice?.dismissed).toBe(false);
+  });
+
+  it("with Safe mode on and no engine running, shows the CPU build", async () => {
+    fake.state.settings = { ...SETTINGS, safe_mode_cpu: true };
+    await ready({ engine_build: null });
+    expect(useStore.getState().health.engine_build).toBe("cpu");
+  });
+
+  it("without a usable graphics card and no engine running, shows the CPU build", async () => {
+    await ready({ engine_build: null }); // the fake hardware has no GPU
+    expect(useStore.getState().health.engine_build).toBe("cpu");
+  });
+
+  it("a virtual display adapter without its own memory does not count as a GPU", async () => {
+    vi.mocked(fake.bridge.models.hardware).mockResolvedValue({
+      ...HARDWARE,
+      gpu: { name: "Red Hat QXL controller", vram_gb: 0, driver_ok: true },
+    });
+    await ready({ engine_build: null });
+    expect(useStore.getState().health.engine_build).toBe("cpu");
+  });
+
+  it("with a working graphics card and no engine running, shows the GPU build", async () => {
+    vi.mocked(fake.bridge.models.hardware).mockResolvedValue({
+      ...HARDWARE,
+      gpu: { name: "RTX", vram_gb: 16, driver_ok: true },
+    });
+    await ready({ engine_build: null });
+    expect(useStore.getState().health.engine_build).toBe("vulkan");
+  });
+
+  it("after the engine has run, keeps showing the build it used", async () => {
+    await ready({ engine: "ok", engine_build: "vulkan" });
+    fake.state.health = { ...HEALTH, engine_idle_unloaded: true };
+    await refreshHealth();
+    expect(useStore.getState().health.engine_build).toBe("vulkan");
+  });
+
+  it("an answer still counts as sent when reading /health fails", async () => {
+    await ready({});
+    vi.mocked(fake.bridge.system.health).mockRejectedValueOnce(new Error("backend_503"));
+    expect(await api.conversations.send("conv-1", "hello")).toEqual({ ok: true });
+  });
+
+  it("turning Safe mode off on a machine without a usable GPU still shows the CPU build", async () => {
+    fake.state.settings = { ...SETTINGS, safe_mode_cpu: true };
+    await ready({ engine_build: null });
+    await api.settings.update({ safe_mode_cpu: false });
+    expect(useStore.getState().settings.safe_mode_cpu).toBe(false);
+    expect(useStore.getState().health.engine_build).toBe("cpu");
   });
 });

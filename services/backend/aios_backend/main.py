@@ -19,9 +19,13 @@ from aios_backend.apps.models.mirror import ModelMirror
 from aios_backend.apps.models.router import router as models_router
 from aios_backend.apps.projects.router import router as projects_router
 from aios_backend.apps.search.router import router as search_router
+from aios_backend.apps.settings import service as settings_service
 from aios_backend.apps.settings.router import router as settings_router
 from aios_backend.apps.setup.router import router as setup_router
+from aios_backend.apps.spike.router import router as spike_router  # SPIKE-D04
+from aios_backend.components import Components
 from aios_backend.config import Settings
+from aios_backend.engine import EngineManager
 from aios_backend.errors import AppError
 from aios_backend.routes import VERSION
 from aios_backend.routes import router as system_router
@@ -77,23 +81,46 @@ def register_error_handlers(app: FastAPI) -> None:
         return JSONResponse({"error": "internal_error"}, status_code=500)
 
 
+def load_safe_mode(database: Database) -> bool:
+    """Saved Safe mode; off if chats.db cannot be read (then nothing else works either)."""
+    try:
+        with database.session() as session:
+            return settings_service.safe_mode_cpu(session)
+    except Exception as exc:
+        log_event(log, "safe_mode_unreadable", error_code=type(exc).__name__)
+        return False
+
+
 def create_app(
     settings: Settings,
     db: Database | None = None,
     answers: AnswerSource | None = None,
-    engine: LocalEngine | None = None,
+    local_engine: LocalEngine | None = None,
     mirror: ModelMirror | None = None,
 ) -> FastAPI:
     """The seams below are None until their modules exist; the endpoints then answer 409/503.
 
-    ``answers``: what produces chat answers. ``engine``: the local engine (llama-server).
+    ``answers``: what produces chat answers. ``local_engine``: start / benchmark / status for the
+    models app (apps/models/engine.py); the process manager itself is ``app.state.engine``.
     ``mirror``: the AIOS model mirror (downloads, catalogue check).
     """
     database = db or Database(settings)
+    components = Components()
+    engine = EngineManager(
+        settings.engine_root,
+        settings.models_dir,
+        settings.models_dir.parent / "engine-tmp",
+        components,
+        idle_unload_s=settings.engine_idle_unload_s,
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        manager: EngineManager = app.state.engine
+        await manager.set_safe_mode(load_safe_mode(database))  # before any engine can start
+        await manager.startup()  # ends orphaned engines (IPC-52), starts the watcher
         yield
+        await manager.shutdown()
         database.dispose()
 
     docs = settings.docs_enabled
@@ -107,9 +134,11 @@ def create_app(
     )
     app.state.settings = settings
     app.state.db = database
+    app.state.components = components
+    app.state.engine = engine
     app.state.answers = answers
     app.state.generations = Generations()
-    app.state.engine = engine
+    app.state.local_engine = local_engine
     app.state.mirror = mirror
     app.state.downloads = Downloads()
     register_error_handlers(app)
@@ -124,5 +153,6 @@ def create_app(
         models_router,
     ):
         app.include_router(router)
+    app.include_router(spike_router)  # SPIKE-D04: temporary, removed by G-01
     app.add_middleware(LoopbackTokenMiddleware, public_paths=settings.public_paths)
     return app
