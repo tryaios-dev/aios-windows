@@ -125,6 +125,35 @@ describe("desktop app against the real backend", () => {
     await ui.api.settings.update({ safe_mode_cpu: false });
   });
 
+  it("settings: Data, About, Health and General show the backend's facts, not simulated ones", async () => {
+    // Data: the evidence stream and epoch the backend holds.
+    expect(store().stream.epoch).toBe(1);
+    expect(store().stream.stream_id).toMatch(/^[0-9a-f-]{36}$/);
+    // About: licences follow the bundled catalogue; General: its version, never checked yet.
+    const names = store().liveInfo?.licences.map((l) => l.name) ?? [];
+    expect(names).toEqual(expect.arrayContaining(["llama.cpp", "SQLCipher", "Electron"]));
+    expect(store().settings.catalogue_version).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(store().settings.last_catalogue_check).toBeNull();
+    // Health: the Company AI row follows the backend's provider flag (off here).
+    expect(store().health.company.enabled).toBe(false);
+
+    // General > Check now works while the automatic update check is switched off (previous test).
+    expect(store().settings.update_check).toBe(false);
+    await ui.api.settings.checkForUpdates();
+    expect(store().settings.last_update_check).not.toBeNull();
+    const catalogue = await ui.api.settings.checkCatalogue();
+    expect(catalogue).toEqual({ ok: false, error: expect.stringContaining("model mirror is not set up") });
+
+    // Health > Support bundle: a real zip of the log folder where the save dialog said.
+    const zip = path.join(data, "support.zip");
+    io.nextSave.push(zip);
+    const bundle = await ui.api.system.supportBundle();
+    expect(bundle).toEqual({ ok: true, file_name: "support.zip", path: zip });
+    expect(existsSync(zip)).toBe(true);
+    expect(await ui.api.system.supportBundle()).toEqual({ ok: false, cancelled: true, error: "" }); // cancelled
+    await ui.api.settings.update({ update_check: true });
+  });
+
   it("projects: create, rename, archive, reclassify (lowering makes a reviewed copy)", async () => {
     const created = await ui.api.projects.create({ name: "Supplier FAQ", classification: "internal" });
     expect(created?.classification).toBe("internal");

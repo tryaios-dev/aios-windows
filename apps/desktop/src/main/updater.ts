@@ -23,8 +23,9 @@ async function askFeed(): Promise<Found | null> {
   return { version: info.version, size_bytes: size };
 }
 
-/** Check now and record the result in the backend (Settings > General shows it). */
-export async function checkForUpdate(backend: BackendHandle): Promise<unknown> {
+/** Check now and record the result in the backend (Settings > General shows it).
+ * `manual`: the user pressed "Check now", which is recorded even while automatic checks are off. */
+export async function checkForUpdate(backend: BackendHandle, manual = false): Promise<unknown> {
   let found: Found | null = null;
   try {
     found = await askFeed();
@@ -32,7 +33,7 @@ export async function checkForUpdate(backend: BackendHandle): Promise<unknown> {
     // Offline or feed unreachable: keep working and record that nothing was found.
     log("updater.check_failed", { component: "updater" });
   }
-  return backend.client.request("POST", "/settings/update-check", { update_available: found });
+  return backend.client.request("POST", "/settings/update-check", { update_available: found, manual });
 }
 
 /**

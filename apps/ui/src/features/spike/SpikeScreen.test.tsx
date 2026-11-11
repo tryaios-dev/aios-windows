@@ -54,7 +54,10 @@ describe("SPIKE-D04 screen", () => {
 
   it("tells the user when the GPU build failed and the CPU build took over", async () => {
     const health = vi.fn().mockResolvedValue({ ...HEALTH, engine: "ok", engine_build: "cpu", engine_model: "m.gguf", engine_cpu_fallback: true });
-    (window as { aios?: Partial<AiosBridge> }).aios = { system: { health }, spike: { ask: vi.fn() } };
+    (window as { aios?: Partial<AiosBridge> }).aios = {
+      system: { health, status: vi.fn(), info: vi.fn(), supportBundle: vi.fn() },
+      spike: { ask: vi.fn() },
+    };
     render(<SpikeScreen />);
     expect(await screen.findByText("Running on the CPU")).toBeTruthy();
     expect(screen.getByText("Running on the CPU build · m.gguf")).toBeTruthy();

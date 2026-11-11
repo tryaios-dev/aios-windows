@@ -10,6 +10,7 @@ from aios_backend.apps.models.engine import LocalEngineDep
 from aios_backend.apps.models.mirror import Mirror
 from aios_backend.apps.models.schemas import (
     BenchmarkOut,
+    CatalogueCheckIn,
     CatalogueCheckOut,
     CatalogueOut,
     DownloadStart,
@@ -40,8 +41,12 @@ def get_catalogue() -> CatalogueOut:
     "/models/catalogue/check",
     summary="Ask the model mirror which catalogue it offers and record the check",
 )
-def check_catalogue(session: DbSession, mirror: Mirror) -> CatalogueCheckOut:
-    return service.check_catalogue(session, mirror)
+def check_catalogue(
+    session: DbSession,
+    mirror: Mirror,
+    body: Annotated[CatalogueCheckIn | None, Body()] = None,
+) -> CatalogueCheckOut:
+    return service.check_catalogue(session, mirror, manual=body.manual if body else False)
 
 
 # ------------------------------------------------------------------ downloads

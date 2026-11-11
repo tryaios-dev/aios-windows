@@ -25,6 +25,7 @@ import {
   refreshProjects,
   refreshSettings,
   refreshStatus,
+  refreshSystem,
   refreshWorkspace,
   reportFailure,
   toConversation,
@@ -51,6 +52,9 @@ const SIM_KEY_LENGTH = 32;
 
 export type IssueResult = { ok: true; key: string } | { ok: false; alreadyIssued: boolean; error: string };
 export type RestoreResult = { ok: true; epoch: number | null } | { ok: false; error: string };
+export type BundleResult =
+  { ok: true; file_name: string; path: string } | { ok: false; cancelled: boolean; error: string };
+export type CatalogueCheckResult = { ok: true } | { ok: false; error: string };
 export type SendResult =
   | { ok: true }
   | {
@@ -272,6 +276,22 @@ export const api = {
       toast("info", "Benchmark not run", "The benchmark needs the local engine, which is not part of this build yet.");
     },
     dismissFallbackNotice: () => s().dismissFallbackNotice(),
+    /** POST /system/support-bundle: the desktop app asks where to save, the backend zips the logs. */
+    supportBundle: async (): Promise<BundleResult> => {
+      if (!isLive()) {
+        await new Promise<void>((r) => setTimeout(r, 900)); // zipping the log folder takes a moment
+        return { ok: true, file_name: "AIOS support bundle.zip", path: "Documents\\AIOS support bundle.zip" };
+      }
+      try {
+        const bundle = await bridge().system.supportBundle();
+        if (!bundle) return { ok: false, cancelled: true, error: "" };
+        return { ok: true, file_name: bundle.file_name, path: bundle.path };
+      } catch (err) {
+        return { ok: false, cancelled: false, error: messageFor(err) };
+      }
+    },
+    /** GET /system/status and /system/info again (Settings > Health opens). */
+    refresh: () => (isLive() ? refreshSystem().catch(() => undefined) : Promise.resolve()),
   },
 
   /** GET /models, POST /models/download, POST /models/import, DELETE /models/{id} */
@@ -333,6 +353,22 @@ export const api = {
         applySettings(await bridge().settings.checkForUpdates());
       } catch (err) {
         reportFailure(err, "Update check failed");
+      }
+    },
+    /** POST /models/catalogue/check as a manual check (runs even while the automatic one is off). */
+    checkCatalogue: async (): Promise<CatalogueCheckResult> => {
+      if (!isLive()) return { ok: true }; // the simulated update check records the catalogue check too
+      try {
+        await bridge().settings.checkCatalogue();
+        return { ok: true };
+      } catch (err) {
+        const error =
+          errorCode(err) === "mirror_unavailable"
+            ? "The model mirror is not set up in this build, so the catalogue was not checked. The bundled catalogue stays in use."
+            : messageFor(err);
+        return { ok: false, error };
+      } finally {
+        await refreshSettings().catch(() => undefined);
       }
     },
     installUpdate: () => s().installUpdate(),

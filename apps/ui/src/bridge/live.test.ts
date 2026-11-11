@@ -76,7 +76,7 @@ function fakeBridge() {
   const remote = (code: string) => new Error(`Error invoking remote method 'aios:invoke': Error: ${code}`);
   const state = { status: { ...STATUS }, settings: { ...SETTINGS }, health: { ...HEALTH } };
   const bridge: AiosBridge = {
-    system: { health: vi.fn(async () => state.health) },
+    system: { ...unused(), health: vi.fn(async () => state.health) },
     setup: {
       status: vi.fn(async () => state.status),
       createStore: vi.fn(async () => {
@@ -99,6 +99,7 @@ function fakeBridge() {
       }),
     },
     settings: {
+      ...unused(),
       get: vi.fn(async () => state.settings),
       update: vi.fn(async (patch) => (state.settings = { ...state.settings, ...patch })),
       network: vi.fn(async () => [
@@ -287,5 +288,101 @@ describe("desktop app: engine state comes from the backend's /health (D-06)", ()
     await api.settings.update({ safe_mode_cpu: false });
     expect(useStore.getState().settings.safe_mode_cpu).toBe(false);
     expect(useStore.getState().health.engine_build).toBe("cpu");
+  });
+});
+
+describe("desktop app: Settings read the backend, not the simulation", () => {
+  const SYSTEM_STATUS = {
+    backend: "ok",
+    database: "ok",
+    version: "0.1.0",
+    engine: { state: "no_model", build: null, loaded_model_id: null },
+    writer: { state: "unavailable" as const, pending: 7 },
+    company: { enabled: true, reachable: false, base_url: "https://ai.example.org", model_name: "company-model" },
+    generating_conversation_id: null,
+  };
+  const INFO = {
+    app_version: "0.1.0",
+    profile: "desktop" as const,
+    schema_version: 6,
+    data_paths: {
+      root: "C:\data",
+      chats_db: "C:\data\chats.db",
+      recovery_package: "C:\data\recovery.pkg",
+      models: "C:\models",
+      logs: "C:\logs",
+      backups: "C:\data\backups",
+    },
+    licences: [{ name: "Catalogue Model", role: "Model weights (Small)", licence: "MIT" }],
+  };
+  const STREAM = {
+    stream_id: "stream-live",
+    device_id: null,
+    epoch: 3,
+    signer_key_id: "signer-live",
+    prior_tip_hash: "tip",
+    created_at: "2026-11-01T10:00:00Z",
+  };
+
+  beforeEach(() => {
+    const b = fake.bridge;
+    b.system.status = vi.fn(async () => SYSTEM_STATUS);
+    b.system.info = vi.fn(async () => INFO);
+    b.system.supportBundle = vi.fn(async () => ({
+      file_name: "aios-support-bundle-1.zip",
+      path: "C:\Users\a\Documents\aios-support-bundle-1.zip",
+      size_bytes: 10,
+      file_count: 1,
+      created_at: "2026-11-11T10:00:00Z",
+    }));
+    b.evidence.stream = vi.fn(async () => STREAM);
+    b.models.catalogue = vi.fn(async () => ({ version: "2026-11-10", signed: false, entries: [] }));
+    b.settings.checkCatalogue = vi.fn(async () => {
+      throw new Error("Error invoking remote method 'aios:invoke': Error: mirror_unavailable");
+    });
+    fake.state.status = { ...STATUS, first_run_complete: true };
+  });
+
+  it("loads the evidence stream, Company AI, licences and log folder", async () => {
+    await hydrate();
+    const s = useStore.getState();
+    expect(s.stream).toMatchObject({ stream_id: "stream-live", epoch: 3, prior_tip_hash: "tip" });
+    expect(s.health.company).toEqual({
+      enabled: true,
+      reachable: false,
+      base_url: "https://ai.example.org",
+      model_name: "company-model",
+    });
+    expect(s.health.evidence_pending).toBe(7);
+    expect(s.liveInfo?.licences.map((l) => l.name)).toEqual(["Catalogue Model"]);
+  });
+
+  it("shows the bundled catalogue version and the backend's last check, never simulated ones", async () => {
+    await hydrate();
+    const { settings } = useStore.getState();
+    expect(settings.catalogue_version).toBe("2026-11-10");
+    expect(settings.last_catalogue_check).toBeNull();
+  });
+
+  it("shows the backend's benchmark, or none, instead of a simulated one", async () => {
+    fake.bridge.models.hardware = vi.fn(async () => ({ ...HARDWARE, benchmark: null }));
+    await hydrate();
+    expect(useStore.getState().hardware.benchmark).toBeUndefined();
+  });
+
+  it("creates a real support bundle where the user chose", async () => {
+    const r = await api.system.supportBundle();
+    expect(fake.bridge.system.supportBundle).toHaveBeenCalledOnce();
+    expect(r).toEqual({ ok: true, file_name: "aios-support-bundle-1.zip", path: expect.stringContaining("Documents") });
+  });
+
+  it("a cancelled save dialog creates nothing and is not an error", async () => {
+    fake.bridge.system.supportBundle = vi.fn(async () => null);
+    expect(await api.system.supportBundle()).toEqual({ ok: false, cancelled: true, error: "" });
+  });
+
+  it("explains a catalogue check that this build cannot run", async () => {
+    const r = await api.settings.checkCatalogue();
+    expect(r).toEqual({ ok: false, error: expect.stringContaining("model mirror is not set up") });
   });
 });

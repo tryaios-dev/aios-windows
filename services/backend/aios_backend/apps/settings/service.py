@@ -110,10 +110,13 @@ def update(
     return get(session)
 
 
-def record_update_check(session: Session, found: UpdateAvailable | None) -> SettingsOut:
-    """Store what the updater found. Ignored while the user has switched the check off."""
+def record_update_check(
+    session: Session, found: UpdateAvailable | None, manual: bool = False
+) -> SettingsOut:
+    """Store what the updater found. An automatic check is refused while the user has switched
+    the check off; a manual "Check now" is always recorded."""
     row = repo.load(session)
-    if not row.update_check:
+    if not row.update_check and not manual:
         raise AppError("update_check_off", 409)
     row.last_update_check = utcnow()
     row.update_available_version = found.version if found else None
@@ -178,10 +181,11 @@ def support_bundle(settings: Settings, path_text: str) -> SupportBundleOut:
 
 
 # ------------------------------------------------------------------ build facts (About, Data)
+# The model rows mirror the bundled Model Catalogue (a test keeps them equal).
 LICENCES: list[tuple[str, str, str]] = [
     ("llama.cpp", "Local inference engine", "MIT"),
-    ("Qwen3", "Model weights", "Apache-2.0"),
-    ("Gemma 4", "Model weights", "Apache-2.0"),
+    ("MiniCPM5 2B", "Model weights (Small)", "Apache-2.0"),
+    ("Ornith 1.5 9B", "Model weights (Medium)", "MIT"),
     ("SQLCipher", "Encrypted database", "BSD-style"),
     ("Electron", "Desktop shell", "MIT"),
 ]

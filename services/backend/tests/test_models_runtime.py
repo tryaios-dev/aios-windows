@@ -326,3 +326,11 @@ def test_model_detail_has_the_verification_checks(
     # Fixed paths still win over the model id.
     assert "entries" in client.get("/models/catalogue").json()
     assert client.get("/models/downloads").json() == []
+
+
+def test_manual_catalogue_check_runs_while_switched_off(runtime: TestClient) -> None:
+    runtime.patch("/settings", json={"catalogue_check": False})
+    assert runtime.post("/models/catalogue/check").json() == {"error": "catalogue_check_off"}
+    out = runtime.post("/models/catalogue/check", json={"manual": True})
+    assert out.status_code == 200 and out.json()["version"]
+    assert runtime.get("/settings").json()["last_catalogue_check"] is not None

@@ -597,12 +597,15 @@ def cancel_download(db: Database, settings: Settings, downloads: Downloads, entr
 
 
 # ------------------------------------------------------------------ catalogue check
-def check_catalogue(session: Session, mirror: ModelMirror | None) -> CatalogueCheckOut:
+def check_catalogue(
+    session: Session, mirror: ModelMirror | None, manual: bool = False
+) -> CatalogueCheckOut:
     """Ask the mirror which catalogue it offers and record the check (Settings > General).
 
     The bundled catalogue stays in use: replacing it needs the catalogue signing key (I-01).
+    An automatic check is refused while switched off; a manual "Check now" always runs.
     """
-    if not repo.setting_flag(session, "catalogue_check"):
+    if not manual and not repo.setting_flag(session, "catalogue_check"):
         raise AppError("catalogue_check_off", 409)
     if mirror is None:
         raise AppError("mirror_unavailable", 503)

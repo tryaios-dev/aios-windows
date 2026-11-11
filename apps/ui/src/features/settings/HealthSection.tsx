@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { api } from "@/bridge/api";
 import { FileArchive } from "lucide-react";
 import { useStore } from "@/bridge/sim/store";
 import { useEngineStatus, useWriterStatus } from "@/components/app/useEngineStatus";
@@ -30,7 +31,8 @@ const BACKEND: Record<
 /** Health: component state, evidence-pending count (F-05), logs and support bundle (L-03). */
 export function HealthSection() {
   const health = useStore((s) => s.health);
-  const companyFlag = useStore((s) => s.sim.companyFlag);
+  const companyFlag = useStore((s) => s.health.company.enabled);
+  const logFolder = useStore((s) => s.liveInfo?.data_paths.logs) ?? LOG_FOLDER;
   const engine = useEngineStatus();
   const writer = useWriterStatus();
   const [bundling, setBundling] = useState(false);
@@ -38,14 +40,22 @@ export function HealthSection() {
   const backend = BACKEND[health.backend];
   const writerDown = health.writer === "unavailable";
 
+  // Opening Health reads the components again, so the rows are current.
+  useEffect(() => void api.system.refresh(), []);
+
   const createBundle = async () => {
     setBundling(true);
     // Zipping the log folder takes a moment; the toast reports where it went.
-    await new Promise<void>((r) => setTimeout(r, 900));
+    const result = await api.system.supportBundle();
     setBundling(false);
+    if (!result.ok) {
+      if (!result.cancelled)
+        useStore.getState().toast({ kind: "deny", title: "Support bundle not created", description: result.error });
+      return;
+    }
     useStore.getState().toast({
       kind: "info",
-      title: "Support bundle saved to Documents\\AIOS support bundle.zip",
+      title: `Support bundle saved to ${result.path}`,
       description: "It contains logs only, never databases. Send it only if you choose to.",
     });
   };
@@ -107,7 +117,7 @@ export function HealthSection() {
         description="Logs stay on this device. They record operations, errors and timings, never message content, prompts or keys. Kept for 14 days or 20 MB, whichever comes first."
       >
         <SettingPanel>
-          <Ledger rows={[{ k: "Log folder", v: <PathValue value={LOG_FOLDER} /> }]} />
+          <Ledger rows={[{ k: "Log folder", v: <PathValue value={logFolder} /> }]} />
           <SettingRow
             label="Support bundle"
             hint="A support bundle is a zip of the log folder and nothing more. Share it with pilot support only if you choose to."

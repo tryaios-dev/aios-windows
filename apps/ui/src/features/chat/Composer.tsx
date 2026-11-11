@@ -30,7 +30,7 @@ export function Composer({ conversation, disabled }: { conversation: Conversatio
   const navigate = useNavigate();
   const generation = useStore((s) => s.generation);
   const installed = useStore((s) => s.installedModels);
-  const companyFlag = useStore((s) => s.sim.companyFlag);
+  const companyFlag = useStore((s) => s.health.company.enabled);
   const company = useStore((s) => s.health.company);
   const pendingText = useStore((s) => s.continueLocally?.pending_text ?? s.modelChoice?.pending_text);
   const busy = !!generation && generation.conversation_id === conversation.id;

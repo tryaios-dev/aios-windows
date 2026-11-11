@@ -39,7 +39,7 @@ def update_settings(body: SettingsPatch, session: DbSession, engine: Engine) -> 
     summary="Record the result of an update check (sent by Electron main's updater)",
 )
 def record_update_check(body: UpdateCheckIn, session: DbSession) -> SettingsOut:
-    return service.record_update_check(session, body.update_available)
+    return service.record_update_check(session, body.update_available, manual=body.manual)
 
 
 @router.get("/system/network", summary="Every host AIOS may connect to")
