@@ -12,6 +12,9 @@ const invoke = (method: string, ...args: unknown[]): Promise<any> => ipcRenderer
 const bridge: AiosBridge = {
   system: {
     health: () => invoke("system.health"),
+    status: () => invoke("system.status"),
+    info: () => invoke("system.info"),
+    supportBundle: () => invoke("system.supportBundle"),
   },
   setup: {
     status: () => invoke("setup.status"),
@@ -25,6 +28,7 @@ const bridge: AiosBridge = {
     update: (patch) => invoke("settings.update", patch),
     network: () => invoke("settings.network"),
     checkForUpdates: () => invoke("settings.checkForUpdates"),
+    checkCatalogue: () => invoke("settings.checkCatalogue"),
   },
   projects: {
     list: () => invoke("projects.list"),
@@ -54,6 +58,7 @@ const bridge: AiosBridge = {
   evidence: {
     list: (projectId) => invoke("evidence.list", projectId),
     status: () => invoke("evidence.status"),
+    stream: () => invoke("evidence.stream"),
     export: () => invoke("evidence.export"),
   },
   models: {

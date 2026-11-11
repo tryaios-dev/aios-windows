@@ -37,6 +37,8 @@ const LICENCES: Array<{ name: string; role: string; licence: string }> = [
 /** About: build identity, honest limits (MVP 8.1, PR-10), licences, pilot support. */
 export function AboutSection() {
   const version = useStore((s) => s.settings.app_version);
+  // Desktop app: the backend's list (it follows the bundled catalogue); browser: the built-in one.
+  const licences = useStore((s) => s.liveInfo?.licences) ?? LICENCES;
   const navigate = useNavigate();
 
   return (
@@ -67,7 +69,7 @@ export function AboutSection() {
         <SettingPanel>
           <Ledger
             dense
-            rows={LICENCES.map((l) => ({
+            rows={licences.map((l) => ({
               rawKey: true,
               k: l.name,
               v: (

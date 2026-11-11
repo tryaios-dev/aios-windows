@@ -69,12 +69,17 @@ function lastChecked(iso: string | null) {
 function UpdatesGroup({ settings }: { settings: Settings }) {
   const [checking, setChecking] = useState(false);
   const [outcome, setOutcome] = useState<"idle" | "current" | "failed">("idle");
+  const [catalogueNote, setCatalogueNote] = useState<string | null>(null);
 
   const checkNow = async () => {
     setChecking(true);
     setOutcome("idle");
+    setCatalogueNote(null);
     try {
       await api.settings.checkForUpdates();
+      // Both hosts once, as the hint says; a catalogue that can't be checked is noted, not an error.
+      const catalogue = await api.settings.checkCatalogue();
+      if (!catalogue.ok) setCatalogueNote(catalogue.error);
       // The notice above takes over when an update is waiting.
       setOutcome(useStore.getState().settings.update_available ? "idle" : "current");
     } catch {
@@ -127,9 +132,13 @@ function UpdatesGroup({ settings }: { settings: Settings }) {
             {outcome === "current" && (
               <span className="inline-flex items-center gap-1.5 text-xs leading-4.5 text-green animate-in">
                 <Check className="size-3 shrink-0" aria-hidden />
-                No update is waiting. AIOS {settings.app_version} and catalogue {settings.catalogue_version} are
-                current.
+                {catalogueNote
+                  ? `No update is waiting. AIOS ${settings.app_version} is current.`
+                  : `No update is waiting. AIOS ${settings.app_version} and catalogue ${settings.catalogue_version} are current.`}
               </span>
+            )}
+            {catalogueNote && outcome !== "failed" && (
+              <span className="mt-1 block text-xs leading-4.5 text-ink-soft animate-in">{catalogueNote}</span>
             )}
             {outcome === "failed" && (
               <Callout tone="deny" compact title="The check did not complete">

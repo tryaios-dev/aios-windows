@@ -181,3 +181,14 @@ def test_project_list_filter(client: TestClient) -> None:
     assert [p["id"] for p in client.get("/projects?archived=false").json()] == [keep["id"]]
     assert [p["id"] for p in client.get("/projects?archived=true").json()] == [old["id"]]
     assert len(client.get("/projects").json()) == 2
+
+
+def test_licences_list_every_catalogue_model(client: TestClient) -> None:
+    """About > Licences names the model weights the bundled catalogue can install."""
+    from aios_backend.apps.models import catalogue
+
+    licences = {
+        item["name"]: item["licence"] for item in client.get("/system/info").json()["licences"]
+    }
+    for entry in catalogue.entries():
+        assert licences.get(entry.name) == entry.licence

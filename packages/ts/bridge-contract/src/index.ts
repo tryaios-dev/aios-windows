@@ -27,6 +27,54 @@ export const Health = z.object({
 });
 export type Health = z.infer<typeof Health>;
 
+/** Backend, engine, evidence writer and Company AI in one call (sidebar dots, Settings > Health). */
+export const SystemStatus = z.object({
+  backend: z.string(),
+  database: z.string(),
+  version: z.string(),
+  engine: z.object({
+    state: z.string(),
+    build: z.enum(["cpu", "vulkan"]).nullable(),
+    loaded_model_id: z.string().nullable(),
+  }),
+  writer: z.object({ state: z.enum(["ok", "unavailable"]), pending: z.number().int() }),
+  company: z.object({
+    enabled: z.boolean(),
+    reachable: z.boolean(),
+    base_url: z.string().nullable(),
+    model_name: z.string().nullable(),
+  }),
+  generating_conversation_id: z.string().nullable(),
+});
+export type SystemStatus = z.infer<typeof SystemStatus>;
+
+/** Build facts for Settings > About and Data. */
+export const SystemInfo = z.object({
+  app_version: z.string(),
+  profile: z.enum(["desktop", "dev", "test"]),
+  schema_version: z.number().int(),
+  data_paths: z.object({
+    root: z.string(),
+    chats_db: z.string(),
+    recovery_package: z.string(),
+    models: z.string(),
+    logs: z.string().nullable(),
+    backups: z.string(),
+  }),
+  licences: z.array(z.object({ name: z.string(), role: z.string(), licence: z.string() })),
+});
+export type SystemInfo = z.infer<typeof SystemInfo>;
+
+/** A zip of the log folder, written where the user chose (Settings > Health). */
+export const SupportBundle = z.object({
+  file_name: z.string(),
+  path: z.string(),
+  size_bytes: z.number().int(),
+  file_count: z.number().int(),
+  created_at: z.string(),
+});
+export type SupportBundle = z.infer<typeof SupportBundle>;
+
 /** SPIKE-D04 (temporary): one local answer. Removed when the chat screen (K-01) uses the gateway (G-01). */
 export const SpikePrompt = z.string().trim().min(1).max(4000);
 export const SpikeAnswer = z.object({
@@ -133,6 +181,10 @@ export const AllowlistEntry = z.object({
   enabled: z.boolean(),
 });
 export type AllowlistEntry = z.infer<typeof AllowlistEntry>;
+
+/** Result of asking the model mirror which catalogue it offers. */
+export const CatalogueCheck = z.object({ version: z.string(), changed: z.boolean(), checked_at: z.string() });
+export type CatalogueCheck = z.infer<typeof CatalogueCheck>;
 
 /* ------------------------------------------------------------------ projects */
 export const Classification = z.enum(["restricted", "internal", "public"]);
@@ -269,6 +321,17 @@ export type EvidenceEvent = z.infer<typeof EvidenceEvent>;
 export const EvidenceStatus = z.object({ writer: z.enum(["ok", "unavailable"]), pending: z.number().int() });
 export type EvidenceStatus = z.infer<typeof EvidenceStatus>;
 
+/** This installation's evidence stream. Each restore starts a new epoch. */
+export const EvidenceStream = z.object({
+  stream_id: z.string(),
+  device_id: z.string().nullable(),
+  epoch: z.number().int(),
+  signer_key_id: z.string(),
+  prior_tip_hash: z.string().nullable(),
+  created_at: z.string().nullable(),
+});
+export type EvidenceStream = z.infer<typeof EvidenceStream>;
+
 /* ------------------------------------------------------------------ models */
 export const Tier = z.enum(["small", "medium"]);
 
@@ -327,6 +390,17 @@ export const Hardware = z.object({
   os: z.string(),
   recommended_tier: Tier.nullable(),
   checked_at: z.string(),
+  /** The latest benchmark on this machine; null until one has run. */
+  benchmark: z
+    .object({
+      model_id: z.string(),
+      engine: z.enum(["cpu", "vulkan"]),
+      tokens_per_second: z.number(),
+      time_to_first_token_ms: z.number().int(),
+      run_at: z.string(),
+    })
+    .nullable()
+    .optional(),
 });
 export type Hardware = z.infer<typeof Hardware>;
 
@@ -337,6 +411,10 @@ export type EngineStatus = z.infer<typeof EngineStatus>;
 export interface AiosBridge {
   system: {
     health(): Promise<Health>;
+    status(): Promise<SystemStatus>;
+    info(): Promise<SystemInfo>;
+    /** System save dialog, then the backend zips the log folder there. Null when cancelled. */
+    supportBundle(): Promise<SupportBundle | null>;
   };
   setup: {
     status(): Promise<SetupStatus>;
@@ -351,8 +429,10 @@ export interface AiosBridge {
     get(): Promise<Settings>;
     update(patch: SettingsPatch): Promise<Settings>;
     network(): Promise<AllowlistEntry[]>;
-    /** Runs the signed update feed check in main and records the result. */
+    /** Runs the signed update feed check in main and records the result (a manual check). */
     checkForUpdates(): Promise<Settings>;
+    /** Asks the model mirror which catalogue it offers (a manual check). */
+    checkCatalogue(): Promise<CatalogueCheck>;
   };
   projects: {
     list(): Promise<Project[]>;
@@ -384,6 +464,7 @@ export interface AiosBridge {
   evidence: {
     list(projectId?: string): Promise<EvidenceEvent[]>;
     status(): Promise<EvidenceStatus>;
+    stream(): Promise<EvidenceStream>;
     export(): Promise<void>;
   };
   models: {

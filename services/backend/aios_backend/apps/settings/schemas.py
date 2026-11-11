@@ -35,9 +35,13 @@ class SettingsPatch(BaseModel):
 
 
 class UpdateCheckIn(BaseModel):
-    """What Electron main's updater found. ``null``: no update waiting."""
+    """What Electron main's updater found. ``null``: no update waiting.
+
+    ``manual``: the user pressed "Check now", which is recorded even while the automatic
+    check is switched off (Settings > General)."""
 
     update_available: UpdateAvailable | None
+    manual: bool = False
 
 
 class AllowlistEntry(BaseModel):

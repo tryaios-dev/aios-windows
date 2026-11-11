@@ -81,6 +81,18 @@
         "title": "BenchmarkOut",
         "type": "object"
       },
+      "CatalogueCheckIn": {
+        "description": "``manual``: the user pressed \"Check now\", allowed even while the automatic check is off.",
+        "properties": {
+          "manual": {
+            "default": false,
+            "title": "Manual",
+            "type": "boolean"
+          }
+        },
+        "title": "CatalogueCheckIn",
+        "type": "object"
+      },
       "CatalogueCheckOut": {
         "properties": {
           "changed": {
@@ -3046,8 +3058,13 @@
         "type": "object"
       },
       "UpdateCheckIn": {
-        "description": "What Electron main's updater found. ``null``: no update waiting.",
+        "description": "What Electron main's updater found. ``null``: no update waiting.\n\n``manual``: the user pressed \"Check now\", which is recorded even while the automatic\ncheck is switched off (Settings > General).",
         "properties": {
+          "manual": {
+            "default": false,
+            "title": "Manual",
+            "type": "boolean"
+          },
           "update_available": {
             "anyOf": [
               {
@@ -4191,6 +4208,23 @@
     "/models/catalogue/check": {
       "post": {
         "operationId": "check_catalogue_models_catalogue_check_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CatalogueCheckIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -4201,6 +4235,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Ask the model mirror which catalogue it offers and record the check",

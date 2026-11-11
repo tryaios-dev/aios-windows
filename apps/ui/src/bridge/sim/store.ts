@@ -41,6 +41,7 @@ import type {
   ToastKind,
 } from "@/lib/types";
 import { DEFAULT_SIM, type SimFlags } from "./flags";
+import type { SystemInfo as LiveSystemInfo } from "@aios/bridge-contract";
 import { hashHex, uuid, ZERO_HASH } from "@/lib/hash";
 import { estimateTokens, truncate } from "@/lib/format";
 import { CATALOGUE, DEFAULT_HARDWARE, catalogueEntry, tierFor } from "@/bridge/sim/catalogue";
@@ -191,6 +192,8 @@ export interface AppState {
   recoveryKey: string | null;
   /** Desktop app: the backend's network allowlist (bridge/live.ts). Null: use the simulated one. */
   liveAllowlist: AllowlistEntry[] | null;
+  /** Desktop app: build facts from the backend (/system/info). Null: use the built-in ones. */
+  liveInfo: LiveSystemInfo | null;
   toasts: Toast[];
   ui: {
     firstRunComplete: boolean;
@@ -401,6 +404,7 @@ function seededState(sim: SimFlags): Omit<AppState, "sim" | "ui" | "toasts"> {
       fallbackNotice: null,
       recoveryKey: null,
       liveAllowlist: null,
+      liveInfo: null,
     };
   }
 }

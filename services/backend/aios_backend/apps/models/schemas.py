@@ -162,6 +162,12 @@ class DownloadStart(BaseModel):
     entry_id: str = Field(min_length=1, max_length=64)
 
 
+class CatalogueCheckIn(BaseModel):
+    """``manual``: the user pressed "Check now", allowed even while the automatic check is off."""
+
+    manual: bool = False
+
+
 class CatalogueCheckOut(BaseModel):
     version: str
     changed: bool
