@@ -76,7 +76,10 @@ export function VerifiedStep({
             {!own && entry.deviation_approval && (
               <Callout tone="caution" title="Third-party quantisation with a recorded deviation approval">
                 Approved by {entry.deviation_approval.reviewer} on {formatDate(entry.deviation_approval.date)}.{" "}
-                {entry.deviation_approval.quality_threshold_result}.
+                {entry.deviation_approval.quality_threshold_result === "pass"
+                  ? "Quality check passed"
+                  : entry.deviation_approval.quality_threshold_result}
+                .
               </Callout>
             )}
             <section>

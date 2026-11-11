@@ -37,4 +37,4 @@ def complete(session: DbSession) -> Completed:
 
 @router.post("/restore", summary="Restore a backup with its recovery key (all or nothing)")
 def restore(body: RestoreIn, db: Db, settings: AppSettings) -> Restored:
-    return service.restore(db, settings, body.backup_path, body.recovery_key)
+    return service.restore(db, settings, body.backup_path, body.recovery_key, body.confirmed)

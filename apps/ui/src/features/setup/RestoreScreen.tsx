@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { motion } from "motion/react";
-import { ArrowRight, FolderOpen, KeyRound } from "lucide-react";
+import { ArrowLeft, ArrowRight, FolderOpen, KeyRound } from "lucide-react";
 import type { BackupFolder } from "@aios/bridge-contract";
 import { api } from "@/bridge/api";
 import { useStore } from "@/bridge/sim/store";
@@ -107,6 +107,8 @@ export function RestoreScreen() {
     resetOutcome();
   };
   const hasInstallation = useStore((s) => s.ui.firstRunComplete);
+  /** Opened from Settings > Data on a finished installation: the way out is back to Settings. */
+  const leave = () => navigate(hasInstallation ? "/settings/data" : "/setup");
   const currentEpoch = useStore((s) => s.stream.epoch);
 
   const submit = async () => {
@@ -146,6 +148,18 @@ export function RestoreScreen() {
   return (
     <SetupFrame eyebrow="Restore">
       <StepBody className="lg:pt-20">
+        {!finished && (
+          <Button
+            type="button"
+            variant="ghost"
+            leading={<ArrowLeft className="size-3.5" />}
+            onClick={leave}
+            disabled={running}
+            className="-ml-2.5 mb-6"
+          >
+            {hasInstallation ? "Back to settings" : "Back to setup"}
+          </Button>
+        )}
         <StepHeading
           title="Restore from a backup"
           lede="Point AIOS at a backup of your data folder and enter the recovery key that was shown once when that installation was set up. Nothing is written until both check out."
@@ -272,8 +286,8 @@ export function RestoreScreen() {
               </Field>
 
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-soft pt-5">
-                <Button type="button" variant="link" onClick={() => navigate("/setup")} disabled={running}>
-                  Set up a new installation instead
+                <Button type="button" variant="link" onClick={leave} disabled={running}>
+                  {hasInstallation ? "Cancel and go back to settings" : "Set up a new installation instead"}
                 </Button>
                 <Button
                   type="submit"

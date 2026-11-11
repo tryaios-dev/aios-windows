@@ -118,3 +118,11 @@ def test_migration_0003_moves_preferences_into_the_new_tables(db: Database) -> N
         keys = set(conn.execute(text("SELECT key FROM preferences")).scalars())
     assert keys == {"settings", "store", "first_run_complete"}
     migrate.upgrade(db)
+
+
+def test_manual_update_check_is_recorded_while_switched_off(client: TestClient) -> None:
+    """ "Check now" runs even when the automatic check is off (Settings > General)."""
+    client.patch("/settings", json={"update_check": False})
+    r = client.post("/settings/update-check", json={"update_available": None, "manual": True})
+    assert r.status_code == 200 and r.json()["last_update_check"] is not None
+    assert r.json()["update_check"] is False  # the switch stays as the user left it

@@ -150,6 +150,7 @@ def cmd_serve_e2e(args: argparse.Namespace) -> int:
     import dataclasses
 
     from aios_backend.__main__ import serve
+    from aios_backend.main import configure_logging
     from aios_common.handshake import read_handshake
 
     hs = read_handshake()
@@ -160,8 +161,10 @@ def cmd_serve_e2e(args: argparse.Namespace) -> int:
         backups_dir=data / "backups",
         recovery_pkg=data / "recovery.pkg",
         models_dir=data / "models",
+        log_file=data / "logs" / "backend.log",  # Settings > Health makes a support bundle of it
     )
     data.mkdir(parents=True, exist_ok=True)
+    configure_logging(settings)  # content-free, as in backend.exe
     db = Database(settings)
     migrate.upgrade(db)
     answers = EchoAnswers() if args.echo else None

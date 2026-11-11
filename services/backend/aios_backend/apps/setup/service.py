@@ -153,7 +153,26 @@ def _unwrap(folder: Path, recovery_key_text: str) -> tuple[rp.Payload, bytes]:
     return payload, file_bytes
 
 
-def restore(db: Database, settings: Settings, backup_path: str, recovery_key_text: str) -> Restored:
+def _in_use(db: Database) -> bool:
+    """Whether this installation holds a finished setup. A locked store counts as not in use:
+    restoring is exactly how a store without its key is opened again."""
+    try:
+        with db.session() as session:
+            return repo.first_run_done(session)
+    except Exception:
+        return False
+
+
+def restore(
+    db: Database,
+    settings: Settings,
+    backup_path: str,
+    recovery_key_text: str,
+    confirmed: bool = False,
+) -> Restored:
+    """Replacing a finished installation needs ``confirmed`` (the "Restore over…" dialog)."""
+    if not confirmed and _in_use(db):
+        raise AppError("confirmation_required", 400)
     folder = Path(backup_path)
     if (folder / "chats.db").resolve() == settings.chats_db.resolve():
         raise AppError("invalid_path", 400)  # that is the live data folder, not a backup
@@ -185,6 +204,7 @@ def restore(db: Database, settings: Settings, backup_path: str, recovery_key_tex
         migrate.upgrade(db)  # the backup may be from an older version
         with db.session() as session:
             repo.mark_restored(session)
+            epoch = 1 + repo.state(session).restore_count
             repo.record_event(
                 session,
                 "continuation",
@@ -206,4 +226,4 @@ def restore(db: Database, settings: Settings, backup_path: str, recovery_key_tex
         raise AppError("restore_failed", 500) from exc
     before.unlink(missing_ok=True)
     _write_atomic(settings.recovery_pkg, pkg_bytes)
-    return Restored(stream_id=payload.stream_id)
+    return Restored(stream_id=payload.stream_id, epoch=epoch)

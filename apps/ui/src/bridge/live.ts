@@ -17,6 +17,8 @@ import {
   type Project as LiveProject,
   type Settings as LiveSettings,
   type SetupStatus,
+  type SystemStatus as LiveSystemStatus,
+  type EvidenceStream as LiveStream,
 } from "@aios/bridge-contract";
 import type {
   Conversation,
@@ -43,6 +45,10 @@ const MESSAGES: Record<string, string> = {
   invalid_setting: "That setting cannot be empty.",
   update_check_off: "Update checks are switched off.",
   invalid_path: "That location can't be used. Choose another file or folder.",
+  log_folder_missing: "There is no log folder yet, so there is nothing to put in a support bundle.",
+  catalogue_check_off: "The model catalogue check is switched off.",
+  catalogue_unreachable: "The model mirror can't be reached. Check the connection and try again.",
+  catalogue_signature_invalid: "The model mirror answered with a catalogue that could not be verified.",
   no_recovery_package:
     "No Recovery Package was found in that folder. Choose the backup of the data folder that contains recovery.pkg.",
   no_backup_database: "That folder has no chats.db. Choose the backup of the whole data folder.",
@@ -77,6 +83,8 @@ const MESSAGES: Record<string, string> = {
     "The evidence writer is not part of this build yet, so the log can't be exported. Every event is kept and waits for it.",
   size_mismatch: "That file is not the model you chose: its size is different from the catalogue entry.",
   digest_mismatch: "That file does not match the catalogue: its SHA-256 is different. It was not installed.",
+  deviation_not_approved:
+    "That model file matches the catalogue, but its third-party review has not passed yet, so it can't be installed.",
   not_gguf: "Choose a .gguf model file.",
   model_installed: "That model is already installed.",
   mirror_unavailable:
@@ -154,6 +162,7 @@ export function toEvent(e: LiveEvent, streamId: string): EvidenceEvent {
 
 export const toModel = (m: LiveModel): InstalledModel => ({ ...m });
 
+/** The backend's last benchmark when it reports one (null: none has run on this machine). */
 export const toHardware = (h: LiveHardware, previous: Hardware): Hardware => ({
   cpu: h.cpu,
   cores: h.cores,
@@ -162,18 +171,53 @@ export const toHardware = (h: LiveHardware, previous: Hardware): Hardware => ({
   free_disk_gb: h.free_disk_gb,
   os: h.os,
   recommended_tier: h.recommended_tier,
-  benchmark: previous.benchmark,
+  benchmark: h.benchmark === undefined ? previous.benchmark : (h.benchmark ?? undefined),
 });
 
 /* ------------------------------------------------------------------ apply */
-/** Backend settings into the store. The catalogue fields stay as they are until a catalogue check runs. */
+/** Version of the catalogue bundled with the backend; read once (GET /models/catalogue). */
+let bundledCatalogue: string | null = null;
+
+/** Backend settings into the store. Until the mirror has been checked, the version shown is the
+ * bundled catalogue's; the last check time is the backend's (null: "Never checked"). */
 export function applySettings(s: LiveSettings): void {
   useStore.setState((st) => ({
     settings: {
       ...st.settings,
       ...s,
-      catalogue_version: s.catalogue_version ?? st.settings.catalogue_version,
-      last_catalogue_check: s.last_catalogue_check ?? st.settings.last_catalogue_check,
+      catalogue_version: s.catalogue_version ?? bundledCatalogue ?? st.settings.catalogue_version,
+      last_catalogue_check: s.last_catalogue_check,
+    },
+  }));
+}
+
+/** Company AI and the writer as the backend reports them (Settings > Health, project header, composer). */
+export function applySystemStatus(status: LiveSystemStatus): void {
+  useStore.setState((s) => ({
+    health: {
+      ...s.health,
+      writer: status.writer.state,
+      evidence_pending: status.writer.pending,
+      company: {
+        enabled: status.company.enabled,
+        reachable: status.company.reachable,
+        base_url: status.company.base_url ?? "",
+        model_name: status.company.model_name ?? "",
+      },
+    },
+  }));
+}
+
+/** The evidence stream (Settings > Data, Evidence tab). The device id comes from the evidence writer. */
+export function applyStream(stream: LiveStream): void {
+  useStore.setState((s) => ({
+    stream: {
+      stream_id: stream.stream_id,
+      device_id: stream.device_id ?? "not assigned yet",
+      epoch: stream.epoch,
+      signer_key_id: stream.signer_key_id,
+      prior_tip_hash: stream.prior_tip_hash ?? undefined,
+      created_at: stream.created_at ?? s.stream.created_at,
     },
   }));
 }
@@ -211,9 +255,28 @@ const ticket = (key: string) => {
 };
 
 export async function refreshSettings(): Promise<void> {
+  if (bundledCatalogue === null) {
+    try {
+      bundledCatalogue = (await bridge().models.catalogue()).version;
+    } catch {
+      // The version shown stays as it is; the settings themselves still load.
+    }
+  }
   const [settings, network] = await Promise.all([bridge().settings.get(), bridge().settings.network()]);
   applySettings(settings);
   applyAllowlist(network);
+}
+
+/** Company AI, writer state (GET /system/status) and build facts (GET /system/info). */
+export async function refreshSystem(): Promise<void> {
+  const [status, info] = await Promise.all([bridge().system.status(), bridge().system.info()]);
+  applySystemStatus(status);
+  useStore.setState({ liveInfo: info });
+}
+
+/** The stream exists once the store has been created; before that there is nothing to load. */
+export async function refreshStream(): Promise<void> {
+  applyStream(await bridge().evidence.stream());
 }
 
 export async function refreshStatus(): Promise<SetupStatus> {
@@ -375,6 +438,8 @@ export async function refreshWorkspace(): Promise<void> {
   await refreshProjects();
   await Promise.all([refreshConversations(), refreshEvents(), refreshModels()]);
   await refreshHealthQuietly(); // after the models: the loaded model is matched against them
+  // Facts for Settings and the Evidence tab: a failed read never fails the workspace.
+  await Promise.all([refreshSystem().catch(() => undefined), refreshStream().catch(() => undefined)]);
 }
 
 /** Run a change against the backend, then reload what it touched. Failures become a toast. */

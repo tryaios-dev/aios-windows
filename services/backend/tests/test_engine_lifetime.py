@@ -10,7 +10,9 @@ import shutil
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import psutil
 import pytest
@@ -45,6 +47,15 @@ def _wait_gone(pid: int, timeout: float = 15) -> bool:
     return False
 
 
+def _wait_health(c: TestClient, done: Callable[[dict[str, Any]], bool], timeout: float = 5) -> Any:
+    deadline = time.monotonic() + timeout
+    while True:
+        health = c.get("/health").json()
+        if done(health) or time.monotonic() > deadline:
+            return health
+        time.sleep(0.05)
+
+
 def test_idle_unload_frees_the_engine_and_the_next_message_restarts_it(
     settings: Settings, db: Database, tmp_path: Path
 ) -> None:
@@ -67,7 +78,8 @@ def test_idle_unload_frees_the_engine_and_the_next_message_restarts_it(
         pid = proc.pid
 
         assert _wait_gone(pid), "engine still running after the idle period"
-        health = c.get("/health").json()
+        # The manager marks the engine unloaded just after the process exits; wait for that.
+        health = _wait_health(c, lambda h: h["engine"] == "not_started")
         assert health["engine"] == "not_started" and health["engine_idle_unloaded"]
 
         _answer(c)  # no user action needed: the next message restarts it

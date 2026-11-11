@@ -4,6 +4,7 @@ import {
   ConversationPatch,
   EvidenceEvent,
   EvidenceStatus,
+  EvidenceStream,
   Exchange,
   Id,
   Message,
@@ -60,6 +61,7 @@ export const evidenceHandlers: Record<string, Handler> = {
     return z.array(EvidenceEvent).parse(await b.client.request("GET", `/evidence${query}`));
   },
   "evidence.status": async (b) => EvidenceStatus.parse(await b.client.request("GET", "/evidence/status")),
+  "evidence.stream": async (b) => EvidenceStream.parse(await b.client.request("GET", "/evidence/stream")),
   "evidence.export": async (b) => {
     await b.client.request("POST", "/evidence/export");
   },

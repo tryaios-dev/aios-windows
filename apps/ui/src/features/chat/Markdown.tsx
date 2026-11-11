@@ -38,7 +38,7 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
       <div className="flex h-8 items-center justify-between border-b border-line-soft bg-paper px-3">
         <span className="label-mono">{language || "code"}</span>
         <button
-          onClick={() => copy(code)}
+          onClick={() => void copy(code)}
           className="inline-flex h-6 items-center gap-1 rounded-sm px-1.5 text-xs text-ink-50 transition-colors hover:bg-ink-6 hover:text-ink"
           aria-label="Copy code"
         >

@@ -27,7 +27,7 @@ export function ProjectLayout() {
   const { projectId } = useParams();
   const project = useStore(selectProject(projectId));
   const setLastProject = useStore((s) => s.setLastProject);
-  const companyFlag = useStore((s) => s.sim.companyFlag);
+  const companyFlag = useStore((s) => s.health.company.enabled);
   const convCount = useStore((s) => s.conversations.filter((c) => c.project_id === projectId && !c.archived).length);
   const evidenceCount = useStore(
     (s) => s.events.filter((e) => e.project_id === projectId || e.project_id === undefined).length,
