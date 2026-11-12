@@ -1,14 +1,17 @@
 """Evidence rules on the backend side: list queued events and report the writer's state.
 
-The evidence writer (services/evidence-writer, not in this repo yet) hash-chains and signs the
-events, makes checkpoints and writes exports. The backend sends it the outbox and stores its
-replies with ``record_append``, ``record_checkpoint`` and ``record_writer_report`` (tables in
-models.py). Until it runs, every event is pending, there are no checkpoints, and an export is
+The evidence writer (services/evidence-writer) hash-chains and signs the events, makes
+checkpoints and builds exports. The pump (aios_backend/evidence/pump.py) sends it the outbox and
+stores its replies with ``record_append``, ``record_checkpoint`` and ``record_writer_report``
+(tables in models.py). While the writer is not running, events stay pending and an export is
 checked and then refused with ``503 writer_unavailable``; nothing is lost.
 """
 
+import io
 import json
-from collections.abc import Sequence
+import os
+import zipfile
+from collections.abc import Callable, Sequence
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -25,6 +28,9 @@ from aios_backend.apps.evidence.schemas import (
     EvidenceStream,
 )
 from aios_backend.errors import AppError, not_found
+from aios_backend.evidence.client import WriterClient, WriterUnavailable
+from aios_common.canonical import utc_time
+from db import outbox
 from db.base import utcnow
 from db.models import EvidenceOutbox
 
@@ -208,24 +214,83 @@ def record_writer_report(
     )
 
 
-def export(session: Session, body: EvidenceExportIn | None) -> EvidenceExportOut:
-    """Check the request now, so the dialog shows the right error; the writer writes the bundle."""
+def _write_atomic(target: Path, data: bytes) -> None:
+    tmp = target.with_name(target.name + ".part")
+    with open(tmp, "wb") as f:
+        f.write(data)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, target)
+
+
+def export(
+    session: Session,
+    body: EvidenceExportIn | None,
+    writer: WriterClient | None = None,
+    flush: Callable[[], object] | None = None,
+) -> EvidenceExportOut:
+    """Check the request, have the writer build and sign the bundle (F-07), write it where the
+    user chose, and record the export. ``flush`` sends queued events to the writer first, so the
+    bundle covers everything recorded up to now."""
     if body is None:
         raise AppError("writer_unavailable", 503)
     if not body.confirmed:
         raise AppError("confirmation_required", 400)
-    if not Path(body.path).is_absolute():
+    target = Path(body.path)
+    if not target.is_absolute() or target.is_dir() or not target.parent.is_dir():
         raise AppError("invalid_path", 400)
+    scope: dict[str, str]
     if body.scope == "project":
         assert body.project_id is not None  # checked by the schema
         if not repo.project_exists(session, body.project_id):
             raise not_found("project")
         found = repo.count(session, body.project_id, None, None)
+        scope = {"kind": "project", "project_id": body.project_id}
     else:
         assert body.from_ is not None and body.to is not None
         if body.from_ > body.to:
             raise AppError("invalid_range", 400)
         found = repo.count(session, None, body.from_, body.to)
+        scope = {"kind": "date_range", "from": utc_time(body.from_), "to": utc_time(body.to)}
     if found == 0:
         raise AppError("nothing_to_export", 409)
-    raise AppError("writer_unavailable", 503)
+    if writer is None:
+        raise AppError("writer_unavailable", 503)
+    try:
+        if flush is not None:
+            flush()
+        bundle, info = writer.export(scope)
+    except WriterUnavailable as exc:
+        code = exc.code if exc.code == "nothing_to_export" else "writer_unavailable"
+        raise AppError(code, 409 if code == "nothing_to_export" else 503) from exc
+    with zipfile.ZipFile(io.BytesIO(bundle)) as zf:
+        manifest = json.loads(zf.read("manifest.json"))
+    _write_atomic(target, bundle)
+    outbox.record(
+        session,
+        "evidence_exported",
+        project_id=body.project_id if body.scope == "project" else None,
+        body={
+            "export_id": info["export_id"],
+            "to_seq": info["to_seq"],
+            "tip_hash": info["tip_hash"],
+            "manifest_digest": info["manifest_digest"],
+            "scope": body.scope,
+        },
+    )
+    epochs = [k["epoch"] for k in manifest["keys"]]
+    return EvidenceExportOut(
+        file_name=target.name,
+        path=str(target),
+        size_bytes=len(bundle),
+        stream_id=manifest["stream_id"],
+        epoch_range=(min(epochs), max(epochs)),
+        first_seq=manifest["scope"]["first_seq"],
+        last_seq=manifest["scope"]["last_seq"],
+        expected_tip=manifest["tip_hash"],
+        signer_key_ids=[k["key_id"] for k in manifest["keys"]],
+        checkpoint_ids=[f"{c['seq']}-{c['key_id'][:16]}" for c in manifest["checkpoints"]],
+        custody=manifest["custody"],
+        exported_at=utcnow(),
+        scope=body.scope,
+    )

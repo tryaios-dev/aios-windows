@@ -41,6 +41,7 @@ import type {
   ProviderType,
   SearchHit,
   Settings,
+  EvidenceExportResult,
 } from "@/lib/types";
 
 const s = () => useStore.getState();
@@ -162,15 +163,21 @@ export const api = {
     },
     /** GET /projects/{id}/evidence */
     evidence: (id: string) => s().events.filter((e) => e.project_id === id),
-    /** POST /evidence/export: needs the evidence writer, which is not in this build. */
-    exportEvidence: async (scope: { project_id: string } | { from: string; to: string }) => {
+    /** POST /evidence/export (F-07). Desktop app: a save dialog, then the writer builds and signs
+     * the bundle. Null when the user cancelled the dialog. */
+    exportEvidence: async (
+      scope: { project_id: string } | { from: string; to: string },
+    ): Promise<EvidenceExportResult | null> => {
       if (!isLive()) return s().exportEvidence(scope);
       try {
-        await bridge().evidence.export();
+        const input =
+          "project_id" in scope
+            ? ({ scope: "project", project_id: scope.project_id } as const)
+            : ({ scope: "range", from: scope.from, to: scope.to } as const);
+        return await bridge().evidence.export(input);
       } catch (err) {
         throw new Error(messageFor(err));
       }
-      throw new Error(messageFor(new Error("writer_unavailable"))); // the backend never answers 200 yet
     },
   },
 
@@ -268,6 +275,22 @@ export const api = {
 
   /** GET /system/hardware, GET /system/network */
   system: {
+    /**
+     * Desktop app: Electron main shows its own confirmation and opens the link (M-20). The renderer
+     * shows no dialog of its own, so a script here cannot open a link without the user's yes.
+     * Browser preview: the caller's dialog has already asked, so open it in a new tab.
+     */
+    openLink: async (url: string): Promise<void> => {
+      if (!isLive()) {
+        window.open(url, "_blank", "noopener,noreferrer");
+        return;
+      }
+      try {
+        await bridge().system.openLink(url);
+      } catch (err) {
+        toast("deny", "Link not opened", messageFor(err));
+      }
+    },
     hardware: () => s().hardware,
     /** Needs the local engine, which is not in the desktop build yet. */
     benchmark: async () => {

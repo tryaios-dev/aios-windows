@@ -1,0 +1,25 @@
+{
+  "current.aiosproj": {
+    "conversations": 1,
+    "messages": 2,
+    "summaries": 1,
+    "classification": "internal",
+    "warnings_contain": []
+  },
+  "older.aiosproj": {
+    "conversations": 1,
+    "messages": 1,
+    "summaries": 0,
+    "classification": "restricted",
+    "warnings_contain": []
+  },
+  "unknown-file.aiosproj": {
+    "conversations": 1,
+    "messages": 2,
+    "summaries": 1,
+    "classification": "internal",
+    "warnings_contain": [
+      "attachments/notes.md"
+    ]
+  }
+}

@@ -3,10 +3,10 @@
 | Item | Value |
 | --- | --- |
 | Version | 1 |
-| Status | draft |
+| Status | draft; golden vectors generated (F-02); frozen when the technical reviewer adds `FROZEN` |
 | Extension rule | Later versions add optional fields only; semantics never change. |
 | Freezes | week 2, by ticket F-02 (golden vectors + `FROZEN`) |
-| Owner of the code | Evidence writer (`services/evidence-writer`, Python) and independent verifier (`apps/verifier-cli`, TypeScript); canonical JSON and hashing in `packages/py/aios-wire` |
+| Owner of the code | Evidence writer (`services/evidence-writer`, Python) and independent verifier (`apps/verifier-cli`, TypeScript); canonical JSON and hashing in `aios_common.canonical` |
 | Schemas | `event.schema.json`, `checkpoint.schema.json`, `export-manifest.schema.json` |
 
 ## 1 Purpose
@@ -89,7 +89,10 @@ the bytes it received (`E_NONCANONICAL`).
 | `disclosure_confirmed` | `conversation_id`, `provider`, `classification` (explicit user confirmation before a Company call) |
 | `model_installed` | `model_id`, `artefact_sha256`, `catalogue_issued_at` |
 | `project_exported` / `project_imported` | `project_id`, `package_id`, `manifest_digest` |
-| `evidence_exported` | `export_id`, `to_seq`, `tip_hash` |
+| `evidence_exported` | `export_id`, `to_seq`, `tip_hash`, `manifest_digest`?, `scope`? (`project`\|`range`) |
+
+The backend also records `project_reclassified`, `project_deleted`, `conversation_deleted`,
+`provider_changed` and `refusal` (ADR 0010). Their bodies follow the same content-free rule.
 
 `project_id`, `conversation_id`, `message_id`, `package_id`, `export_id`: UUID strings.
 `classification`: `restricted` \| `internal` \| `public`.
@@ -102,13 +105,17 @@ fail on them.
 
 Body: `reason` (`restore`\|`key_rotation`), `previous_epoch`, `resumed_from` (`{seq, event_hash}`
 of the last event present in the restored or current log, equal to `prev_hash`),
-`last_checkpoint` (`{seq, event_hash}` of the last checkpoint present), `signing_key`, `key_id`
-(the key of the new epoch; equal to the old one on a restore without rotation).
+`last_checkpoint` (`{seq, event_hash}` of the last checkpoint present; the tip itself when there
+is none), `signing_key`, `key_id` (the key of the new epoch), `previous_key_id`? (the key of
+`previous_epoch`).
 
-- The event has `epoch = previous_epoch + 1` and is the first event of that epoch.
-- On `key_rotation` the writer first writes a checkpoint covering the continuation event signed
-  with the **old** key, then signs subsequent checkpoints with the new key. This hands trust
-  from old key to new key inside the chain.
+- The event has `epoch = previous_epoch + 1` and is the first event of that epoch. Only the
+  writer writes it; an intent of type `continuation` is refused.
+- **Restore always rotates the key** (MVP 9.2, M-16): the restored installation generates a new
+  signing key, declared by the continuation.
+- **Handover checkpoint**: the writer signs two checkpoints over the continuation event: one with
+  the **old** key (the key of `previous_epoch`), then one with the new key. Every later checkpoint
+  uses the new key. This hands trust from the old key to the new one inside the chain.
 - On `restore` the old device may have written events after the backup; the result is a
   branch at `resumed_from`. The verifier reports both branches; neither is an error by itself.
 
@@ -122,9 +129,10 @@ of the last event present in the restored or current log, equal to `prev_hash`),
 - `sig = Ed25519(signing_key, H("aios/evidence/v1/checkpoint", JCS(checkpoint without "sig")))`
   — the 32-byte digest is the signed message.
 - `key_id` must be the key declared for `epoch` by `store_created` (epoch 1) or by the
-  `continuation` that opened the epoch.
-- When: PROPOSED (P-3) after every 100 events or 5 minutes with new events, at clean shutdown,
-  before an evidence export and after every `continuation`.
+  `continuation` that opened the epoch. Exception (section 6): a checkpoint whose `seq` is a
+  `continuation` event may instead be signed with the key of the previous epoch.
+- When: after every 100 events, or on the next append once 5 minutes have passed with new
+  events, at clean shutdown, before an evidence export and after every `continuation` (P-3).
 
 ## 8 Commitments
 
@@ -146,37 +154,81 @@ short or guessable content.
 
 ## 10 Export bundle
 
-A ZIP with exactly three entries (stored or deflate, no encryption, no directories, no
+A ZIP with exactly four entries (stored or deflate, no encryption, no directories, no
 symlinks, UTF-8 names; readers reject any other entry and enforce the sizes in the manifest
 while inflating):
 
 - `manifest.json` (`export-manifest.schema.json`): stream, range, tip, all public keys per epoch,
-  and `{path, size_bytes, sha256}` of every other file.
-- `events.jsonl`: one JCS event per line, LF-terminated, in `seq` order (branches: all events,
-  ordered by `seq` then `event_hash`).
-- `checkpoints.jsonl`: one JCS checkpoint per line; the last one covers `to_seq`.
+  `{path, size_bytes, sha256}` of `events.jsonl` and `checkpoints.jsonl`, the export scope, the
+  checkpoints included and the custody statement (MVP 9.2).
+- `manifest.sig.json` (`manifest-signature.schema.json`): `{"v": 1, "key_id": …, "sig": …}`,
+  where `sig = Ed25519(key, H("aios/evidence/v1/export", JCS(manifest)))` with the key of the
+  epoch of the tip. This makes the manifest a signed statement of what the export must contain.
+- `events.jsonl`: one JCS event per line, LF-terminated, in `seq` order.
+- `checkpoints.jsonl`: one JCS checkpoint per line, in the order they were written; the last one
+  covers `to_seq`.
+
+v1 exports always run from genesis (`from_seq = 0`) to the tip at export time, so every chain
+link can be checked. The scope (question 7) only names which events the user asked for:
+`{"kind": "project", "project_id", "first_seq", "last_seq"}`,
+`{"kind": "date_range", "from", "to", "first_seq", "last_seq"}` or
+`{"kind": "stream", "first_seq", "last_seq"}`. The other events in the range come along; they are
+content-free already.
+
+`custody` is `"self-custodied Local, no anchor"` in Phase 1a.
 
 `manifest_digest = H("aios/evidence/v1/export", JCS(manifest))` is recorded in the
 `evidence_exported` event.
 
-## 11 Verification and rejection
+Several bundles of the same stream can be verified together (for example the export of a restored
+device and of the original device); that is how branches are found.
 
-The verifier reports one of `valid`, `valid_with_branches`, `invalid`, plus warnings. Errors:
+## 11 Verification and verdicts
+
+The verifier prints exactly one verdict (MVP 9.2, M-13, AC-13), plus error codes and warnings:
+
+| Verdict | When |
+| --- | --- |
+| `intact` | Every check passes; one chain. |
+| `altered` | A hash, link or signature fails: `E_SCHEMA`, `E_NONCANONICAL`, `E_PREV_MISMATCH`, `E_EPOCH`, `E_SEQ_GAP`, `E_BAD_SIG`, `E_CHECKPOINT_MISMATCH`, `E_MANIFEST_SIG`, `E_FILE_DIGEST`. |
+| `truncated` | The events stop before the manifest's `to_seq` / `tip_hash` while every event present still verifies (`E_TRUNCATED`). |
+| `branched` | Two valid events share one `prev_hash` (in one bundle or across bundles of the same stream). |
+| `unknown_signer` | A checkpoint or the manifest names a `key_id` that is not the key the chain declares for that epoch, or the epoch-1 key differs from `--expect-key` (`E_UNKNOWN_SIGNER`). Whether the signature itself verifies under the named key does not matter. |
+
+Precedence when several apply: `altered`, then `unknown_signer`, then `truncated`, then
+`branched`, then `intact`.
 
 | Code | Condition |
 | --- | --- |
-| `E_SCHEMA` | Object invalid against its schema, or `v` ≠ 1 |
+| `E_SCHEMA` | Object invalid against its schema, or `v` ≠ 1, or an unexpected ZIP entry |
 | `E_NONCANONICAL` | Bytes differ from JCS re-serialisation |
-| `E_PREV_MISMATCH` | `prev_hash` does not match any event with `seq − 1` |
-| `E_SEQ_GAP` | Missing `seq` between genesis and `to_seq` |
+| `E_PREV_MISMATCH` | `prev_hash` does not match the event with `seq − 1` |
+| `E_SEQ_GAP` | Missing `seq` between genesis and the last event present |
 | `E_EPOCH` | Epoch decreases, jumps by >1, or increases on a non-continuation event |
 | `E_BAD_SIG` | Checkpoint signature does not verify |
-| `E_UNKNOWN_SIGNER` | Checkpoint `key_id` not declared for its epoch |
+| `E_UNKNOWN_SIGNER` | Checkpoint or manifest `key_id` not declared for its epoch (section 7) |
 | `E_CHECKPOINT_MISMATCH` | Checkpoint `event_hash` differs from the computed hash at `seq` |
-| `E_TRUNCATED` | Manifest `to_seq`/`tip_hash` not present, or file digest mismatch |
+| `E_MANIFEST_SIG` | `manifest.sig.json` does not verify |
+| `E_TRUNCATED` | Manifest `to_seq`/`tip_hash` not present in the events |
+| `E_FILE_DIGEST` | `events.jsonl` or `checkpoints.jsonl` size or sha256 differs from the manifest and truncation does not explain it |
 
-Warning `W_UNSIGNED_TAIL`: events after the last checkpoint (reported, not invalid).
-Golden vectors (F-02): valid, altered, truncated, branched, unknown-signer.
+Warnings: `W_UNSIGNED_TAIL` (events after the last checkpoint; reported, not a failure) and
+`W_UNKNOWN_TYPE` (an event type not in the v1 registry; it is still hashed, linked and covered
+by signatures, per the extension rule).
+
+Readings fixed by the reference verifier (`apps/verifier-cli`, F-04), normative for v1:
+- A missing `seq` (`E_SEQ_GAP`) is `altered`, not `truncated`: truncation only removes events
+  from the end.
+- An event present at `to_seq` whose hash differs from `tip_hash` is `altered`
+  (`E_CHECKPOINT_MISMATCH`), not `truncated`: the event is there but is not the signed one.
+- A size/sha256 mismatch of a data file is explained by truncation only when the events are a
+  prefix that verifies and every checkpoint, including those beyond the last event, still
+  verifies under the manifest's keys; otherwise `E_FILE_DIGEST`.
+- The handover checkpoint over a `continuation` is signed by the previous epoch's key; it is
+  not `unknown_signer` (section 7).
+- Each file appears once in the ZIP and each epoch once in `manifest.keys`; anything else is
+  `E_SCHEMA`.
+Golden vectors (F-02) are in `golden-vectors/`, one folder per case with the expected verdict.
 
 ## 12 Spec check
 
@@ -197,8 +249,9 @@ Golden vectors (F-02): valid, altered, truncated, branched, unknown-signer.
   continuation.
 - **P-4 Trust anchor.** PROPOSED: epoch-1 key is taken from `store_created` and the verifier
   prints its `key_id`; an auditor compares it out of band (optionally `--expect-key <key_id>`).
-- **P-5 Restore keeps the key.** PROPOSED: restore increments the epoch but keeps the signing key
-  from the Recovery Package; rotation is a separate `continuation` with `reason: key_rotation`.
+- **P-5 Restore rotates the key.** DECIDED (MVP 9.2 wins over the earlier proposal): restore
+  increments the epoch and generates a new signing key; the recovered key signs the handover
+  checkpoint (section 6).
 - **P-6 Content-free bodies.** PROPOSED: IDs, classifications, digests and counts only; no
   names or titles.
 - **P-7 Unknown event types.** PROPOSED: allowed in later versions; v1 verifiers verify and

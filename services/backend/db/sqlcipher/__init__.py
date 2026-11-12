@@ -42,3 +42,45 @@ def create_sqlcipher_engine(path: Path, key: Callable[[], str]) -> Engine:
         dbapi_conn.execute("PRAGMA foreign_keys = ON")
 
     return engine
+
+
+def _keyed(path: Path, hex_key: str) -> Any:
+    if not _HEX_KEY.fullmatch(hex_key):
+        raise ValueError("database key must be 64 lowercase hex characters")
+    conn = sqlcipher.connect(str(path))
+    conn.execute(f"PRAGMA key = \"x'{hex_key}'\"")
+    conn.execute("PRAGMA cipher_memory_security = ON")
+    return conn
+
+
+def backup_encrypted(source: Path, target: Path, hex_key: str) -> None:
+    """A consistent copy through SQLite's online backup API, encrypted with the same key (E-06).
+
+    Copying the file of an open database can lose committed transactions; the backup API copies
+    a consistent snapshot. Confirmed to work on this SQLCipher build (E-01).
+    """
+    src = _keyed(source, hex_key)
+    try:
+        src.execute("SELECT count(*) FROM sqlite_master")  # wrong key: fail before writing
+        dest = _keyed(target, hex_key)
+        try:
+            src.backup(dest)
+        finally:
+            dest.close()
+    finally:
+        src.close()
+
+
+def integrity_ok(path: Path, hex_key: str) -> bool:
+    """The file opens with ``hex_key`` and passes SQLite's integrity check."""
+    try:
+        conn = _keyed(path, hex_key)
+    except Exception:
+        return False
+    try:
+        row = conn.execute("PRAGMA integrity_check").fetchone()
+        return bool(row) and row[0] == "ok"
+    except Exception:
+        return False
+    finally:
+        conn.close()

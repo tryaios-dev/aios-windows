@@ -23,6 +23,11 @@ export const windows: DesktopPlatform = {
     };
   },
 
+  logsDir(packaged) {
+    // Same folder as the backend's logs (aios_common.paths.logs_dir): %LOCALAPPDATA%\AIOS\logs.
+    return packaged && process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, "AIOS", "logs") : null;
+  },
+
   // The venv's python.exe starts the real interpreter as a child, so killing the parent alone
   // would leave the backend running. taskkill /T stops the whole tree.
   stopProcessTree(child) {

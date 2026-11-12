@@ -75,6 +75,16 @@ export const SupportBundle = z.object({
 });
 export type SupportBundle = z.infer<typeof SupportBundle>;
 
+/**
+ * A link from a model answer the user clicked (M-20). Web links only, no credentials; Electron main
+ * still asks the user to confirm in its own dialog before anything opens.
+ */
+export const ExternalLink = z
+  .string()
+  .max(2048)
+  // http(s), a host with no user or password part, optional port, then a path, query or fragment.
+  .regex(/^https?:\/\/[A-Za-z0-9.-]+(?::\d{1,5})?(?:[/?#][^\s]*)?$/, "not_a_web_link");
+
 /** SPIKE-D04 (temporary): one local answer. Removed when the chat screen (K-01) uses the gateway (G-01). */
 export const SpikePrompt = z.string().trim().min(1).max(4000);
 export const SpikeAnswer = z.object({
@@ -318,6 +328,31 @@ export const EvidenceEvent = z.object({
 });
 export type EvidenceEvent = z.infer<typeof EvidenceEvent>;
 
+/** What to export (F-07): a project, or a date range; the save dialog picks the file. */
+export const EvidenceExportInput = z.discriminatedUnion("scope", [
+  z.object({ scope: z.literal("project"), project_id: z.string().uuid() }).strict(),
+  z.object({ scope: z.literal("range"), from: z.string().datetime(), to: z.string().datetime() }).strict(),
+]);
+export type EvidenceExportInput = z.infer<typeof EvidenceExportInput>;
+
+/** The written bundle, as the backend reports it (POST /evidence/export). */
+export const EvidenceExport = z.object({
+  file_name: z.string(),
+  path: z.string(),
+  size_bytes: z.number().int(),
+  stream_id: z.string(),
+  epoch_range: z.tuple([z.number().int(), z.number().int()]),
+  first_seq: z.number().int(),
+  last_seq: z.number().int(),
+  expected_tip: z.string(),
+  signer_key_ids: z.array(z.string()),
+  checkpoint_ids: z.array(z.string()),
+  custody: z.string(),
+  exported_at: z.string(),
+  scope: z.string(),
+});
+export type EvidenceExport = z.infer<typeof EvidenceExport>;
+
 export const EvidenceStatus = z.object({ writer: z.enum(["ok", "unavailable"]), pending: z.number().int() });
 export type EvidenceStatus = z.infer<typeof EvidenceStatus>;
 
@@ -415,6 +450,8 @@ export interface AiosBridge {
     info(): Promise<SystemInfo>;
     /** System save dialog, then the backend zips the log folder there. Null when cancelled. */
     supportBundle(): Promise<SupportBundle | null>;
+    /** Asks the user in a system dialog, then opens a web link in the default browser. True when opened. */
+    openLink(url: string): Promise<boolean>;
   };
   setup: {
     status(): Promise<SetupStatus>;
@@ -465,7 +502,8 @@ export interface AiosBridge {
     list(projectId?: string): Promise<EvidenceEvent[]>;
     status(): Promise<EvidenceStatus>;
     stream(): Promise<EvidenceStream>;
-    export(): Promise<void>;
+    /** System save dialog, then the evidence writer builds and signs the bundle. Null when cancelled. */
+    export(input: EvidenceExportInput): Promise<EvidenceExport | null>;
   };
   models: {
     catalogue(): Promise<Catalogue>;

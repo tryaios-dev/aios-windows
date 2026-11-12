@@ -6,8 +6,8 @@
 | Status | draft (hostnames are placeholders until B-06) |
 | Extension rule | Later versions add optional fields only; semantics never change. |
 | Freezes | fixed in the 1a build; frozen by ticket G-08 (golden vectors + `FROZEN`) |
-| Owner of the code | Backend `services/backend/aios_backend/net/` (only user of httpx) and `config/allowlist.py`; Electron main `apps/desktop/src/main/updater.ts` for the update feed |
-| Files | `allowlist.json` (data), `allowlist.schema.json` |
+| Owner of the code | Backend `services/backend/aios_backend/net.py` (the only module allowed to open outbound HTTP; a layout test enforces it); Electron main `apps/desktop/src/main/updater.ts` for the update feed |
+| Files | `allowlist.json` (data), `allowlist.schema.json`, `golden-vectors/cases.json` (allow/deny decisions, G-08) |
 
 ## 1 Purpose
 
@@ -50,6 +50,10 @@ freezes the list (the real hosts must also pass the corporate proxy).
    connections at all (CSP, no `fetch`).
 8. The `configured` company host must be a DNS name (same rule as `host`), HTTPS, and is
    changed only in settings by the user.
+
+Implementation notes (backend, `net.py`): redirects are followed by httpx, but every hop passes
+the same check in a request hook before it is sent, at most 3 hops; certificates come from the
+OS trust store via `truststore`. The decisions are pinned by `golden-vectors/cases.json`.
 
 ## 4 Rejection rules for the file
 

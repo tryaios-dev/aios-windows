@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from aios_backend.apps.projects import package
-from aios_common.canonical import jcs
+from aios_common.canonical import jcs, sha256_hex
 
 
 def event_types(client: TestClient) -> list[str]:
@@ -164,29 +164,202 @@ def test_unlisted_and_traversal_entries_are_rejected(client: TestClient, tmp_pat
     assert client.post("/projects/import", json={"path": str(extra)}).json() == {"error": "p_zip"}
 
 
+PROJECT_FILE = {
+    "id": "11111111-1111-4111-8111-111111111111",
+    "name": "P",
+    "description": None,
+    "classification": "public",
+    "classification_source": "project",
+    "created_at": "2026-10-28T09:15:02.123Z",
+    "updated_at": "2026-10-28T09:15:02.123Z",
+}
+
+
 def test_package_reader_checks_references() -> None:
-    project = {
-        "id": "11111111-1111-4111-8111-111111111111",
-        "name": "P",
-        "description": None,
-        "classification": "public",
-        "created_at": "2026-10-28T09:15:02.123Z",
-        "updated_at": "2026-10-28T09:15:02.123Z",
-    }
     conv = {
         "id": "22222222-2222-4222-8222-222222222222",
         "project_id": "33333333-3333-4333-8333-333333333333",  # not the package's project
         "title": "T",
-        "classification": "public",
-        "created_at": project["created_at"],
-        "updated_at": project["created_at"],
+        "classification_effective": "public",
+        "classification_source": "project",
+        "created_at": PROJECT_FILE["created_at"],
+        "updated_at": PROJECT_FILE["created_at"],
         "messages": [],
-        "summaries": [],
     }
-    built = package.build(project, [conv], "0.1.0")
+    built = package.build(PROJECT_FILE, [conv], {}, [], "0.1.0")
     try:
         package.read(built.data)
     except package.PackageError as exc:
         assert exc.code == "P_REFERENCE"
     else:
         raise AssertionError("expected P_REFERENCE")
+
+
+# ------------------------------------------------------------------ MVP 9.5 layout (J-01, J-02)
+def test_m14_export_has_the_mvp_layout_and_checksums(chat: TestClient, tmp_path: Path) -> None:
+    p = make_project(chat)
+    conv = chat.post(f"/projects/{p['id']}/conversations", json={}).json()
+    chat.post(f"/conversations/{conv['id']}/messages", json={"text": "Payment terms?"})
+    target = tmp_path / "layout.aiosproj"
+    chat.post(f"/projects/{p['id']}/export", json={"path": str(target)})
+    with zipfile.ZipFile(target) as zf:
+        names = set(zf.namelist())
+        assert {"manifest.json", "project.json", "models.json", "checksums.txt"} <= names
+        assert f"conversations/{conv['id']}.json" in names
+        manifest = json.loads(zf.read("manifest.json"))
+        checksums = zf.read("checksums.txt")
+        assert manifest["v"] == 1 and manifest["checksums_sha256"] == sha256_hex(checksums)
+        assert manifest["export_event_id"] and manifest["schema_versions"]
+        for line in checksums.decode().splitlines():
+            digest, name = line.split("  ")
+            assert sha256_hex(zf.read(name)) == digest
+        conversation = json.loads(zf.read(f"conversations/{conv['id']}.json"))
+        for item in [conversation, *conversation["messages"]]:
+            assert item["classification_effective"] == "internal"
+            assert item["classification_source"] == "project"
+
+
+def test_m14_a_tampered_checksums_file_is_rejected(client: TestClient, tmp_path: Path) -> None:
+    src = _package(tmp_path, client)
+    with zipfile.ZipFile(src) as zf:
+        text = zf.read("checksums.txt").decode()
+    changed = text.replace(text[:4], "0000", 1).encode()
+    bad = _rewrite(src, tmp_path / "bad-sums.aiosproj", {"checksums.txt": changed})
+    assert client.post("/projects/import", json={"path": str(bad)}).json() == {
+        "error": "p_checksum"
+    }
+
+
+def test_ac_16_a_newer_package_version_is_refused_by_name(
+    client: TestClient, tmp_path: Path
+) -> None:
+    src = _package(tmp_path, client)
+    with zipfile.ZipFile(src) as zf:
+        manifest = json.loads(zf.read("manifest.json"))
+    newer = _rewrite(src, tmp_path / "v2.aiosproj", {"manifest.json": jcs({**manifest, "v": 2})})
+    assert client.post("/projects/import", json={"path": str(newer)}).json() == {
+        "error": "p_version_2"
+    }
+
+
+def test_m14_unknown_files_are_skipped_with_a_warning(client: TestClient, tmp_path: Path) -> None:
+    src = _package(tmp_path, client)
+    extra = _rewrite(src, tmp_path / "extra-file.aiosproj", {"attachments/readme.txt": b"hi"})
+    out = client.post("/projects/import", json={"path": str(extra)}).json()
+    assert any("attachments/readme.txt" in w for w in out["warnings"]), out
+
+
+def test_m14_unknown_fields_and_the_original_source_survive_a_round_trip(
+    chat: TestClient, tmp_path: Path
+) -> None:
+    p = make_project(chat)
+    conv = chat.post(f"/projects/{p['id']}/conversations", json={}).json()
+    chat.post(f"/conversations/{conv['id']}/messages", json={"text": "hello"})
+    src = tmp_path / "src.aiosproj"
+    chat.post(f"/projects/{p['id']}/export", json={"path": str(src)})
+
+    # A later version added fields this one does not know.
+    with zipfile.ZipFile(src) as zf:
+        files = {n: zf.read(n) for n in zf.namelist()}
+    project = json.loads(files["project.json"]) | {
+        "colour": "teal",
+        "classification_source": "review",
+    }
+    conversation = json.loads(files[f"conversations/{conv['id']}.json"])
+    conversation["messages"][0]["reaction"] = "thumbs_up"
+    files["project.json"] = jcs(project)
+    files[f"conversations/{conv['id']}.json"] = jcs(conversation)
+    body = {n: d for n, d in files.items() if n not in ("manifest.json", "checksums.txt")}
+    sums = package.checksums_text(body)
+    manifest = json.loads(files["manifest.json"]) | {"checksums_sha256": sha256_hex(sums)}
+    changed = _rewrite(
+        src,
+        tmp_path / "newer-fields.aiosproj",
+        {**body, "checksums.txt": sums, "manifest.json": jcs(manifest)},
+    )
+    imported = chat.post("/projects/import", json={"path": str(changed)}).json()
+    assert "error" not in imported, imported
+
+    again = tmp_path / "again.aiosproj"
+    chat.post(f"/projects/{imported['project_id']}/export", json={"path": str(again)})
+    with zipfile.ZipFile(again) as zf:
+        project_out = json.loads(zf.read("project.json"))
+        conv_name = next(n for n in zf.namelist() if n.startswith("conversations/"))
+        conv_out = json.loads(zf.read(conv_name))
+    assert project_out["colour"] == "teal"
+    assert project_out["classification_source"] == "import"
+    assert conv_out["messages"][0]["reaction"] == "thumbs_up"
+    with chat.app.state.db.session() as s:  # type: ignore[attr-defined]
+        from db.models import Project
+
+        row = s.get(Project, imported["project_id"])
+        assert row is not None
+        assert json.loads(row.extensions)["imported_classification_source"] == "review"
+
+
+def test_m14_importing_the_same_package_twice_gives_two_independent_projects(
+    chat: TestClient, tmp_path: Path
+) -> None:
+    p = make_project(chat)
+    conv = chat.post(f"/projects/{p['id']}/conversations", json={}).json()
+    chat.post(f"/conversations/{conv['id']}/messages", json={"text": "hello"})
+    src = tmp_path / "twice.aiosproj"
+    chat.post(f"/projects/{p['id']}/export", json={"path": str(src)})
+    first = chat.post("/projects/import", json={"path": str(src)}).json()
+    second = chat.post("/projects/import", json={"path": str(src)}).json()
+    assert first["project_id"] != second["project_id"]
+    a = chat.get(f"/projects/{first['project_id']}/conversations").json()
+    b = chat.get(f"/projects/{second['project_id']}/conversations").json()
+    assert {c["id"] for c in a}.isdisjoint({c["id"] for c in b})
+    chat.delete(f"/projects/{first['project_id']}")
+    assert len(chat.get(f"/projects/{second['project_id']}/conversations").json()) == 1
+
+
+def test_m14_identifiers_travel_unchanged_to_another_store(
+    chat: TestClient, client: TestClient, tmp_path: Path
+) -> None:
+    """``client`` and ``chat`` share one test database here, so the other store is simulated by
+    deleting the project before importing: no identifier collides, and none changes."""
+    p = make_project(chat)
+    conv = chat.post(f"/projects/{p['id']}/conversations", json={}).json()
+    src = tmp_path / "move.aiosproj"
+    chat.post(f"/projects/{p['id']}/export", json={"path": str(src)})
+    chat.delete(f"/projects/{p['id']}")
+    out = chat.post("/projects/import", json={"path": str(src)}).json()
+    assert out["project_id"] == p["id"]
+    assert [c["id"] for c in chat.get(f"/projects/{p['id']}/conversations").json()] == [conv["id"]]
+
+
+def test_ac_05_a_new_project_is_restricted_unless_chosen(client: TestClient) -> None:
+    resp = client.post("/projects", json={"name": "No class given"})
+    assert resp.status_code == 201
+    assert resp.json()["classification"] == "restricted"
+
+
+def test_m04_raising_reaches_every_message_and_summary(chat: TestClient, db) -> None:  # type: ignore[no-untyped-def]
+    from sqlalchemy import select
+
+    from db.models import Message, Summary
+
+    p = make_project(chat, cls="public")
+    conv = chat.post(f"/projects/{p['id']}/conversations", json={"title": "T"}).json()
+    assert chat.post(f"/conversations/{conv['id']}/messages", json={"text": "hi"}).status_code < 300
+    with db.session() as s:
+        s.add(
+            Summary(
+                id="00000000-0000-4000-8000-0000000000aa",
+                conversation_id=conv["id"],
+                covers_until_message_id="x",
+                content="summary",
+                classification_effective="public",
+                classification_source="project",
+                model_id="m",
+                provider="local",
+            )
+        )
+        s.commit()
+    chat.post(f"/projects/{p['id']}/reclassify", json={"to": "restricted"})
+    with db.session() as s:
+        classes = {m.classification_effective for m in s.scalars(select(Message))}
+        classes |= {x.classification_effective for x in s.scalars(select(Summary))}
+    assert classes == {"restricted"}

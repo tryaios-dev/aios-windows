@@ -2,10 +2,14 @@ import { app, BrowserWindow, dialog } from "electron";
 import { startBackend, stopBackend } from "./backend/spawn.js";
 import { registerIpc } from "./ipc/index.js";
 import { currentPlatform } from "./platform/index.js";
-import { onSecondInstance, runStartup } from "./startup.js";
+import { onSecondInstance, runStartup, startFailureText } from "./startup.js";
 import { createMainWindow, createStartupWindow } from "./window.js";
 import { initUpdater } from "./updater.js";
-import { log } from "./logging.js";
+import { configureLogFile, log } from "./logging.js";
+import { disableBackgroundNetworking } from "./chromium.js";
+
+// Before anything else: no Chromium traffic of its own (C-01, AC-21).
+disableBackgroundNetworking(app.commandLine);
 
 // A second launch only wakes the running copy (second-instance below) and exits. app.quit() is
 // not immediate, so it must not reach the start-up below: that would flash "Starting AIOS…"
@@ -33,6 +37,8 @@ app.on("second-instance", () => {
 
 app.whenReady().then(async () => {
   if (!primary) return;
+  const logs = currentPlatform().logsDir(app.isPackaged);
+  if (logs) configureLogFile(logs);
   // The installed app runs only on an OS AIOS ships for (Windows). Development builds may run
   // elsewhere so the code can be worked on, but they are never shipped.
   if (app.isPackaged && !currentPlatform().shipped) {
@@ -56,17 +62,18 @@ app.whenReady().then(async () => {
       else main.once("show", closeStartup);
     },
     askRetryOrQuit: async (code) => {
+      const { detail, canRetry } = startFailureText(code);
       const { response } = await dialog.showMessageBox(showStarting(), {
         type: "error",
         title: "AIOS",
         message: "AIOS could not start",
-        detail: `The background service did not respond. Try again; if it keeps failing, restart the computer.\n\nCode: ${code}`,
-        buttons: ["Retry", "Quit"],
+        detail,
+        buttons: canRetry ? ["Retry", "Quit"] : ["Quit"],
         defaultId: 0,
-        cancelId: 1,
+        cancelId: canRetry ? 1 : 0,
         noLink: true,
       });
-      return response === 0 ? "retry" : "quit";
+      return canRetry && response === 0 ? "retry" : "quit";
     },
     quit: () => app.quit(),
     quitting: () => quitting,

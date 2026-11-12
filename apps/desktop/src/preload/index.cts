@@ -15,6 +15,7 @@ const bridge: AiosBridge = {
     status: () => invoke("system.status"),
     info: () => invoke("system.info"),
     supportBundle: () => invoke("system.supportBundle"),
+    openLink: (url) => invoke("system.openLink", url),
   },
   setup: {
     status: () => invoke("setup.status"),
@@ -59,7 +60,7 @@ const bridge: AiosBridge = {
     list: (projectId) => invoke("evidence.list", projectId),
     status: () => invoke("evidence.status"),
     stream: () => invoke("evidence.stream"),
-    export: () => invoke("evidence.export"),
+    export: (input) => invoke("evidence.export", input),
   },
   models: {
     catalogue: () => invoke("models.catalogue"),

@@ -82,15 +82,38 @@ def main() -> None:
             check("Wrong token -> 401", status == 401, str(status))
             status, _ = get(port, "/docs", token)
             check("No /docs in the shipped exe", status == 404, str(status))
-            status, body = get(port, "/health", token)
-            health = json.loads(body) if status == 200 else {}
+            # The backend starts evidence-writer.exe next to it (IPC-40); its pump reports "ok"
+            # once the writer has answered.
+            deadline = time.monotonic() + 30
+            while True:
+                status, body = get(port, "/health", token)
+                health = json.loads(body) if status == 200 else {}
+                if health.get("evidence_writer") == "ok" or time.monotonic() > deadline:
+                    break
+                time.sleep(0.5)
             check(
-                "GET /health reports backend, engine, evidence writer",
+                "GET /health reports backend, engine, evidence writer (running)",
                 status == 200
                 and health.get("backend") == "ok"
                 and health.get("engine") == "not_started"
-                and health.get("evidence_writer") == "not_started",
+                and health.get("evidence_writer") == "ok",
                 body,
+            )
+            writer_ports = powershell(
+                # Every unconnected socket the writer owns must be on 127.0.0.1, whatever state
+                # Windows reports (its listener can show a blank state). Ports of an established
+                # loopback pair are asyncio's internal socket pair, not listeners; Windows also
+                # lists their bound half as 0.0.0.0.
+                "Get-Process -Name evidence-writer | ForEach-Object { "
+                "$c = Get-NetTCPConnection -OwningProcess $_.Id -ErrorAction SilentlyContinue; "
+                "$pair = $c | Where-Object { $_.State -eq 'Established' } | ForEach-Object LocalPort; "
+                "$c | Where-Object { $_.RemotePort -eq 0 -and $pair -notcontains $_.LocalPort } "
+                "| ForEach-Object LocalAddress } | Sort-Object -Unique"
+            )
+            check(
+                "evidence-writer listens on 127.0.0.1 only",
+                writer_ports == "127.0.0.1",
+                repr(writer_ports),
             )
 
             status, body = get(port, "/models/catalogue", token)
@@ -102,7 +125,10 @@ def main() -> None:
             )
 
             listen = powershell(
-                f"(Get-NetTCPConnection -LocalPort {port} -State Listen).LocalAddress | Sort-Object -Unique"
+                # The listener is the unconnected socket on the READY port; some Windows builds
+                # report its state as blank instead of Listen, so filter by remote port instead.
+                f"(Get-NetTCPConnection -LocalPort {port} | Where-Object {{ $_.RemotePort -eq 0 }})"
+                ".LocalAddress | Sort-Object -Unique"
             )
             check("Listens on 127.0.0.1 only", listen == "127.0.0.1", repr(listen))
 

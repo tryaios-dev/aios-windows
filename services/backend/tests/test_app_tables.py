@@ -19,7 +19,6 @@ from aios_backend.apps.models.engine import EngineState, Fallback
 from aios_backend.config import Settings
 from aios_backend.main import create_app
 from db import migrate
-from db.models import Conversation, Message, Project
 from db.session import Database
 
 HEADERS = {"Authorization": f"Bearer {LAUNCH_TOKEN}"}
@@ -67,35 +66,36 @@ def test_short_queries_and_operator_characters(chat: TestClient) -> None:
 def test_migration_indexes_existing_messages(settings: Settings) -> None:
     db = Database(settings)
     migrate.upgrade(db, "0005")
-    with db.session() as s:
-        s.add(Project(id="p1", name="P", classification="public", classification_source="project"))
-        s.flush()
-        s.add(
-            Conversation(
-                id="c1",
-                project_id="p1",
-                title="T",
-                classification_effective="public",
-                classification_source="project",
-                provider_mode="local",
-                current_provider="local",
-            )
+    # Rows as an older build wrote them: plain SQL, because today's models have newer columns.
+    now = "2026-11-01 10:00:00.000000"
+    with db.engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO projects (id, name, classification, classification_source,"
+                " company_ai_enabled, archived, created_at, updated_at)"
+                " VALUES ('p1', 'P', 'public', 'project', 0, 0, :t, :t)"
+            ),
+            {"t": now},
         )
-        s.flush()
-        s.add(
-            Message(
-                id="m1",
-                conversation_id="c1",
-                position=0,
-                role="user",
-                content="written before the index existed",
-                classification_effective="public",
-                classification_source="project",
-                status="complete",
-                provider="local",
-            )
+        conn.execute(
+            text(
+                "INSERT INTO conversations (id, project_id, title, classification_effective,"
+                " classification_source, provider_mode, current_provider, archived, created_at,"
+                " updated_at) VALUES ('c1', 'p1', 'T', 'public', 'project', 'local', 'local', 0,"
+                " :t, :t)"
+            ),
+            {"t": now},
         )
-        s.commit()
+        conn.execute(
+            text(
+                "INSERT INTO messages (id, conversation_id, position, role, content,"
+                " classification_effective, classification_source, status, provider,"
+                " prompt_tokens, completion_tokens, created_at) VALUES ('m1', 'c1', 0, 'user',"
+                " 'written before the index existed', 'public', 'project', 'complete', 'local',"
+                " 0, 0, :t)"
+            ),
+            {"t": now},
+        )
     migrate.upgrade(db)
     with TestClient(create_app(settings, db), client=LOOPBACK, headers=HEADERS) as c:
         assert hits(c, "before the index") == ["m1"]
@@ -115,7 +115,7 @@ def test_package_history_and_repeat_import_warning(chat: TestClient, tmp_path: P
     assert (history[0]["conversations"], history[0]["messages"]) == (1, 2)
 
     first = chat.post("/projects/import", json={"path": str(target)}).json()
-    assert first["warnings"] == []
+    assert not any("imported before" in w for w in first["warnings"])
     imported = chat.get(f"/projects/{first['project_id']}/packages").json()
     assert [r["direction"] for r in imported] == ["import"]
     assert imported[0]["checksum"] == history[0]["checksum"]

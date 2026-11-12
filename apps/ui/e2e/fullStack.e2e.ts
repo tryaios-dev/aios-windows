@@ -214,9 +214,18 @@ describe("desktop app against the real backend", () => {
     expect(hits[0]!.snippet.toLowerCase()).toContain("price list");
   });
 
-  it("evidence: project events come from the backend; export waits for the writer", async () => {
+  it("evidence: the writer chains the events; export writes a signed bundle where the user chose (F-07)", async () => {
     expect(ui.api.projects.evidence(projectId).length).toBeGreaterThan(0);
-    await expect(ui.api.projects.exportEvidence({ project_id: projectId })).rejects.toThrow(/evidence writer/);
+    // Cancelling the save dialog writes nothing.
+    expect(await ui.api.projects.exportEvidence({ project_id: projectId })).toBeNull();
+
+    const file = path.join(data, "evidence.zip");
+    io.nextSave.push(file);
+    const result = await ui.api.projects.exportEvidence({ project_id: projectId });
+    expect(result?.path).toBe(file);
+    expect(existsSync(file)).toBe(true);
+    expect(result?.custody).toBe("self-custodied Local, no anchor");
+    expect(result?.expected_tip).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it("packages: export to the file chosen in the save dialog, import it back as a new project", async () => {

@@ -27,6 +27,7 @@ const browserPreview: AiosBridge = {
     status: notInElectron,
     info: notInElectron,
     supportBundle: notInElectron,
+    openLink: notInElectron,
   },
   setup: unavailable(),
   settings: unavailable(),

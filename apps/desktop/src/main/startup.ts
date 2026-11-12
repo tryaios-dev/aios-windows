@@ -21,6 +21,26 @@ export function errorCode(err: unknown): string {
   return /^[a-z0-9_]+$/.test(message) ? message : "backend_start_failed";
 }
 
+/** The backend's exit code when chats.db was written by a newer AIOS (C-04 rollback). */
+export const NEWER_DATA_CODE = "backend_exit_4";
+
+/** The "could not start" dialog text for an error code. Retrying never helps with newer data. */
+export function startFailureText(code: string): { detail: string; canRetry: boolean } {
+  if (code === NEWER_DATA_CODE) {
+    return {
+      detail:
+        "Your data was last opened by a newer version of AIOS, so this version cannot open it. " +
+        "Install the newer version again. Your data has not been changed.\n\nCode: " +
+        code,
+      canRetry: false,
+    };
+  }
+  return {
+    detail: `The background service did not respond. Try again; if it keeps failing, restart the computer.\n\nCode: ${code}`,
+    canRetry: true,
+  };
+}
+
 /**
  * Start AIOS so that a window is always on screen: the start-up window first, then the backend.
  * A failed start shows Retry/Quit instead of leaving the app running with no window.

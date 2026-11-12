@@ -1,20 +1,36 @@
-# Invariants (MVP spec Section 5.3) — never violate
+# Invariants (MVP spec Section 5.3, word for word) — never violate
 
-1. The UI never calls a model. The renderer (`apps/ui`) has no `fetch`, Node built-ins or
-   `electron`; its only door is `window.aios`. Every model request goes through
-   `apps/providers` → `apps/gateway` in the backend.
-2. No silent Local → Company transfer. Moving history to the company server always asks.
-3. Secrets live only in the OS keystore and the wrapped Recovery Package — never in files,
-   logs, evidence, settings or environment variables.
-4. The per-launch token is generated in Electron main and sent over stdin. Never argv, env,
-   logs or files. Only Electron main and the backend ever hold it. How every process starts,
-   authenticates and gets its secret (including the engine key and the evidence writer):
-   [contracts/process-ipc/v1/spec.md](contracts/process-ipc/v1/spec.md), rules IPC-01 to IPC-62.
-5. Only `services/evidence-writer` opens `evidence.db`. The backend settings declare exactly
-   one database (`chats.db`).
-6. Logs contain no content: no message text, prompts, tokens, keys or recovery material.
-7. Frozen contracts (`contracts/*/v1/FROZEN`) only gain optional fields; semantics never change.
-8. `apps/verifier-cli` shares no code with anything else in the repo. It reads only `contracts/`.
+1. The UI never calls a model directly. Every model request goes through the provider router and
+   the gateway (PR-04).
+2. No silent Local to Company transfer. Moving history to the company server always asks (PR-03).
+3. Secrets only in the keystore and the wrapped Recovery Package. Never in files, logs, evidence
+   or the renderer (FR-30).
+4. The renderer never holds the backend secret (SR-08).
+5. Only the evidence writer has code that writes evidence.db; it is a separate process from the
+   first build (SR-04).
+6. Logs contain no content (SR-07).
+7. Frozen contracts only gain optional, versioned fields; their semantics never change (Master
+   Section 9.3).
+
+# How this repository applies them
+
+- (1) The renderer (`apps/ui`) has no `fetch`, Node built-ins or `electron`; its only door is
+  `window.aios`. Model requests go through the provider router to the gateway module
+  (`services/backend/aios_backend/gateway/`) in the backend.
+- (2) Moving a conversation or a project to Company needs the confirmation flag the UI sets after
+  its dialog; moving to Local never asks.
+- (3) Also never in settings, environment variables or browser storage. The renderer keeps no
+  conversation content in `localStorage` in the desktop app.
+- (4) The per-launch token is generated in Electron main and sent over stdin. Never argv, env,
+  logs or files. Only Electron main and the backend ever hold it. How every process starts,
+  authenticates and gets its secret (including the engine key and the evidence writer):
+  [contracts/process-ipc/v1/spec.md](contracts/process-ipc/v1/spec.md), rules IPC-01 to IPC-62.
+- (5) Only `services/evidence-writer` opens `evidence.db`. The backend settings declare exactly
+  one database (`chats.db`) and talk to the writer over its authenticated loopback API.
+- (6) No message text, prompts, tokens, keys or recovery material in any log.
+- (7) A contract is frozen when `contracts/<name>/v1/FROZEN` exists and its golden vectors are
+  checked in CI.
+- `apps/verifier-cli` shares no code with anything else in the repo. It reads only `contracts/`.
 
 # Boundaries (enforced in CI)
 

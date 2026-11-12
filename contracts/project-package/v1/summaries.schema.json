@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tryaios.com/contracts/project-package/v1/summaries",
+  "title": "project-package/v1/summaries",
+  "description": "summaries/<conversation_id>.json: the summaries of one conversation; conversation_id equals the file name. Readers keep unknown fields and write them back on export (MVP 9.5).",
+  "x-status": "draft",
+  "type": "object",
+  "required": [
+    "conversation_id",
+    "summaries"
+  ],
+  "properties": {
+    "conversation_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "summaries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "covers_until_message_id",
+          "content",
+          "classification_effective",
+          "model_id",
+          "provider",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/uuid"
+          },
+          "covers_until_message_id": {
+            "$ref": "#/$defs/uuid"
+          },
+          "content": {
+            "type": "string"
+          },
+          "classification_effective": {
+            "$ref": "#/$defs/classification"
+          },
+          "classification_source": {
+            "$ref": "#/$defs/source"
+          },
+          "model_id": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "provider": {
+            "enum": [
+              "local",
+              "company"
+            ]
+          },
+          "created_at": {
+            "$ref": "#/$defs/time"
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "time": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    },
+    "classification": {
+      "enum": [
+        "restricted",
+        "internal",
+        "public"
+      ]
+    },
+    "source": {
+      "enum": [
+        "project",
+        "import",
+        "review"
+      ]
+    },
+    "model_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{1,63}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

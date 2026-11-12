@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tryaios.com/contracts/project-package/v1/models",
+  "title": "project-package/v1/models",
+  "description": "models.json: catalogue references of the models the project used. Never model files. Readers keep unknown fields and write them back on export (MVP 9.5).",
+  "x-status": "draft",
+  "type": "object",
+  "required": [
+    "models"
+  ],
+  "properties": {
+    "models": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "catalogue_entry_id",
+          "name",
+          "artifact_digest"
+        ],
+        "properties": {
+          "catalogue_entry_id": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "artifact_digest": {
+            "$ref": "#/$defs/sha256"
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "time": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    },
+    "classification": {
+      "enum": [
+        "restricted",
+        "internal",
+        "public"
+      ]
+    },
+    "source": {
+      "enum": [
+        "project",
+        "import",
+        "review"
+      ]
+    },
+    "model_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{1,63}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

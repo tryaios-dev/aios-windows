@@ -2,11 +2,22 @@
   "name": "protect-main",
   "target": "branch",
   "enforcement": "active",
-  "conditions": { "ref_name": { "include": ["~DEFAULT_BRANCH"], "exclude": [] } },
+  "conditions": {
+    "ref_name": {
+      "include": [
+        "~DEFAULT_BRANCH"
+      ],
+      "exclude": []
+    }
+  },
   "bypass_actors": [],
   "rules": [
-    { "type": "deletion" },
-    { "type": "non_fast_forward" },
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
     {
       "type": "pull_request",
       "parameters": {
@@ -22,14 +33,62 @@
       "parameters": {
         "strict_required_status_checks_policy": true,
         "required_status_checks": [
-          { "context": "py-lint", "integration_id": 15368 },
-          { "context": "py-unit (ubuntu-latest)", "integration_id": 15368 },
-          { "context": "py-unit (windows-latest)", "integration_id": 15368 },
-          { "context": "ts-lint", "integration_id": 15368 },
-          { "context": "ts-unit (ubuntu-latest)", "integration_id": 15368 },
-          { "context": "ts-unit (windows-latest)", "integration_id": 15368 },
-          { "context": "package-windows", "integration_id": 15368 },
-          { "context": "audit", "integration_id": 15368 }
+          {
+            "context": "py-lint",
+            "integration_id": 15368
+          },
+          {
+            "context": "py-unit (ubuntu-latest)",
+            "integration_id": 15368
+          },
+          {
+            "context": "py-unit (windows-latest)",
+            "integration_id": 15368
+          },
+          {
+            "context": "ts-lint",
+            "integration_id": 15368
+          },
+          {
+            "context": "ts-unit (ubuntu-latest)",
+            "integration_id": 15368
+          },
+          {
+            "context": "ts-unit (windows-latest)",
+            "integration_id": 15368
+          },
+          {
+            "context": "e2e (ubuntu-latest)",
+            "integration_id": 15368
+          },
+          {
+            "context": "e2e (windows-latest)",
+            "integration_id": 15368
+          },
+          {
+            "context": "llama-linux",
+            "integration_id": 15368
+          },
+          {
+            "context": "llama-windows (cpu)",
+            "integration_id": 15368
+          },
+          {
+            "context": "llama-windows (vulkan)",
+            "integration_id": 15368
+          },
+          {
+            "context": "backend-linux-build",
+            "integration_id": 15368
+          },
+          {
+            "context": "package-windows",
+            "integration_id": 15368
+          },
+          {
+            "context": "audit",
+            "integration_id": 15368
+          }
         ]
       }
     }

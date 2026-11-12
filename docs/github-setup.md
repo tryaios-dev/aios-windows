@@ -20,7 +20,8 @@ Settings that cannot live in the repository. Do once, as an organisation owner o
    ```
    This creates the ruleset `protect-main`: no direct pushes or force-pushes, pull request with one
    approval, **code-owner review required**, conversations resolved, and all CI jobs green
-   (`py-lint`, `py-unit` ×2, `ts-lint`, `ts-unit` ×2, `package-windows`, `audit`).
+   (`py-lint`, `py-unit` ×2, `ts-lint`, `ts-unit` ×2, `e2e` ×2, `llama-linux`, `llama-windows` ×2,
+   `package-windows`, `audit`).
    The same can be done by hand under Settings → Rules → Rulesets.
 5. **Merge settings.** Settings → General → Pull requests: allow squash merging; turn on
    "Automatically delete head branches".

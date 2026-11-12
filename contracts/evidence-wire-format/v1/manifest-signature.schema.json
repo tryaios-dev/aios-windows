@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tryaios.com/contracts/evidence-wire-format/v1/manifest-signature",
+  "title": "evidence-wire-format/v1/manifest-signature",
+  "description": "manifest.sig.json: sig = Ed25519(key, SHA-256('aios/evidence/v1/export' || 0x00 || JCS(manifest))).",
+  "x-status": "draft",
+  "type": "object",
+  "required": [
+    "v",
+    "key_id",
+    "sig"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "key_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "sig": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{86}$"
+    }
+  }
+}

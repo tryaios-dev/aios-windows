@@ -68,3 +68,35 @@ def test_evidence_is_pending_until_the_writer_runs(client: TestClient) -> None:
 def test_outbox_refuses_content(body: dict) -> None:
     with pytest.raises(ContentInEvidence):
         check_body(body)
+
+
+def test_ac_08_search_index_rebuilds_after_damage(chat: TestClient) -> None:
+    """H-02: the index is derived data; the repair command rebuilds it from the messages."""
+    from sqlalchemy import text
+
+    from db import search_index
+
+    db = chat.app.state.db  # type: ignore[attr-defined]
+    for name in ("Alpha", "Beta"):
+        project = chat.post("/projects", json={"name": name, "classification": "public"}).json()
+        conv = chat.post(f"/projects/{project['id']}/conversations", json={}).json()
+        chat.post(f"/conversations/{conv['id']}/messages", json={"text": f"quarterly {name} plan"})
+    assert len(chat.get("/search", params={"q": "quarterly"}).json()) == 2
+
+    with db.engine.begin() as conn:  # damage: the index loses its rows
+        conn.execute(text("DROP TABLE message_search"))
+        conn.execute(
+            text(
+                "CREATE VIRTUAL TABLE message_search USING fts5(content, tokenize = 'trigram', content = '')"
+            )
+        )
+    assert chat.get("/search", params={"q": "quarterly"}).json() == []
+
+    assert search_index.rebuild(db) == 4  # two questions, two answers
+    hits = chat.get("/search", params={"q": "quarterly"}).json()
+    assert {h["project_id"] for h in hits} and len(hits) == 2
+    # the triggers still work after a rebuild
+    project = chat.post("/projects", json={"name": "Gamma", "classification": "public"}).json()
+    conv = chat.post(f"/projects/{project['id']}/conversations", json={}).json()
+    chat.post(f"/conversations/{conv['id']}/messages", json={"text": "quarterly Gamma plan"})
+    assert len(chat.get("/search", params={"q": "quarterly"}).json()) == 3

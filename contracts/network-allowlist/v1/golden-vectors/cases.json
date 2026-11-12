@@ -1,0 +1,27 @@
+{
+  "v": 1,
+  "description": "Network allowlist v1 decisions (G-08). Each case: the destination URL, the company server URL configured while the operator flag is on (null = flag off), and whether a request may be sent. Every implementation of the allowlist must give the same answer for every case.",
+  "cases": [
+    { "id": "mirror", "url": "https://models.example.eu/catalogue.json", "company": null, "allowed": true },
+    { "id": "mirror-explicit-port", "url": "https://models.example.eu:443/m/a.gguf", "company": null, "allowed": true },
+    { "id": "mirror-uppercase-host", "url": "https://MODELS.Example.EU/x", "company": null, "allowed": true },
+    { "id": "update-feed", "url": "https://updates.example.eu/latest.yml", "company": null, "allowed": true },
+    { "id": "mirror-plain-http", "url": "http://models.example.eu/x", "company": null, "allowed": false },
+    { "id": "mirror-other-port", "url": "https://models.example.eu:8443/x", "company": null, "allowed": false },
+    { "id": "subdomain", "url": "https://cdn.models.example.eu/x", "company": null, "allowed": false },
+    { "id": "parent-domain", "url": "https://example.eu/x", "company": null, "allowed": false },
+    { "id": "suffix-trick", "url": "https://models.example.eu.evil.test/x", "company": null, "allowed": false },
+    { "id": "credentials-in-url", "url": "https://user:pw@models.example.eu/x", "company": null, "allowed": false },
+    { "id": "ip-literal", "url": "https://93.184.216.34/x", "company": null, "allowed": false },
+    { "id": "ipv6-literal", "url": "https://[2001:db8::1]/x", "company": null, "allowed": false },
+    { "id": "unlisted-host", "url": "https://telemetry.example.com/collect", "company": null, "allowed": false },
+    { "id": "other-scheme", "url": "ftp://models.example.eu/x", "company": null, "allowed": false },
+    { "id": "no-host", "url": "https:///x", "company": null, "allowed": false },
+    { "id": "company-flag-off", "url": "https://ai.company.test/v1/chat", "company": null, "allowed": false },
+    { "id": "company-flag-on", "url": "https://ai.company.test/v1/chat", "company": "https://ai.company.test", "allowed": true },
+    { "id": "company-other-host", "url": "https://other.company.test/v1/chat", "company": "https://ai.company.test", "allowed": false },
+    { "id": "company-other-port", "url": "https://ai.company.test:8443/v1/chat", "company": "https://ai.company.test", "allowed": false },
+    { "id": "company-plain-http", "url": "http://ai.company.test/v1/chat", "company": "https://ai.company.test", "allowed": false },
+    { "id": "fixed-still-allowed-with-company", "url": "https://models.example.eu/x", "company": "https://ai.company.test", "allowed": true }
+  ]
+}

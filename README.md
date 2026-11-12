@@ -31,9 +31,10 @@ Features are named the same on both sides, one folder each:
 Every screen of the `aios-product-designs` prototype is built in the UI. In the desktop app all
 seven areas (setup, settings, projects, chat, search, evidence, models) run on the real backend
 (UI → `window.aios` → Electron IPC → backend; `uv run aios-backend routes`). In a plain browser
-the UI uses its simulated backend (`apps/ui/src/bridge/sim/`). Not in this build: model download
-from the mirror, the local engine (so chat answers "no local model is ready") and the evidence
-writer (events stay pending). `pnpm test:e2e` runs the whole chain against a real backend. The
+the UI uses its simulated backend (`apps/ui/src/bridge/sim/`). The evidence writer
+(`services/evidence-writer`, its own process; ADR 0014) chains, signs and exports every event, and
+`apps/verifier-cli` checks an export. Not in this build: model download from the mirror and a
+ready local model (so chat answers "no local model is ready"). `pnpm test:e2e` runs the whole chain against a real backend. The
 app shell (sidebar, project header) lives in `apps/ui/src/app/`.
 
 AIOS ships for Windows only. Everything OS-specific sits behind one platform layer per
@@ -91,9 +92,10 @@ pnpm check:all                                  # must end green (includes pnpm 
 ```
 
 `pnpm check:all` runs the same checks as CI: lock-file check, ruff lint and format, import rules,
-mypy, `openapi.json` up to date, Python tests (78 backend + 18 shared, including a check that every
-file CI runs is committed), TypeScript typecheck, eslint, vitest, and the end-to-end test
-(UI → preload → main → a real backend). Expected ending: `Tests  13 passed (13)` from the
+mypy, `openapi.json` up to date, the contract vector checks (`tools/contracts/gen_*.py --check`),
+Python tests (backend, evidence writer and shared, including a check that every file CI runs is
+committed), TypeScript typecheck, eslint, vitest (desktop, UI, verifier), and the end-to-end test
+(UI → preload → main → a real backend). Expected ending: `Tests  14 passed (14)` from the
 end-to-end test. Run it before every push; if it is green, CI's lint, test and e2e jobs should be
 too.
 

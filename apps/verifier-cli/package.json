@@ -1,0 +1,26 @@
+{
+  "name": "@aios/verifier-cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Independent verifier for AIOS evidence export bundles (evidence-wire-format v1).",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "aios-verify": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "lint": "echo ok",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  }
+}

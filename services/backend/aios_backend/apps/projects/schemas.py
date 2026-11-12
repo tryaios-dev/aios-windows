@@ -24,7 +24,8 @@ class ProjectOut(BaseModel):
 
 class ProjectCreate(BaseModel):
     name: str = Field(max_length=200)
-    classification: Classification
+    # Restricted unless the user picks Internal or Public at creation (M-04, AC-05).
+    classification: Classification = "restricted"
 
 
 class ProjectPatch(BaseModel):

@@ -1,4 +1,5 @@
 import dataclasses
+import json
 import shutil
 from pathlib import Path
 
@@ -162,6 +163,38 @@ def test_restore_needs_a_recovery_package(
     device = fresh_device(settings, tmp_path)
     resp = device.post("/restore", json={"backup_path": str(folder), "recovery_key": key})
     assert resp.json() == {"error": "no_recovery_package"}
+
+
+def test_ac_17_restore_refuses_a_backup_missing_a_file_its_package_requires(
+    backup: tuple[Path, str], settings: Settings, tmp_path: Path
+) -> None:
+    folder, key = backup
+    (folder / "chats.db").unlink()
+    device = fresh_device(settings, tmp_path)
+    resp = device.post("/restore", json={"backup_path": str(folder), "recovery_key": key})
+    assert resp.json()["error"] in {"r_missing_file", "no_backup_database"}
+    assert device.get("/projects").json() == []
+
+
+def test_ac_17_restore_refuses_a_damaged_database(
+    backup: tuple[Path, str], settings: Settings, tmp_path: Path
+) -> None:
+    folder, key = backup
+    data = bytearray((folder / "chats.db").read_bytes())
+    data[len(data) // 2 : len(data) // 2 + 64] = bytes(64)  # damage a page in the middle
+    (folder / "chats.db").write_bytes(bytes(data))
+    device = fresh_device(settings, tmp_path)
+    resp = device.post("/restore", json={"backup_path": str(folder), "recovery_key": key})
+    assert resp.json()["error"] in {"r_damaged", "r_mismatch"}
+    assert device.get("/projects").json() == []
+
+
+def test_the_package_records_the_mvp_9_4_fields(client: TestClient, settings: Settings) -> None:
+    first_run(client)
+    pkg = json.loads(settings.recovery_pkg.read_bytes())
+    assert pkg["backup_manifest"]["required"] == ["chats.db"]  # no writer in this test
+    assert pkg["security_state_revision"]["migration"]
+    assert pkg["evidence_tip"] is None  # nothing is chained yet at store creation
 
 
 def test_restore_over_a_finished_installation_needs_confirmation(

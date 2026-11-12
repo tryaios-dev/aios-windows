@@ -26,6 +26,8 @@ export interface DesktopPlatform {
   /** True only for an OS AIOS ships for. The installed app refuses to start on any other. */
   readonly shipped: boolean;
   backendCommand(where: BackendLocation): BackendCommand;
+  /** The shared log folder of the installed app (backend, evidence writer, main); null in development. */
+  logsDir(packaged: boolean): string | null;
   /** Stop the backend and every process it started. */
   stopProcessTree(child: ChildProcess): void;
 }

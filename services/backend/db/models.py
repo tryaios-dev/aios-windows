@@ -32,6 +32,9 @@ class Project(Timestamps, Base):
     imported_package_id: Mapped[str | None] = mapped_column(ID, nullable=True)
     company_ai_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Fields this version does not understand, kept from an imported Project Package and written
+    # back on export (MVP 9.5), plus the original classification source of an imported item.
+    extensions: Mapped[str] = mapped_column(Text, default="{}", server_default="{}")
 
 
 class Conversation(Timestamps, Base):
@@ -49,6 +52,9 @@ class Conversation(Timestamps, Base):
     model_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
     last_message_preview: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # Fields this version does not understand, kept from an imported Project Package and written
+    # back on export (MVP 9.5), plus the original classification source of an imported item.
+    extensions: Mapped[str] = mapped_column(Text, default="{}", server_default="{}")
 
 
 class ProviderMove(Base):
@@ -88,6 +94,9 @@ class Message(Base):
     evidence_outbox_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     previous_versions: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON list
     continued_from: Mapped[str | None] = mapped_column(ID, nullable=True)
+    # Fields this version does not understand, kept from an imported Project Package and written
+    # back on export (MVP 9.5), plus the original classification source of an imported item.
+    extensions: Mapped[str] = mapped_column(Text, default="{}", server_default="{}")
 
 
 class Summary(Base):
@@ -104,6 +113,22 @@ class Summary(Base):
     model_id: Mapped[str] = mapped_column(String(100))
     provider: Mapped[str] = mapped_column(ENUM)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    # Fields this version does not understand, kept from an imported Project Package (MVP 9.5).
+    extensions: Mapped[str] = mapped_column(Text, default="{}", server_default="{}")
+
+
+class Provider(Timestamps, Base):
+    """Where a conversation can run (MVP 9.1): ``local`` (the engine on this device) and, behind
+    the operator flag, ``company``. The API key is never here: ``credential_ref`` names the OS key
+    store entry that holds it (FR-30)."""
+
+    __tablename__ = "providers"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)  # local | company
+    type: Mapped[str] = mapped_column(ENUM)  # local | company
+    base_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    credential_ref: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class EvidenceOutbox(Base):
