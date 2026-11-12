@@ -321,9 +321,21 @@ def generate(out: Path) -> None:
         )
 
 
+def _comparable(path: Path) -> bytes:
+    """A file's bytes, or for a ZIP its entries (name, method, time, content). Deflate output
+    depends on the zlib build (Linux and Windows Pythons differ), and the spec allows stored or
+    deflate, so compressed bytes are not part of the vector."""
+    data = path.read_bytes()
+    if path.suffix != ".zip":
+        return data
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        entries = [(i.filename, i.compress_type, i.date_time, zf.read(i)) for i in zf.infolist()]
+    return repr(entries).encode()
+
+
 def _snapshot(folder: Path) -> dict[str, bytes]:
     return {
-        str(p.relative_to(folder)).replace("\\", "/"): p.read_bytes()
+        str(p.relative_to(folder)).replace("\\", "/"): _comparable(p)
         for p in sorted(folder.rglob("*"))
         if p.is_file()
     }

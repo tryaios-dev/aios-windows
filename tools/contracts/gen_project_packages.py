@@ -221,8 +221,20 @@ def generate(out: Path) -> None:
     (out / "README.md").write_text(README, encoding="utf-8", newline="\n")
 
 
+def _comparable(path: Path) -> bytes:
+    """A file's bytes, or for a package (ZIP) its entries (name, method, time, content). Deflate
+    output depends on the zlib build (Linux and Windows Pythons differ); the checksums in each
+    package cover the entry contents, not the compressed bytes."""
+    data = path.read_bytes()
+    if not zipfile.is_zipfile(io.BytesIO(data)):
+        return data
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        entries = [(i.filename, i.compress_type, i.date_time, zf.read(i)) for i in zf.infolist()]
+    return repr(entries).encode()
+
+
 def _snapshot(folder: Path) -> dict[str, bytes]:
-    return {p.name: p.read_bytes() for p in sorted(folder.iterdir()) if p.is_file()}
+    return {p.name: _comparable(p) for p in sorted(folder.iterdir()) if p.is_file()}
 
 
 def main(argv: list[str]) -> int:

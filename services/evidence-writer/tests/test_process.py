@@ -32,6 +32,8 @@ def _start(data_dir: Path, frame: bytes) -> subprocess.Popen[bytes]:
     assert proc.stdin is not None
     proc.stdin.write(frame)
     proc.stdin.close()
+    # communicate() on POSIX flushes a still-set stdin first, which fails once it is closed.
+    proc.stdin = None
     return proc
 
 
