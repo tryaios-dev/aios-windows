@@ -106,6 +106,11 @@ class EngineManager:
         self._job.close()
 
     @property
+    def job(self) -> ChildJob:
+        """The backend's kill-on-close job (IPC-50); the evidence writer joins it too."""
+        return self._job
+
+    @property
     def safe_mode(self) -> bool:
         return self._safe_mode
 

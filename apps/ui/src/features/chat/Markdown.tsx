@@ -6,6 +6,8 @@ import { Check, Copy, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useCopy } from "@/components/ui/layout";
 import { ConfirmDialog } from "@/components/ui/overlays";
+import { api } from "@/bridge/api";
+import { isLive } from "@/bridge/live";
 
 /**
  * Model output is rendered as data (SR-06, M-20). react-markdown never emits raw
@@ -83,7 +85,9 @@ function ConfirmedLink({ href, children }: { href?: string | undefined; children
         href={href}
         onClick={(e) => {
           e.preventDefault();
-          setOpen(true);
+          // Desktop app: Electron main asks the user (its dialog cannot be skipped from here).
+          if (isLive()) void api.system.openLink(href);
+          else setOpen(true);
         }}
         className="inline-flex items-baseline gap-0.5 text-green underline decoration-green/30 underline-offset-2 hover:decoration-green"
       >
@@ -99,7 +103,7 @@ function ConfirmedLink({ href, children }: { href?: string | undefined; children
         confirmLabel="Open link"
         onConfirm={() => {
           setOpen(false);
-          window.open(href, "_blank", "noopener,noreferrer");
+          void api.system.openLink(href);
         }}
       >
         <div className="truncate rounded-md border border-line bg-paper px-3 py-2 font-mono text-xs text-ink-soft">

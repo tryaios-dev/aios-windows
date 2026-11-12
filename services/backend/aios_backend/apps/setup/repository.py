@@ -75,6 +75,26 @@ def add(session: Session, *rows: object) -> None:
     session.flush()
 
 
+def update_store(session: Session, *, signing_key_id: str, package_id: str) -> None:
+    """After a restore: the writer's new signing key and the rewritten recovery.pkg."""
+    identity = session.get(StoreIdentity, SINGLE_ROW)
+    if identity is not None:
+        identity.signing_key_id = signing_key_id
+        identity.package_id = package_id
+
+
+def backup_is_sound(path: Path, key_hex: str) -> bool:
+    """SQLite's own integrity check on a backed-up chats.db (E-04: a damaged copy is refused)."""
+    engine = create_sqlcipher_engine(path, lambda: key_hex)
+    try:
+        with engine.connect() as conn:
+            return conn.execute(text("PRAGMA integrity_check")).scalar() == "ok"
+    except Exception:
+        return False
+    finally:
+        engine.dispose()
+
+
 def backup_stream_id(path: Path, key_hex: str) -> str | None:
     """Open a backed-up chats.db with its key and read its evidence stream id.
 

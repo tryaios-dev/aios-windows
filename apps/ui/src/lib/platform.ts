@@ -19,6 +19,8 @@ export interface PlatformText {
   signIn: string;
   /** Data folders as the user would type them. */
   folders: { root: string; data: string; logs: string; models: string; recoveryPackage: string };
+  /** Where the browser preview pretends an export was saved (the desktop app asks the user). */
+  exportsFolder: string;
   /** Full-disk encryption, and where to turn it on. */
   diskEncryption: string;
   diskEncryptionSettings: string;
@@ -42,6 +44,7 @@ const WINDOWS: PlatformText = {
     models: "%LOCALAPPDATA%\\AIOS\\models\\",
     recoveryPackage: "%LOCALAPPDATA%\\AIOS\\recovery.pkg",
   },
+  exportsFolder: "%USERPROFILE%\\Documents\\AIOS exports",
   diskEncryption: "BitLocker",
   diskEncryptionSettings: "Windows settings",
   installer: "Setup.exe",

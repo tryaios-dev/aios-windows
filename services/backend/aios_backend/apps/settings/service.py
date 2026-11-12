@@ -15,6 +15,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from aios_backend import net
 from aios_backend.apps.settings import repository as repo
 from aios_backend.apps.settings.schemas import (
     AllowlistEntry,
@@ -31,30 +32,8 @@ from db.base import utcnow
 
 EDITABLE = ("update_check", "catalogue_check", "safe_mode_cpu", "default_model_id")
 
-# (id, host, port, purpose, kind). Hostnames are placeholders until B-06 records the real ones.
-ALLOWLIST: list[tuple[str, str, int, str, str]] = [
-    (
-        "model-mirror",
-        "models.example.eu",
-        443,
-        "Model mirror (downloads you start, catalogue check)",
-        "fixed",
-    ),
-    (
-        "update-feed",
-        "updates.example.eu",
-        443,
-        "Signed update feed (at start, at most once a day)",
-        "fixed",
-    ),
-    (
-        "company-server",
-        "configured",
-        443,
-        "Company AI server (only while the provider flag is on)",
-        "configured",
-    ),
-]
+# The allowlist itself lives in aios_backend.net, the one client that enforces it (G-08).
+ALLOWLIST = net.ALLOWLIST
 
 
 def get(session: Session) -> SettingsOut:

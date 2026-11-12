@@ -10,6 +10,16 @@ extraResources:
     to: ui
   - from: ../../build/out/backend
     to: backend
+  # the only program that opens evidence.db (F-01); started by the backend
+  - from: ../../build/out/evidence-writer
+    to: evidence-writer
+  # the independent evidence verifier (F-03/F-04), run with AIOS.exe's own Node.js runtime
+  - from: ../verifier-cli/dist
+    to: verifier/dist
+  - from: ../verifier-cli/package.json
+    to: verifier/package.json
+  - from: ../../build/installer/aios-verify.cmd
+    to: verifier/aios-verify.cmd
   # llama-server CPU + Vulkan, built from the source pinned in build/llama/manifest.json (build/llama/build.py)
   - from: ../../build/out/llama/cpu
     to: llama/cpu
@@ -22,6 +32,8 @@ extraResources:
 # see docs/platforms.md.
 win:
   target: [nsis]
+  # AIOS Soft Square app icon (dark A on a white rounded tile), made by build/icons/make_icons.py
+  icon: ../../build/icons/icon.ico
   # Every .exe/.dll is signed through build/signing/azure-sign.js (B-04); credentials come
   # from masked CI variables only.
   signtoolOptions:
@@ -32,6 +44,10 @@ nsis:
   perMachine: false          # per-user install, no admin
   allowElevation: false
   deleteAppDataOnUninstall: false
+  installerIcon: ../../build/icons/icon.ico
+  uninstallerIcon: ../../build/icons/icon.ico
+  installerHeaderIcon: ../../build/icons/icon.ico
+  include: ../../build/installer/installer.nsh   # "remove my data?" on uninstall, default No (AC-22)
 publish:
   provider: generic
   url: https://updates.example.eu/aios   # B-06: real update-feed host from A-05

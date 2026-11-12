@@ -47,6 +47,7 @@ import { estimateTokens, truncate } from "@/lib/format";
 import { CATALOGUE, DEFAULT_HARDWARE, catalogueEntry, tierFor } from "@/bridge/sim/catalogue";
 import { pickAnswer, summaryFor } from "@/bridge/sim/answers";
 import { platform } from "@/lib/platform";
+import { inElectron } from "@/bridge/index";
 
 /* ------------------------------------------------------------------ */
 /* Constants                                                            */
@@ -126,6 +127,7 @@ const WORKSPACE_FIELDS = [
 type Workspace = Pick<AppState, (typeof WORKSPACE_FIELDS)[number]>;
 
 function loadWorkspace(): Workspace | null {
+  if (inElectron()) return null;
   try {
     const raw = localStorage.getItem(WORKSPACE_KEY);
     if (!raw) return null;
@@ -139,7 +141,22 @@ function loadWorkspace(): Workspace | null {
   }
 }
 
+/*
+ * Desktop app: projects and conversations come from the encrypted store (chats.db) and must never
+ * be copied into browser storage, which Chromium keeps on disk unencrypted (invariant 3, SR-07).
+ * Only the plain-browser preview keeps its simulated workspace. A workspace an older build left
+ * behind is removed at start.
+ */
+if (inElectron()) {
+  try {
+    localStorage.removeItem(WORKSPACE_KEY);
+  } catch {
+    /* storage unavailable: nothing to remove */
+  }
+}
+
 function saveWorkspace(s: AppState) {
+  if (inElectron()) return;
   try {
     if (s.ui.freshInstall && s.ui.firstRunComplete) {
       const w: Record<string, unknown> = {};

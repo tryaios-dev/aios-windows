@@ -37,12 +37,15 @@ jobs:
       - run: uv sync --frozen --all-packages --all-extras
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      - run: uv run mypy packages/py/aios-common/src services/backend/aios_backend services/backend/db
+      - run: uv run mypy packages/py/aios-common/src services/backend/aios_backend services/backend/db services/evidence-writer/aios_evidence_writer
       - run: uv run lint-imports
       - run: uv run aios-backend --profile test migrate   # SQLCipher opens, migrations apply
       - run: uv run aios-backend --profile test check     # at head, models match migrations
       - run: uv run aios-backend openapi --check
       - run: uv run python tools/contracts/gen_process_ipc_vectors.py --check   # golden vectors current (D-02)
+      - run: uv run python tools/contracts/gen_evidence_vectors.py --check      # evidence golden vectors current (F-02)
+      - run: uv run python tools/contracts/gen_project_packages.py --check      # golden project packages current (J-02)
+      - run: uv run python tools/contracts/gen_recovery_reference.py --check    # reference Recovery Package current (E-03)
 
   py-unit:
     strategy:
@@ -172,6 +175,17 @@ jobs:
       - run: uv sync --frozen --all-packages --all-extras
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:e2e
+
+  backend-linux-build:                           # B-03 / AC-23: backend + writer build on Ubuntu (not shipped)
+    needs: [py-unit]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen --all-packages --all-extras
+      - run: uv run pyinstaller build/pyinstaller/backend.spec --distpath build/out --workpath build/out/work --noconfirm
+      - run: uv run pyinstaller build/pyinstaller/evidence-writer.spec --distpath build/out --workpath build/out/work-writer --noconfirm
+      - run: uv run python tools/smoke_linux_build.py
 
   package-windows:
     needs: [py-lint, py-unit, ts-lint, ts-unit, e2e, llama-windows]

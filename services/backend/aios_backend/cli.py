@@ -69,6 +69,14 @@ def cmd_showmigrations(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_rebuild_search(args: argparse.Namespace) -> int:
+    from db import search_index
+
+    count = search_index.rebuild(_db(args))
+    print(f"search index rebuilt from {count} message(s)")
+    return 0
+
+
 def cmd_check(args: argparse.Namespace) -> int:
     db = _db(args)
     print(f"profile   {db.settings.profile}")
@@ -255,6 +263,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_openapi)
 
     sub.add_parser("routes", help="list every route").set_defaults(func=cmd_routes)
+    sub.add_parser(
+        "rebuild-search", help="rebuild the full-text search index from the messages (H-02)"
+    ).set_defaults(func=cmd_rebuild_search)
     return parser
 
 

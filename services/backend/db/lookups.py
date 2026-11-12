@@ -78,3 +78,13 @@ def restore_count(session: Session) -> int:
     """How often this store was restored (table of apps/setup). Each restore starts an epoch."""
     value = session.execute(text("SELECT restore_count FROM setup_state WHERE id = 1")).scalar()
     return int(value or 0)
+
+
+def model_reference(session: Session, model_id: str) -> tuple[str, str, str] | None:
+    """(catalogue entry id, name, artefact digest) of an installed model (table of apps/models),
+    for the models.json of a Project Package. Model files are never exported."""
+    row = session.execute(
+        text("SELECT id, name, artifact_digest FROM installed_models WHERE id = :m"),
+        {"m": model_id},
+    ).first()
+    return None if row is None else (str(row[0]), str(row[1]), str(row[2]))

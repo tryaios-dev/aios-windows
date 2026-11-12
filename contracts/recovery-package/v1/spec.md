@@ -3,11 +3,12 @@
 | Item | Value |
 | --- | --- |
 | Version | 1 |
-| Status | draft |
+| Status | draft (reference package in CI; `FROZEN` on reviewer approval) |
 | Extension rule | Later versions add optional fields only; semantics never change. |
 | Freezes | week 2, by ticket E-03 (reference package as golden vector + `FROZEN`) |
 | Owner of the code | Backend setup app (`services/backend/aios_backend/apps/setup/recovery_package.py`, restore in `service.py`); keys from `aios_common.keystore` |
 | Schemas | `recovery-package.schema.json` (file `recovery.pkg`), `recovery-payload.schema.json` (decrypted payload) |
+| Reference package | `golden-vectors/reference.pkg` (`tools/contracts/gen_recovery_reference.py`, checked in CI) |
 
 ## 1 Purpose
 
@@ -49,6 +50,9 @@ The file is the JCS serialisation of one JSON object (`recovery-package.schema.j
 | `kdf` | `{"alg": "argon2id", "version": 19, "memory_kib", "iterations", "parallelism", "salt"}`; salt 16 random bytes; output 32 bytes |
 | `aead` | `{"alg": "aes-256-gcm", "nonce"}`; nonce 12 random bytes |
 | `ciphertext` | AES-256-GCM ciphertext ‖ 16-byte tag of the payload, base64url |
+| `security_state_revision` | optional (MVP 9.4): `{migration, catalogue}` versions of the store when written (Phase 1a); strings or null |
+| `evidence_tip` | optional (MVP 9.4): `{stream_id, epoch, seq, event_hash}` of the chain when written, or null before the first event |
+| `backup_manifest` | optional (MVP 9.4): `{required: [file names], excluded: [names]}`; today `required` = `chats.db` and the evidence writer's file, `excluded` = logs, backups, `recovery.pkg` |
 
 - `header` = the object without `ciphertext`.
 - `wrap_key = Argon2id(password = recovery_key_bytes, salt, memory_kib, iterations, parallelism, length = 32)`.
@@ -58,6 +62,15 @@ The file is the JCS serialisation of one JSON object (`recovery-package.schema.j
   `H("aios/recovery/v1/file", file_bytes)`.
 
 Every write uses a fresh salt and nonce, so each `wrap_key` encrypts exactly one message.
+
+**MVP 9.4 `auth_tag`.** MVP 9.4 lists an `auth_tag` over the package. Here that role is played
+by the 16-byte GCM tag at the end of `ciphertext`: the whole header (every field above except
+`ciphertext`, including the three optional ones and any unknown field) is the AAD, so changing
+any header byte makes the unwrap fail with `R_UNWRAP`. No separate field is written. The
+reference package's test changes each header field in turn and expects `R_UNWRAP`.
+
+Packages written before the optional fields existed have none of them; readers then require
+only `chats.db` and skip the chain-length check.
 
 ### Payload (`recovery-payload.schema.json`)
 
@@ -82,9 +95,18 @@ PROPOSED for writing: `memory_kib = 65536` (64 MiB), `iterations = 3`, `parallel
 - Rewritten (new `package_id`, same recovery key, new salt/nonce) when a wrapped key rotates.
   A new recovery key is only issued by an explicit user action; the old package is then
   replaced and the new key shown once.
-- Restore: user supplies backup + recovery key → unwrap → open the backed-up `chats.db` with
-  `db_key` → put both keys in Credential Manager → writer appends a `continuation` event
-  (`reason: restore`, new epoch) signed under the same signing key.
+- Restore (M-02): user supplies backup folder + recovery key →
+  1. unwrap; check every file in `backup_manifest.required` is present (`R_MISSING_FILE`);
+  2. open the backed-up `chats.db` with `db_key` and run its integrity check (`R_DAMAGED`);
+  3. put both keys in Credential Manager, migrate `chats.db` if it is older;
+  4. the evidence writer verifies the backed-up chain: same `stream_id` (`R_MISMATCH`), unbroken
+     (`R_EVIDENCE_INVALID`), and not ending before `evidence_tip.seq` (`R_EVIDENCE_SHORT`);
+  5. the writer starts a new epoch with a **new signing key**: a `continuation` event
+     (`reason: restore`, `previous_key_id`) and a handover checkpoint signed by the old key, then
+     one signed by the new key (Evidence Wire Format v1 §6);
+  6. `recovery.pkg` is rewritten under the same recovery key with the new signing seed and the
+     new `evidence_tip`, and `recovery_package_written` is recorded.
+  Any failure undoes the steps (files swapped back, newly added keystore entries removed).
 
 ## 6 Rejection rules
 
@@ -95,7 +117,13 @@ PROPOSED for writing: `memory_kib = 65536` (64 MiB), `iterations = 3`, `parallel
 | `R_CHECKSUM` | Recovery key checksum wrong | "The recovery key has a typing error" |
 | `R_UNWRAP` | AES-GCM authentication fails | "Wrong recovery key, or the package is damaged" (one message; no distinction is possible or offered) |
 | `R_PAYLOAD` | Payload schema invalid, `stream_id` differs from header, or the public key derived from `signing_key_seed` does not match `signing_key_id` | "The package is damaged" |
-| `R_MISMATCH` | Package `stream_id` differs from the backup's evidence stream | "This recovery key belongs to a different store" |
+| `R_MISMATCH` | Package `stream_id` differs from the backup's evidence stream, or `db_key` does not open the backup | "This recovery key belongs to a different store" |
+| `R_MISSING_FILE` | A file in `backup_manifest.required` is not in the backup | "The backup is incomplete" |
+| `R_DAMAGED` | The backed-up `chats.db` fails its integrity check | "The backup is damaged" |
+| `R_EVIDENCE_INVALID` | The backed-up evidence chain does not verify | "The backup's evidence log is damaged" |
+| `R_EVIDENCE_SHORT` | The backed-up chain ends before `evidence_tip` (an older backup than the package) | "This backup is older than the recovery package" |
+
+The API reports these codes in lower case (`r_missing_file`, …).
 
 Unwrapped key material lives only in memory, is never logged and is written only to Credential
 Manager. No retry limit is enforced by the file (offline attack cost comes from 160-bit key
@@ -123,5 +151,10 @@ entropy, not from Argon2id).
   only) is not included; the user re-enters it after restore.
 - **P-5 Header in clear.** PROPOSED: `stream_id`, `signing_key_id`, `created_at` are readable
   without the key (lets the UI match package and backup before asking for the key); all of it
-  is authenticated as AAD.
+  is authenticated as AAD. The MVP 9.4 fields (`security_state_revision`, `evidence_tip`,
+  `backup_manifest`) are header fields for the same reason: restore checks them before it
+  touches the current store.
+- **P-7 Signing key on restore.** DECIDED (implemented): rotated. The restored device gets a new
+  signing key; the old key signs the handover, so a copy of the old package cannot keep
+  signing in parallel unnoticed (two signers after the same tip show as a branch).
 - **P-6 Container.** PROPOSED: a single JSON file, not a ZIP; it contains no content.

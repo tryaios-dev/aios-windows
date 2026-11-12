@@ -1,0 +1,13 @@
+{
+  "recovery_key": "185G-R38E-1W81-24GK-2GAH-C5RR-34D1-P70X-X14P",
+  "package_id": "9a9a9a9a-0000-4000-8000-000000000001",
+  "stream_id": "3f2a9c1e-7b4d-4e8f-9a01-0c1d2e3f4a5b",
+  "db_key_hex": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+  "signing_seed_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+  "signing_key_id": "27bae617870a907c45fe37e0beef3b7dd1499bdeeb64051e0658310f3d585093",
+  "required_files": [
+    "chats.db",
+    "evidence.db"
+  ],
+  "evidence_tip_seq": 2
+}

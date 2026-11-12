@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Query, status
+from fastapi import APIRouter, Body, Query, Request, status
 
 from aios_backend.apps.evidence import service
 from aios_backend.apps.evidence.schemas import (
@@ -14,6 +14,7 @@ from aios_backend.apps.evidence.schemas import (
     EvidenceStatus,
     EvidenceStream,
 )
+from aios_backend.evidence import pump
 from db.session import DbSession
 
 router = APIRouter(tags=["evidence"])
@@ -69,6 +70,8 @@ def get_event(seq: int, session: DbSession) -> EvidenceEventOut:
     summary="Export a verifiable bundle for a project or date range (written by the evidence writer)",
 )
 def export(
-    session: DbSession, body: Annotated[EvidenceExportIn | None, Body()] = None
+    request: Request, session: DbSession, body: Annotated[EvidenceExportIn | None, Body()] = None
 ) -> EvidenceExportOut:
-    return service.export(session, body)
+    writer = request.app.state.writer
+    db = request.app.state.db
+    return service.export(session, body, writer, lambda: pump.drain(db, writer))

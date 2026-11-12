@@ -2,7 +2,7 @@
 name = "aios-workspace"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
-dependencies = ["aios-common", "aios-backend"]
+dependencies = ["aios-common", "aios-backend", "aios-evidence-writer"]
 
 [tool.uv]
 package = false
@@ -13,6 +13,7 @@ members = ["packages/py/*", "services/*"]
 [tool.uv.sources]
 aios-common = { workspace = true }
 aios-backend = { workspace = true }
+aios-evidence-writer = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -36,7 +37,7 @@ select = ["E", "F", "I", "B", "UP", "S", "T20", "FAST"]
 ignore = ["S101", "E501"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["aios_backend", "aios_common", "db"]
+known-first-party = ["aios_backend", "aios_common", "aios_evidence_writer", "db"]
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header", "fastapi.Path"]
@@ -59,13 +60,25 @@ ignore_missing_imports = true
 
 # ---------------------------------------------------------------- import boundaries
 [tool.importlinter]
-root_packages = ["aios_backend", "db", "aios_common"]
+root_packages = ["aios_backend", "db", "aios_common", "aios_evidence_writer"]
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "Shared package never imports the backend"
 type = "forbidden"
 source_modules = ["aios_common"]
+forbidden_modules = ["aios_backend", "db"]
+
+[[tool.importlinter.contracts]]
+name = "AC-14: the backend never imports the evidence writer (only the writer opens evidence.db)"
+type = "forbidden"
+source_modules = ["aios_backend", "db"]
+forbidden_modules = ["aios_evidence_writer"]
+
+[[tool.importlinter.contracts]]
+name = "The evidence writer never imports the backend or chats.db code"
+type = "forbidden"
+source_modules = ["aios_evidence_writer"]
 forbidden_modules = ["aios_backend", "db"]
 
 [[tool.importlinter.contracts]]

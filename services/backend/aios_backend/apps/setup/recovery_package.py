@@ -104,25 +104,57 @@ def _aad(header: dict[str, Any]) -> bytes:
 
 
 # ------------------------------------------------------------------ writing (section 4)
+# What a backup of the data folder must contain (question 10, decided: presence, not content).
+# The databases change with every message, so their hashes would reject every real backup; their
+# validity is checked at restore instead (chats.db opens with the unwrapped key and passes an
+# integrity check; the evidence writer verifies its chain up to ``evidence_tip``). The writer
+# names its own file (its /status), so the backend never spells it (AC-14).
+def backup_manifest(writer_file: str | None) -> dict[str, Any]:
+    required = ["chats.db"] + ([writer_file] if writer_file else [])
+    return {"required": required, "excluded": ["logs", "backups", "recovery.pkg"]}
+
+
 def write(
-    *, recovery_key: bytes, db_key: bytes, signing_seed: bytes, stream_id: str
+    *,
+    recovery_key: bytes,
+    db_key: bytes,
+    signing_seed: bytes,
+    stream_id: str,
+    security_state_revision: dict[str, Any] | None = None,
+    evidence_tip: dict[str, Any] | None = None,
+    writer_file: str | None = None,
+    fixed: dict[str, Any] | None = None,
 ) -> tuple[bytes, str]:
-    """The ``recovery.pkg`` bytes and its package_id. Fresh salt and nonce on every call."""
-    package_id = str(uuid.uuid4())
+    """The ``recovery.pkg`` bytes and its package_id. Fresh salt and nonce on every call.
+
+    ``security_state_revision``, ``evidence_tip`` and ``backup_manifest`` (MVP 9.4) are part of
+    the header, which AES-GCM authenticates as associated data: changing any of them makes the
+    unwrap fail (``R_UNWRAP``), the role MVP 9.4 gives the ``auth_tag``.
+    """
+    # ``fixed`` (golden vectors only): package_id, created_at, salt and nonce instead of fresh ones.
+    pin = fixed or {}
+    package_id = pin.get("package_id") or str(uuid.uuid4())
     header: dict[str, Any] = {
         "format": "aios-recovery-package",
         "v": 1,
         "package_id": package_id,
-        "created_at": utc_time(),
+        "created_at": pin.get("created_at") or utc_time(),
         "stream_id": stream_id,
         "signing_key_id": key_id(public_key(signing_seed)),
         "kdf": {
             "alg": "argon2id",
             "version": 19,
             **WRITE_KDF,
-            "salt": b64url(secrets.token_bytes(16)),
+            "salt": b64url(pin.get("salt") or secrets.token_bytes(16)),
         },
-        "aead": {"alg": "aes-256-gcm", "nonce": b64url(secrets.token_bytes(12))},
+        "aead": {
+            "alg": "aes-256-gcm",
+            "nonce": b64url(pin.get("nonce") or secrets.token_bytes(12)),
+        },
+        "security_state_revision": security_state_revision
+        or {"migration": None, "catalogue": None},
+        "evidence_tip": evidence_tip,
+        "backup_manifest": backup_manifest(writer_file),
     }
     payload = jcs(
         {
@@ -152,6 +184,37 @@ def _is_str(value: Any, pattern: re.Pattern[str], length: int | None = None) -> 
     )
 
 
+def _optional_fields_ok(pkg: dict[str, Any]) -> bool:
+    """MVP 9.4 fields. Optional so packages written before them still restore."""
+    state = pkg.get("security_state_revision")
+    if state is not None and not (
+        isinstance(state, dict) and all(isinstance(v, str | None) for v in state.values())
+    ):
+        return False
+    tip = pkg.get("evidence_tip")
+    if tip is not None and not (
+        isinstance(tip, dict)
+        and isinstance(tip.get("seq"), int)
+        and isinstance(tip.get("epoch"), int)
+        and _is_str(tip.get("event_hash"), re.compile(r"[0-9a-f]{64}"))
+    ):
+        return False
+    manifest = pkg.get("backup_manifest")
+    return manifest is None or (
+        isinstance(manifest, dict)
+        and isinstance(manifest.get("required"), list)
+        and all(
+            isinstance(n, str) and re.fullmatch(r"[a-z0-9._-]{1,64}", n)
+            for n in manifest["required"]
+        )
+    )
+
+
+def required_files(pkg: dict[str, Any]) -> list[str]:
+    manifest = pkg.get("backup_manifest") or {"required": ["chats.db"]}
+    return list(manifest["required"])
+
+
 def read(file_bytes: bytes) -> dict[str, Any]:
     """Parse and validate the header before any KDF runs."""
     try:
@@ -179,7 +242,7 @@ def read(file_bytes: bytes) -> dict[str, Any]:
         and _is_str(pkg.get("ciphertext"), B64)
         and len(pkg["ciphertext"]) <= 4096
     )
-    if not ok:
+    if not ok or not _optional_fields_ok(pkg):
         raise RecoveryError("R_FORMAT")
     assert isinstance(kdf, dict)
     for name, (low, high) in KDF_BOUNDS.items():

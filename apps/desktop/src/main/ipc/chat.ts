@@ -3,6 +3,8 @@ import {
   Conversation,
   ConversationPatch,
   EvidenceEvent,
+  EvidenceExport,
+  EvidenceExportInput,
   EvidenceStatus,
   EvidenceStream,
   Exchange,
@@ -12,6 +14,7 @@ import {
   ProvidersStatus,
   SearchHit,
 } from "@aios/bridge-contract";
+import { pickSaveTarget } from "./dialogs.js";
 import type { Handler } from "./index.js";
 
 const conv = (id: unknown) => `/conversations/${Id.parse(id)}`;
@@ -62,7 +65,14 @@ export const evidenceHandlers: Record<string, Handler> = {
   },
   "evidence.status": async (b) => EvidenceStatus.parse(await b.client.request("GET", "/evidence/status")),
   "evidence.stream": async (b) => EvidenceStream.parse(await b.client.request("GET", "/evidence/stream")),
-  "evidence.export": async (b) => {
-    await b.client.request("POST", "/evidence/export");
+  /** The user picks where; the writer builds and signs the bundle (F-07); the backend writes it. */
+  "evidence.export": async (b, input) => {
+    const what = EvidenceExportInput.parse(input);
+    const day = new Date().toISOString().slice(0, 10);
+    const target = await pickSaveTarget("Export evidence", `aios-evidence-${day}.zip`, "zip");
+    if (!target) return null;
+    return EvidenceExport.parse(
+      await b.client.request("POST", "/evidence/export", { ...what, path: target, confirmed: true }),
+    );
   },
 };

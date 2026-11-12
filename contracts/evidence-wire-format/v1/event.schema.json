@@ -434,6 +434,9 @@
         },
         "key_id": {
           "$ref": "#/$defs/digest"
+        },
+        "previous_key_id": {
+          "$ref": "#/$defs/digest"
         }
       }
     },
@@ -594,6 +597,15 @@
         },
         "tip_hash": {
           "$ref": "#/$defs/digest"
+        },
+        "manifest_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "scope": {
+          "enum": [
+            "project",
+            "range"
+          ]
         }
       }
     }

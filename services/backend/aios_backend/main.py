@@ -1,9 +1,9 @@
 """App factory for the local API, called only by Electron main with the launch token."""
 
+import asyncio
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
-from logging.handlers import RotatingFileHandler
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -23,15 +23,18 @@ from aios_backend.apps.settings import service as settings_service
 from aios_backend.apps.settings.router import router as settings_router
 from aios_backend.apps.setup.router import router as setup_router
 from aios_backend.apps.spike.router import router as spike_router  # SPIKE-D04
-from aios_backend.components import Components
+from aios_backend.components import Components, ComponentState
 from aios_backend.config import Settings
 from aios_backend.engine import EngineManager
 from aios_backend.errors import AppError
+from aios_backend.evidence import process as writer_process
+from aios_backend.evidence import pump
+from aios_backend.evidence.client import WriterClient
 from aios_backend.routes import VERSION
 from aios_backend.routes import router as system_router
 from aios_backend.runtime import Generations
 from aios_common.asgi_auth import LoopbackTokenMiddleware
-from aios_common.logging import ContentFreeFormatter, get_logger, log_event
+from aios_common.logging import file_handler, get_logger, log_event
 from db.session import Database
 from db.sqlcipher import DatabaseKeyMissing
 
@@ -39,14 +42,11 @@ log = get_logger("api")
 
 
 def configure_logging(settings: Settings) -> None:
-    """Content-free file log, 5 MB x 4 files. Access lines are off (they carry paths)."""
+    """Content-free file log (aios_common.logging retention). Access lines are off (paths)."""
     handler: logging.Handler = logging.NullHandler()
     if settings.log_file is not None:
-        settings.log_file.parent.mkdir(parents=True, exist_ok=True)
-        handler = RotatingFileHandler(
-            settings.log_file, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
-        )
-        handler.setFormatter(ContentFreeFormatter())
+        # Content-free, rotating, and the folder kept within 14 days and 20 MB (M-21).
+        handler = file_handler(settings.log_file, "backend")
     for name in ("aios", "uvicorn.error", "alembic"):
         logger = logging.getLogger(name)
         logger.handlers = [handler]
@@ -97,12 +97,18 @@ def create_app(
     answers: AnswerSource | None = None,
     local_engine: LocalEngine | None = None,
     mirror: ModelMirror | None = None,
+    writer: WriterClient | None = None,
+    start_writer: bool = False,
+    signing_seed: Callable[[], bytes] | None = None,
 ) -> FastAPI:
     """The seams below are None until their modules exist; the endpoints then answer 409/503.
 
     ``answers``: what produces chat answers. ``local_engine``: start / benchmark / status for the
     models app (apps/models/engine.py); the process manager itself is ``app.state.engine``.
     ``mirror``: the AIOS model mirror (downloads, catalogue check).
+    ``writer``: the evidence writer's API (tests pass one); ``start_writer`` starts
+    evidence-writer as a child process instead (backend.exe, ``aios-backend serve``).
+    Without either, evidence stays queued in the outbox (pending) and export answers 503.
     """
     database = db or Database(settings)
     components = Components()
@@ -119,7 +125,26 @@ def create_app(
         manager: EngineManager = app.state.engine
         await manager.set_safe_mode(load_safe_mode(database))  # before any engine can start
         await manager.startup()  # ends orphaned engines (IPC-52), starts the watcher
+        child = None
+        if app.state.writer is None and start_writer:
+            try:
+                child = await asyncio.to_thread(writer_process.start, settings, manager.job)
+                app.state.writer = child.client
+            except writer_process.WriterStartError:
+                components.evidence_writer = ComponentState.FAILED
+        pumping = None
+        if app.state.writer is not None:
+            components.evidence_writer = ComponentState.STARTING
+            pumping = asyncio.create_task(pump.run(database, app.state.writer, components))
         yield
+        if pumping is not None:
+            pumping.cancel()
+            try:
+                await asyncio.to_thread(pump.shutdown_checkpoint, database, app.state.writer)
+            except Exception as exc:  # the writer is gone: events stay queued for next time
+                log_event(log, "shutdown_checkpoint_failed", error_code=type(exc).__name__)
+        if child is not None:
+            child.stop()
         await manager.shutdown()
         database.dispose()
 
@@ -140,6 +165,10 @@ def create_app(
     app.state.generations = Generations()
     app.state.local_engine = local_engine
     app.state.mirror = mirror
+    app.state.writer = writer
+    # Where restore reads the writer's new signing key to wrap it again: the OS key store, or the
+    # fixed development seed. Tests that rotate keys pass their own.
+    app.state.signing_seed = signing_seed
     app.state.downloads = Downloads()
     register_error_handlers(app)
     app.include_router(system_router)

@@ -58,6 +58,29 @@ def evidence_seq(session: Session, outbox_id: int) -> int | None:
 
 
 default_model_id = lookups.default_model_id
+model_reference = lookups.model_reference
+
+
+def stream_id(session: Session) -> str | None:
+    identity = lookups.store_identity(session)
+    return identity[0] if identity else None
+
+
+def any_id_exists(
+    session: Session, project_id: str, conversation_ids: set[str], item_ids: set[str]
+) -> bool:
+    """Whether a package's identifiers would collide with rows already in this store."""
+    if session.get(Project, project_id) is not None:
+        return True
+    if conversation_ids and session.scalar(
+        select(func.count()).where(Conversation.id.in_(conversation_ids))
+    ):
+        return True
+    if not item_ids:
+        return False
+    if session.scalar(select(func.count()).where(Message.id.in_(item_ids))):
+        return True
+    return bool(session.scalar(select(func.count()).where(Summary.id.in_(item_ids))))
 
 
 def packages(session: Session, project_id: str) -> Sequence[ProjectPackage]:

@@ -57,9 +57,10 @@ jobs:
           Add-Content $env:GITHUB_PATH "C:\VulkanSDK\$v\bin"
       - run: pnpm build:llama                      # patched llama-server, CPU + Vulkan (D-03)
       - run: pnpm build:backend
-      - name: Sign backend.exe and both llama-server builds (+ their DLLs)
+      - name: Sign backend.exe, evidence-writer.exe and both llama-server builds (+ their DLLs)
         run: |
           powershell -File build/signing/sign.ps1 build/out/backend
+          powershell -File build/signing/sign.ps1 build/out/evidence-writer
           powershell -File build/signing/sign.ps1 build/out/llama/cpu
           powershell -File build/signing/sign.ps1 build/out/llama/vulkan
       - run: pnpm build

@@ -2283,6 +2283,7 @@
       "ProjectCreate": {
         "properties": {
           "classification": {
+            "default": "restricted",
             "enum": [
               "restricted",
               "internal",
@@ -2298,8 +2299,7 @@
           }
         },
         "required": [
-          "name",
-          "classification"
+          "name"
         ],
         "title": "ProjectCreate",
         "type": "object"

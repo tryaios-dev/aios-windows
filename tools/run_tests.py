@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SUITES = [
     (ROOT, ["packages/py", "tests/security", "tests/engine"]),  # engine: skipped without a build
     (ROOT / "services" / "backend", []),
+    (ROOT / "services" / "evidence-writer", []),
 ]
 
 code = 0

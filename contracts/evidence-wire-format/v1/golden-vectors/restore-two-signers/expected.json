@@ -1,0 +1,11 @@
+{
+  "verdict": "intact",
+  "epochs": [
+    1,
+    2
+  ],
+  "key_ids": [
+    "27bae617870a907c45fe37e0beef3b7dd1499bdeeb64051e0658310f3d585093",
+    "1c3d1a1708a6230bd61af2457fdce849bd71b87205b334062b0de0b4ae6a097c"
+  ]
+}

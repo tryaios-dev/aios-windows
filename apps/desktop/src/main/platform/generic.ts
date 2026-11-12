@@ -17,6 +17,10 @@ export const generic: DesktopPlatform = {
     };
   },
 
+  logsDir() {
+    return null; // development only: logs go to the terminal
+  },
+
   stopProcessTree(child) {
     if (child.exitCode === null) child.kill();
   },

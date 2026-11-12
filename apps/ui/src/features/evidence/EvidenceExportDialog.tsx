@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Collapsible } from "radix-ui";
 import { Check, ChevronDown, Copy, FileCheck2, FolderOpen, Terminal } from "lucide-react";
 import { api } from "@/bridge/api";
+import { isLive } from "@/bridge/live";
+import { platform } from "@/lib/platform";
 import { useStore } from "@/bridge/sim/store";
 import type { EvidenceEvent, EvidenceExportResult, Project } from "@/lib/types";
 import { cn } from "@/lib/cn";
@@ -20,8 +22,6 @@ type Phase =
   | { kind: "working" }
   | { kind: "done"; result: EvidenceExportResult }
   | { kind: "error"; message: string };
-
-const DEFAULT_FOLDER = "C:\\Users\\pilot\\Documents\\AIOS exports";
 
 const VERDICTS: Array<{ verdict: string; tone: DotTone; meaning: string }> = [
   {
@@ -100,7 +100,10 @@ export function EvidenceExportDialog({
   }, [allEvents, checkpoints, scope, first, last, fromIso, toIso, selectedCount]);
 
   const canExport =
-    phase.kind === "form" && folder.length > 0 && selectedCount > 0 && !(scope === "range" && rangeInvalid);
+    phase.kind === "form" &&
+    (isLive() || folder.length > 0) &&
+    selectedCount > 0 &&
+    !(scope === "range" && rangeInvalid);
 
   const run = async () => {
     if (!canExport) return;
@@ -109,6 +112,10 @@ export function EvidenceExportDialog({
       const result = await api.projects.exportEvidence(
         scope === "project" ? { project_id: project.id } : { from: fromIso, to: toIso },
       );
+      if (!result) {
+        setPhase({ kind: "form" }); // the save dialog was cancelled
+        return;
+      }
       setPhase({ kind: "done", result });
       useStore.getState().toast({
         kind: "success",
@@ -135,7 +142,7 @@ export function EvidenceExportDialog({
       title={phase.kind === "done" ? "Evidence exported" : "Export evidence"}
       description={
         phase.kind === "done"
-          ? `Written to ${folder}. Hand the file to anyone; the verifier needs nothing else from this device.`
+          ? `Written to ${phase.kind === "done" ? phase.result.path : folder}. Hand the file to anyone; the verifier needs nothing else from this device.`
           : "A signed, content-free package of events, checkpoints and signer keys. Anyone can verify it without AIOS."
       }
       footer={
@@ -235,29 +242,33 @@ export function EvidenceExportDialog({
             )}
           </Field>
 
-          <Field
-            label="Destination"
-            htmlFor="evidence-export-folder"
-            hint="The package is written to this folder on this device. Nothing is uploaded."
-          >
-            <div className="flex gap-2">
-              <Input
-                id="evidence-export-folder"
-                mono
-                readOnly
-                value={folder}
-                placeholder="Choose a folder"
-                className="flex-1"
-              />
-              <Button
-                variant="secondary"
-                leading={<FolderOpen className="size-3.5" aria-hidden />}
-                onClick={() => setFolder(DEFAULT_FOLDER)}
-              >
-                Choose folder
-              </Button>
-            </div>
-          </Field>
+          {isLive() ? (
+            <Hint>You choose where to save the file in the next step. Nothing is uploaded.</Hint>
+          ) : (
+            <Field
+              label="Destination"
+              htmlFor="evidence-export-folder"
+              hint="The package is written to this folder on this device. Nothing is uploaded."
+            >
+              <div className="flex gap-2">
+                <Input
+                  id="evidence-export-folder"
+                  mono
+                  readOnly
+                  value={folder}
+                  placeholder="Choose a folder"
+                  className="flex-1"
+                />
+                <Button
+                  variant="secondary"
+                  leading={<FolderOpen className="size-3.5" aria-hidden />}
+                  onClick={() => setFolder(platform.exportsFolder)}
+                >
+                  Choose folder
+                </Button>
+              </div>
+            </Field>
+          )}
 
           <div className="flex items-center gap-3 border-t border-line-soft pt-4">
             <span className="label-mono shrink-0">Package</span>

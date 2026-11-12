@@ -1,0 +1,15 @@
+{
+  "input": {
+    "tag": "aios/evidence/v1/commit/input",
+    "nonce_b64url": "ZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXp7fH1-f4CBgoM",
+    "bytes_utf8": "{\"messages\":[{\"content\":\"You are a helpful assistant.\",\"role\":\"system\"},{\"content\":\"What is the capital of Austria?\",\"role\":\"user\"}],\"model\":\"minicpm5-2b-q4_k_m-openbmb-gguf\"}",
+    "commitment": "4aa04a6b669d1e7fc4766cdc8bb9932886d7c25dab1400b0dcdee283859984c8"
+  },
+  "output": {
+    "tag": "aios/evidence/v1/commit/output",
+    "nonce_b64url": "hIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqM",
+    "bytes_utf8": "Vienna is the capital of Austria.",
+    "commitment": "6acc9c6228c11624540720ce9721e23d00380e4b1fae092f23ff0dc2fa586803"
+  },
+  "rule": "commitment = SHA-256(UTF-8(tag) || 0x00 || nonce || bytes), lowercase hex"
+}

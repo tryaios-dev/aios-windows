@@ -40,11 +40,12 @@ def record(
     project_id: str | None = None,
     conversation_id: str | None = None,
     body: dict[str, BodyValue] | None = None,
+    event_id: str | None = None,
 ) -> EvidenceOutbox:
     data = dict(body or {})
     check_body(data)
     row = EvidenceOutbox(
-        event_id=str(uuid.uuid4()),
+        event_id=event_id or str(uuid.uuid4()),
         type=type,
         actor=actor,
         project_id=project_id,

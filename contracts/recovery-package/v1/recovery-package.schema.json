@@ -33,7 +33,44 @@
         "nonce": { "type": "string", "pattern": "^[A-Za-z0-9_-]{16}$", "description": "12 bytes, base64url without padding" }
       }
     },
-    "ciphertext": { "type": "string", "pattern": "^[A-Za-z0-9_-]+$", "maxLength": 4096, "description": "ciphertext || 16-byte GCM tag, base64url without padding" }
+    "ciphertext": { "type": "string", "pattern": "^[A-Za-z0-9_-]+$", "maxLength": 4096, "description": "ciphertext || 16-byte GCM tag, base64url without padding" },
+    "security_state_revision": {
+      "description": "Optional (MVP 9.4). Phase 1a: the chats.db migration and the model catalogue version. Authenticated as part of the header.",
+      "anyOf": [
+        { "type": "object", "additionalProperties": { "type": ["string", "null"] } },
+        { "type": "null" }
+      ]
+    },
+    "evidence_tip": {
+      "description": "Optional (MVP 9.4). The evidence chain tip when the package was written; restore refuses a backup whose chain ends before it.",
+      "anyOf": [
+        {
+          "type": "object",
+          "required": ["epoch", "seq", "event_hash"],
+          "properties": {
+            "stream_id": { "$ref": "#/$defs/uuid" },
+            "epoch": { "type": "integer", "minimum": 1 },
+            "seq": { "type": "integer", "minimum": 0 },
+            "event_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+          }
+        },
+        { "type": "null" }
+      ]
+    },
+    "backup_manifest": {
+      "description": "Optional (MVP 9.4). Files a backup must contain to be restored with this package, and what is never backed up.",
+      "anyOf": [
+        {
+          "type": "object",
+          "required": ["required"],
+          "properties": {
+            "required": { "type": "array", "items": { "type": "string", "pattern": "^[a-z0-9._-]{1,64}$" } },
+            "excluded": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        { "type": "null" }
+      ]
+    }
   },
   "$defs": {
     "uuid": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" }

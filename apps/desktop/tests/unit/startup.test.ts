@@ -121,3 +121,19 @@ describe("start-up window text", () => {
     expect(SLOW_START_HINT_MS).toBe(5_000);
   });
 });
+
+/** C-04: after a rollback to an older version the backend exits with 4 (data from a newer AIOS). */
+describe("ac-21 start failure after a rollback", () => {
+  it("explains newer data and offers no retry", async () => {
+    const { startFailureText } = await import("../../src/main/startup.js");
+    const newer = startFailureText("backend_exit_4");
+    expect(newer.canRetry).toBe(false);
+    expect(newer.detail).toContain("newer version of AIOS");
+    expect(newer.detail).toContain("has not been changed");
+  });
+
+  it("keeps Retry for any other failure", async () => {
+    const { startFailureText } = await import("../../src/main/startup.js");
+    expect(startFailureText("backend_start_timeout").canRetry).toBe(true);
+  });
+});

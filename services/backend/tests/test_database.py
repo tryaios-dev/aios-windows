@@ -92,3 +92,97 @@ def test_b02_sqlcipher_build_matches_pin(db: Database) -> None:
         assert cipher == pin["cipher_version"]
     else:
         assert cipher, "SQLCipher not active"
+
+
+CLASS_COLUMN = {
+    "projects": "classification",
+    "conversations": "classification_effective",
+    "messages": "classification_effective",
+    "summaries": "classification_effective",
+}
+
+
+def test_ac_05_every_stored_item_carries_its_class(db: Database) -> None:
+    """MVP 12 schema snapshot: every content table records a class, where it came from, and an
+    extensions object, so Phase 1b enforcement needs no inference or blanket reclassification."""
+    from sqlalchemy import inspect
+
+    inspector = inspect(db.engine)
+    for table, class_column in CLASS_COLUMN.items():
+        columns = {c["name"]: c for c in inspector.get_columns(table)}
+        for required in (class_column, "classification_source", "extensions"):
+            assert required in columns, f"{table}.{required} missing"
+            assert columns[required]["nullable"] is False, f"{table}.{required} may be null"
+
+
+def test_providers_table_starts_with_local_only(db: Database) -> None:
+    from sqlalchemy import text
+
+    with db.engine.connect() as conn:
+        rows = conn.execute(text("SELECT id, type, enabled, credential_ref FROM providers")).all()
+    assert [tuple(r) for r in rows] == [("local", "local", 1, None)]
+
+
+# ------------------------------------------------------------------ E-06 backup before migration
+def _put_setting(db: Database, value: str) -> None:
+    from sqlalchemy import text
+
+    with db.engine.begin() as conn:
+        conn.execute(text("CREATE TABLE IF NOT EXISTS probe (v TEXT)"))
+        conn.execute(text("INSERT INTO probe (v) VALUES (:v)"), {"v": value})
+
+
+def test_e06_backup_opens_with_the_key_and_holds_the_last_write(db: Database) -> None:
+    from sqlalchemy import text
+
+    from db.sqlcipher import create_sqlcipher_engine, integrity_ok
+
+    _put_setting(db, "written just before the backup")
+    copy = migrate.backup(db)
+    assert copy is not None and integrity_ok(copy, db.key_hex())
+    engine = create_sqlcipher_engine(copy, db.key_hex)
+    with engine.connect() as conn:
+        assert (
+            conn.execute(text("SELECT v FROM probe")).scalar() == "written just before the backup"
+        )
+    engine.dispose()
+    assert b"written just before" not in copy.read_bytes()  # still encrypted
+
+
+def test_e06_a_failing_migration_leaves_the_database_as_it_was(
+    db: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sqlalchemy import text
+
+    migrate.downgrade(db, "0006")
+    _put_setting(db, "before the update")
+    before = migrate.current(db)
+
+    def broken(cfg: object, revision: str) -> None:
+        with db.engine.begin() as conn:
+            conn.execute(text("DELETE FROM probe"))  # half-done work...
+        raise RuntimeError("migration failed")  # ...then the migration fails
+
+    monkeypatch.setattr(migrate.command, "upgrade", broken)
+    with pytest.raises(RuntimeError):
+        migrate.upgrade(db)
+    monkeypatch.undo()
+    assert migrate.current(db) == before
+    with db.engine.connect() as conn:
+        assert conn.execute(text("SELECT v FROM probe")).scalar() == "before the update"
+
+
+def test_e06_an_older_build_refuses_a_newer_database_untouched(db: Database) -> None:
+    from sqlalchemy import text
+
+    with db.engine.begin() as conn:
+        conn.execute(text("UPDATE alembic_version SET version_num = '9999'"))
+    db.dispose()
+    path = db.settings.chats_db
+    stamp = path.read_bytes()
+    migrate.backup(db)  # an earlier pre-migration copy exists
+    with pytest.raises(migrate.NewerSchema) as refused:
+        migrate.upgrade(db)
+    assert refused.value.revision == "9999"
+    assert refused.value.backup is not None and refused.value.backup.name.startswith("chats-")
+    assert path.read_bytes() == stamp

@@ -1,4 +1,5 @@
 import { Health, SupportBundle, SystemInfo, SystemStatus } from "@aios/bridge-contract";
+import { openExternalConfirmed } from "../links.js";
 import { pickSaveTarget } from "./dialogs.js";
 import type { Handler } from "./index.js";
 
@@ -19,4 +20,6 @@ export const systemHandlers: Record<string, Handler> = {
     if (!target) return null;
     return SupportBundle.parse(await b.client.request("POST", "/system/support-bundle", { path: target }));
   },
+  /** Never reaches the backend: main validates the link and asks the user before opening it. */
+  "system.openLink": async (_b, url) => openExternalConfirmed(url),
 };
