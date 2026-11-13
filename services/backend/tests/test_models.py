@@ -11,7 +11,6 @@ from fastapi.testclient import TestClient
 from aios_backend.apps.models import catalogue
 from aios_backend.config import Settings
 
-UI_CATALOGUE = Path(__file__).resolve().parents[3] / "apps/ui/src/bridge/sim/catalogue.ts"
 CONTENT = b"GGUF" + b"\x00" * 1020  # a tiny stand-in for a model file
 
 
@@ -39,20 +38,6 @@ def gguf(tmp_path: Path, content: bytes = CONTENT, name: str = "download.gguf") 
     path.parent.mkdir(exist_ok=True)
     path.write_bytes(content)
     return path
-
-
-def test_backend_catalogue_equals_the_one_the_ui_shows() -> None:
-    ui = UI_CATALOGUE.read_text("utf-8")
-    ui_entries = {
-        m.group(1): (int(m.group(3).replace("_", "")), m.group(2))
-        for m in re.finditer(
-            r'entry_id: "([^"]+)".*?artifact_digest: "([0-9a-f]{64})",\s+size_bytes: ([\d_]+)',
-            ui,
-            re.S,
-        )
-    }
-    backend = {e.id: (e.size_bytes, e.artifact_digest) for e in catalogue.entries()}
-    assert backend == ui_entries
 
 
 def test_catalogue_endpoint(client: TestClient) -> None:

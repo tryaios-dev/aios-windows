@@ -1,12 +1,10 @@
 import type { CatalogueEntry, Hardware } from "@/lib/types";
 
 /**
- * Model Catalogue v1 (MVP 9.6): the same entries as the backend's catalogue_dev.json (a backend
- * test checks). Real published files with their real size and SHA-256, downloaded from their
- * origin on Hugging Face at a pinned revision. Entries without a passed review are listed but never
- * suggested or installed.
+ * Browser preview only: the AI models the simulated backend lists. A copy of the backend's
+ * catalogue_dev.json so the preview shows the same models as the desktop app.
  */
-export const CATALOGUE: CatalogueEntry[] = [
+export const SIM_CATALOGUE: CatalogueEntry[] = [
   {
     entry_id: "ornith-1.5-9b-q4_k_m-ornith-gguf",
     name: "Ornith 1.5 9B",
@@ -113,7 +111,8 @@ export const CATALOGUE: CatalogueEntry[] = [
   },
 ];
 
-export const DEFAULT_HARDWARE: Hardware = {
+/** The computer the browser preview pretends to run on. */
+export const SIM_HARDWARE: Hardware = {
   cpu: "Intel Core i7-13700H",
   cores: 14,
   ram_gb: 16,
@@ -122,51 +121,5 @@ export const DEFAULT_HARDWARE: Hardware = {
   os: "Windows 11 Pro 24H2 (build 26100)",
   recommended_tier: "medium",
   recommended_entry_id: "ornith-1.5-9b-q4_k_m-ornith-gguf",
+  benchmark: { model_id: "ornith-1.5-9b-q4_k_m-ornith-gguf", engine: "vulkan", tokens_per_second: 38.4, time_to_first_token_ms: 420, run_at: new Date(Date.now() - 19 * 86400000).toISOString() },
 };
-
-export const MINIMUM_PROFILE = { ram_gb: 8, free_disk_gb: 10 };
-
-export function catalogueEntry(id: string | null | undefined): CatalogueEntry | undefined {
-  return CATALOGUE.find((e) => e.entry_id === id);
-}
-
-/**
- * The one model to suggest (same rule as the backend, apps/models/hardware.py): the "General and
- * chat" picks of the Local Model Catalogue v3 for Windows PCs, best first. Integrated graphics and
- * a GPU without a driver count as no dedicated GPU. Only reviewed entries (MVP 9.6) that fit on the
- * drive are suggested; otherwise the next row is tried.
- */
-export const PROFILES: Array<{ min_vram_gb: number; min_ram_gb: number; entry_id: string }> = [
-  { min_vram_gb: 24, min_ram_gb: 64, entry_id: "qwen3.8-27b-ud-q4_k_m-unsloth-gguf" },
-  { min_vram_gb: 8, min_ram_gb: 32, entry_id: "sage-a1.5-q4_k_m-mradermacher-gguf" },
-  { min_vram_gb: 8, min_ram_gb: 16, entry_id: "ornith-1.5-9b-q4_k_m-ornith-gguf" },
-  { min_vram_gb: 0, min_ram_gb: 8, entry_id: "minicpm5-2b-q4_k_m-openbmb-gguf" },
-];
-
-export function installable(entry: CatalogueEntry): boolean {
-  if (entry.pipeline === "own") return true;
-  const r = entry.deviation_approval;
-  return !!r && !!r.reviewer.trim() && !!r.date && r.quality_threshold_result === "pass";
-}
-
-export function recommendFor(hw: Hardware): CatalogueEntry | null {
-  if (hw.ram_gb < MINIMUM_PROFILE.ram_gb || hw.free_disk_gb < MINIMUM_PROFILE.free_disk_gb) return null;
-  const vram = hw.gpu && hw.gpu.driver_ok ? hw.gpu.vram_gb : 0;
-  for (const p of PROFILES) {
-    const entry = catalogueEntry(p.entry_id);
-    if (!entry || vram < p.min_vram_gb || hw.ram_gb < p.min_ram_gb || !installable(entry)) continue;
-    if (hw.free_disk_gb * 1024 ** 3 < entry.size_bytes + 2 * 1024 ** 3) continue;
-    return entry;
-  }
-  return null;
-}
-
-export function tierFor(hw: Hardware): CatalogueEntry["tier"] | null {
-  return recommendFor(hw)?.tier ?? null;
-}
-
-export function hardwareSupports(entry: CatalogueEntry, hw: Hardware): boolean {
-  if (hw.free_disk_gb * 1024 ** 3 < entry.size_bytes + 2 * 1024 ** 3) return false;
-  if (hw.ram_gb >= entry.min_ram_gb) return true;
-  return !!hw.gpu && hw.gpu.vram_gb >= entry.min_vram_gb && entry.min_vram_gb > 0;
-}

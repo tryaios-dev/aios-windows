@@ -1,5 +1,5 @@
 /**
- * Full stack, end to end: UI api (`src/bridge/api.ts`) → window.aios (the real preload) →
+ * Full stack, end to end: UI api (`src/lib/api.ts`) → window.aios (the real preload) →
  * Electron main handlers (the real zod checks and HTTP client) → the real backend on a
  * throw-away database. Only Electron's IPC pipe and the system file dialogs are stood in for.
  *
@@ -51,9 +51,9 @@ async function startBackend(): Promise<number> {
 
 // The UI modules are loaded after window.aios exists, as in the desktop app.
 type Ui = {
-  api: typeof import("../src/bridge/api").api;
+  api: typeof import("../src/lib/api").api;
   hydrate: typeof import("../src/bridge/live").hydrate;
-  useStore: typeof import("../src/bridge/sim/store").useStore;
+  useStore: typeof import("../src/lib/store").useStore;
 };
 let ui: Ui;
 const store = () => ui.useStore.getState();
@@ -63,9 +63,9 @@ beforeAll(async () => {
   if (!existsSync(PYTHON)) throw new Error(`run \`uv sync\` first: ${PYTHON} is missing`);
   await startBackend();
   const [{ api }, { hydrate }, { useStore }] = await Promise.all([
-    import("../src/bridge/api"),
+    import("../src/lib/api"),
     import("../src/bridge/live"),
-    import("../src/bridge/sim/store"),
+    import("../src/lib/store"),
   ]);
   ui = { api, hydrate, useStore };
 });
@@ -88,24 +88,25 @@ describe("desktop app against the real backend", () => {
   let projectId = "";
   let conversationId = "";
 
-  it("starts on setup, with this machine's real hardware", async () => {
+  it("starts on setup, with this machine's real hardware and the backend's list of AI models", async () => {
     await ui.hydrate();
+    const { CATALOGUE } = await import("../src/data/catalogue");
+    expect(CATALOGUE.map((e) => e.entry_id)).toContain("minicpm5-2b-q4_k_m-openbmb-gguf"); // nothing listed by hand
     expect(store().ui.firstRunComplete).toBe(false);
     expect(store().hardware.cores).toBeGreaterThan(0);
     expect(store().settings.schema_version).toBeGreaterThanOrEqual(4);
-    const ids = store().liveAllowlist?.map((e) => e.id) ?? [];
+    const ids = store().live?.allowlist.map((e) => e.id) ?? [];
     expect(ids.slice(0, 3)).toEqual(["model-mirror", "update-feed", "model-origin"]); // Hugging Face
     expect(ids.at(-1)).toBe("company-server");
   });
 
   it("setup: creates the store, shows the recovery key once, finishes with the default project", async () => {
-    ui.api.firstRun.begin();
     const issued = await ui.api.firstRun.issueRecoveryKey();
     expect(issued.ok && issued.key).toMatch(/^([0-9A-Z]{4}-){8}[0-9A-Z]{4}$/);
     const again = await ui.api.firstRun.issueRecoveryKey();
     expect(!again.ok && again.alreadyIssued).toBe(true);
 
-    expect(await ui.api.firstRun.complete({ installedModelId: null })).toBe(true);
+    expect(await ui.api.firstRun.complete()).toBe(true);
     expect(store().ui.firstRunComplete).toBe(true);
     const workspace = store().projects.find((p) => p.name === "My workspace");
     expect(workspace?.classification).toBe("restricted");
@@ -132,7 +133,7 @@ describe("desktop app against the real backend", () => {
     expect(store().stream.epoch).toBe(1);
     expect(store().stream.stream_id).toMatch(/^[0-9a-f-]{36}$/);
     // About: licences follow the bundled catalogue; General: its version, never checked yet.
-    const names = store().liveInfo?.licences.map((l) => l.name) ?? [];
+    const names = store().live?.licences.map((l) => l.name) ?? [];
     expect(names).toEqual(expect.arrayContaining(["llama.cpp", "SQLCipher", "Electron"]));
     expect(store().settings.catalogue_version).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(store().settings.last_catalogue_check).toBeNull();
@@ -140,11 +141,13 @@ describe("desktop app against the real backend", () => {
     expect(store().health.company.enabled).toBe(false);
 
     // General > Check now works while the automatic update check is switched off (previous test).
+    // It also asks for newly listed AI models; with no mirror in this build the bundled list stays.
     expect(store().settings.update_check).toBe(false);
     await ui.api.settings.checkForUpdates();
     expect(store().settings.last_update_check).not.toBeNull();
-    const catalogue = await ui.api.settings.checkCatalogue();
-    expect(catalogue).toEqual({ ok: false, error: expect.stringContaining("model mirror is not set up") });
+    expect(store().settings.catalogue_version).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    // Backup has no backend yet: nothing in the desktop app claims one exists.
+    expect(store().settings.last_backup_at).toBeNull();
 
     // Health > Support bundle: a real zip of the log folder where the save dialog said.
     const zip = path.join(data, "support.zip");
@@ -180,7 +183,7 @@ describe("desktop app against the real backend", () => {
     const before = store().toasts.length;
     ui.api.projects.setCompanyAi(projectId, true, true);
     await vi.waitFor(() => expect(store().toasts.length).toBeGreaterThan(before));
-    expect(lastToast()?.description).toMatch(/Company AI is not available/);
+    expect(lastToast()?.description).toMatch(/company server is not available/);
   });
 
   it("chat: start a conversation, send, get the answer, rename, regenerate", async () => {
@@ -219,7 +222,7 @@ describe("desktop app against the real backend", () => {
   it("evidence: the writer chains the events; export writes a signed bundle where the user chose (F-07)", async () => {
     expect(ui.api.projects.evidence(projectId).length).toBeGreaterThan(0);
     // Cancelling the save dialog writes nothing.
-    expect(await ui.api.projects.exportEvidence({ project_id: projectId })).toBeNull();
+    await expect(ui.api.projects.exportEvidence({ project_id: projectId })).rejects.toThrow(/No file was chosen/);
 
     const file = path.join(data, "evidence.zip");
     io.nextSave.push(file);
@@ -253,12 +256,24 @@ describe("desktop app against the real backend", () => {
     writeFileSync(fake, "GGUF fake");
     io.nextOpen.push(fake);
     await ui.api.models.importOffline("minicpm5-2b-q4_k_m-openbmb-gguf");
-    await vi.waitFor(() => expect(lastToast()?.title).toBe("Model not installed"));
+    await vi.waitFor(() => expect(lastToast()?.title).toBe("AI model not installed"));
     expect(lastToast()?.description).toMatch(/size is different/);
     expect(store().installedModels).toEqual([]);
 
     ui.api.models.download("minicpm5-2b-q4_k_m-openbmb-gguf");
-    await vi.waitFor(() => expect(lastToast()?.description).toMatch(/model mirror is not set up/));
+    await vi.waitFor(() => expect(lastToast()?.description).toMatch(/isn't available in this build yet/));
+  });
+
+  it("areas the backend does not have yet start empty and say so, changing nothing", async () => {
+    const { useExtras } = await import("../src/lib/extras");
+    expect(useExtras.getState().knowledge).toEqual([]);
+    expect(useExtras.getState().installedSkills).toEqual([]);
+    ui.api.knowledge.add();
+    expect(lastToast()?.title).toBe("My secure knowledge is not in this build yet");
+    expect(useExtras.getState().knowledge).toEqual([]);
+    const backup = await ui.api.backup.run();
+    expect(backup.ok).toBe(false);
+    expect(await ui.api.recoveryKey.createNew()).toBeNull();
   });
 
   it("deleting a conversation and a project removes them everywhere", async () => {

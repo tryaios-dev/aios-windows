@@ -1,55 +1,27 @@
 /** The ONLY module that touches window.aios. Everything else uses these hooks or `bridge()`. */
 import { useQuery } from "@tanstack/react-query";
 import type { AiosBridge } from "@aios/bridge-contract";
-
-const notInElectron = async (): Promise<never> => {
-  throw new Error("not_in_electron");
-};
-
-/** Every method of a bridge group fails with `not_in_electron`. */
-const unavailable = <T extends object>(): T => new Proxy({}, { get: () => notInElectron }) as T;
-
-/** In a plain browser (`pnpm dev:ui`) there is no Electron preload, so window.aios is missing.
- * This stub keeps the UI rendering for layout work; `api.ts` uses the simulated store instead. */
-const browserPreview: AiosBridge = {
-  system: {
-    health: async () => ({
-      backend: "browser-preview",
-      database: "ok",
-      engine: "not_started",
-      engine_build: null,
-      engine_model: null,
-      engine_cpu_fallback: false,
-      engine_idle_unloaded: false,
-      evidence_writer: "not_started",
-      version: "-",
-    }),
-    status: notInElectron,
-    info: notInElectron,
-    supportBundle: notInElectron,
-    openLink: notInElectron,
-  },
-  setup: unavailable(),
-  settings: unavailable(),
-  projects: unavailable(),
-  conversations: unavailable(),
-  search: unavailable(),
-  evidence: unavailable(),
-  models: unavailable(),
-  spike: {
-    ask: async () => ({
-      text: "",
-      error: "backend_unavailable",
-      firstTokenMs: null,
-      totalMs: 0,
-      tokens: null,
-      tokensPerSecond: null,
-    }),
-  },
-};
+import { simBridge } from "./sim";
 
 export const inElectron = () => window.aios !== undefined;
-export const bridge = (): AiosBridge => window.aios ?? browserPreview;
+/**
+ * The way to the backend. Desktop app: `window.aios`, the real backend through Electron main.
+ * Plain browser (`pnpm dev:ui`): the simulated backend with sample data in `./sim`, so the design can
+ * be worked on without Electron. The desktop app never uses the simulation.
+ */
+export const bridge = (): AiosBridge => window.aios ?? simBridge;
+
+/**
+ * Open a link from an answer (M-20). Desktop app: Electron main shows its own confirmation, which
+ * nothing in the page can skip. Browser preview: the caller's dialog has already asked.
+ */
+export async function openExternal(url: string): Promise<void> {
+  if (window.aios) {
+    await window.aios.system.openLink(url);
+    return;
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+}
 
 export const useHealth = () =>
   useQuery({ queryKey: ["health"], queryFn: () => bridge().system.health(), refetchInterval: 10_000 });

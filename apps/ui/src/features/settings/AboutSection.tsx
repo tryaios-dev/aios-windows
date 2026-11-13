@@ -1,71 +1,70 @@
-import { useNavigate } from "react-router";
-import { ArrowRight } from "lucide-react";
-import { useStore } from "@/bridge/sim/store";
-import { Wordmark } from "@/components/ui/brand";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/chips";
-import { Ledger, NumberedList, SettingGroup, SettingPanel, SettingRow } from "@/components/app/SettingRow";
-import { platform } from "@/lib/platform";
+import { useNavigate } from 'react-router'
+import { ArrowRight } from 'lucide-react'
+import { useStore } from '@/lib/store'
+import { ART } from '@/assets/icons'
+import { Art } from '@/components/ui/art'
+import { Wordmark } from '@/components/ui/brand'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/chips'
+import { Ledger, SettingGroup, SettingPanel, SettingRow } from './SettingRow'
 
-const LIMITS: Array<{ title: string; text: string }> = [
-  {
-    title: `Malware running as your ${platform.os} user`,
-    text: `Anything that runs as you can read what you can read, including open conversations and the keys ${platform.os} holds for you.`,
-  },
-  {
-    title: "A lost device without full-disk encryption",
-    text: `The conversation database is encrypted, but its key is protected only by your ${platform.signIn}. Turn on ${platform.diskEncryption}.`,
-  },
-  {
-    title: "An owner who holds every key",
-    text: "Someone with all the keys could rebuild a history that was never exported, and nothing outside this device would show the difference.",
-  },
-  {
-    title: "Restoring while the original device keeps writing",
-    text: "Two branches of the evidence log result. The verifier reports both; it cannot say which one is right.",
-  },
-];
+/**
+ * What is in AIOS, in the order of the menu, then the two things that protect all of it.
+ * Written out here on purpose: About must read the same whatever the setup screens list.
+ */
+const PARTS: Array<{ name: string; line: string; icon: string }> = [
+  { icon: ART.activity, name: 'Activity', line: 'Everything your AI did, in plain words and in order. It holds none of what you wrote.' },
+  { icon: ART.knowledge, name: 'My secure knowledge', line: 'The documents you want your AI to use. AIOS keeps an encrypted copy on this computer. Your original files stay where they are.' },
+  { icon: ART.model, name: 'AI models', line: 'The AI itself, and newer versions as they come out. It runs on this computer, even with no internet.' },
+  { icon: ART.skills, name: 'Skills', line: 'Extra abilities that run on this computer, such as translating or reading spreadsheets.' },
+  { icon: ART.resources, name: 'Resources', line: 'More power for bigger jobs: cloud AI models and computing power by the hour. You approve everything that is sent.' },
+]
 
-const LICENCES: Array<{ name: string; role: string; licence: string }> = [
-  { name: "llama.cpp", role: "Local inference engine", licence: "MIT" },
-  { name: "MiniCPM5 2B", role: "Model weights (Small)", licence: "Apache-2.0" },
-  { name: "Ornith 1.5 9B", role: "Model weights (Medium)", licence: "MIT" },
-  { name: "SQLCipher", role: "Encrypted database", licence: "BSD-style" },
-  { name: "Electron", role: "Desktop shell", licence: "MIT" },
-];
+const PROTECTION: Array<{ name: string; line: string; icon: string }> = [
+  { icon: ART.encrypted, name: 'Secure storage', line: 'Everything AIOS keeps on this computer is encrypted, with backup and restore.' },
+  { icon: ART.backup, name: 'Rules', line: 'What the AI may and may not do. Four are built in. The first: nothing leaves this computer unless you say so.' },
+]
 
-/** About: build identity, honest limits (MVP 8.1, PR-10), licences, pilot support. */
+const NO_LICENCES: Array<{ name: string; role: string; licence: string }> = []
+
+/** About: which version this is, what is in AIOS and how it is protected, licences and pilot support. */
 export function AboutSection() {
-  const version = useStore((s) => s.settings.app_version);
-  // Desktop app: the backend's list (it follows the bundled catalogue); browser: the built-in one.
-  const licences = useStore((s) => s.liveInfo?.licences) ?? LICENCES;
-  const navigate = useNavigate();
+  const version = useStore((s) => s.settings.app_version)
+  // The open-source software and AI models in this build, as GET /system/info reports them.
+  const licences = useStore((s) => s.live?.licences) ?? NO_LICENCES
+  const navigate = useNavigate()
 
   return (
     <>
-      <div className="flex flex-col gap-3 px-1 pt-2 pb-2">
-        <Wordmark height={22} />
-        <p className="font-mono text-xs tracking-[0.02em] text-ink-soft tabular">
-          <span className="text-ink">{version}</span>
-          <span className="mx-2 text-ink-30">·</span>internal pilot build
-          <span className="mx-2 text-ink-30">·</span>
-          {platform.osVersions}
-        </p>
-      </div>
+      <section aria-label="This version of AIOS" className="overflow-hidden rounded-xl border border-line bg-white shadow-card">
+        <div className="flex items-center gap-5 p-6">
+          <div className="min-w-0 flex-1">
+            <Wordmark height={24} />
+            <p className="mt-2.5 flex flex-wrap items-center gap-x-2 text-sm leading-5 text-ink-soft">
+              <span className="font-mono text-xs tracking-[0.02em] text-ink tabular">Version {version}</span>
+              <span className="text-ink-30" aria-hidden>
+                ·
+              </span>
+              Pilot version
+            </p>
+          </div>
+        </div>
+        <p className="border-t border-line-soft bg-paper-raised px-6 py-3 text-sm leading-5 text-ink-soft">Nothing leaves this computer unless you say so. AIOS goes online only to check for updates and to download an AI model you install.</p>
+      </section>
 
-      <SettingGroup
-        title="What this build does not protect against"
-        description="Evidence in this version is self-custodied and Local, with no anchor outside the device. These limits follow from that."
-      >
+      <SettingGroup title="What is in AIOS">
         <SettingPanel>
-          <NumberedList items={LIMITS} />
+          <PartList parts={PARTS} />
         </SettingPanel>
       </SettingGroup>
 
-      <SettingGroup
-        title="Licences"
-        description="Open-source components in this build and the model weights it can install."
-      >
+      <SettingGroup title="How it is protected">
+        <SettingPanel>
+          <PartList parts={PROTECTION} />
+        </SettingPanel>
+      </SettingGroup>
+
+      <SettingGroup title="Licences" description="Open-source software inside AIOS, and the AI models it can install.">
         <SettingPanel>
           <Ledger
             dense
@@ -86,16 +85,32 @@ export function AboutSection() {
       <SettingGroup title="Pilot support">
         <SettingPanel>
           <SettingRow
-            label="Pilot support · shared channel #aios-pilot"
-            hint="Logs stay on this device unless you send them."
+            label="Ask in the shared channel #aios-pilot"
+            hint="If support asks for a diagnostic file, you can create one in Troubleshooting."
             control={
-              <Button trailing={<ArrowRight className="size-3.5" />} onClick={() => navigate("/settings/health")}>
-                Create a support bundle in Health
+              <Button trailing={<ArrowRight className="size-3.5" />} onClick={() => navigate('/settings/troubleshooting')}>
+                Open Troubleshooting
               </Button>
             }
           />
         </SettingPanel>
       </SettingGroup>
     </>
-  );
+  )
+}
+
+function PartList({ parts }: { parts: Array<{ name: string; line: string; icon: string }> }) {
+  return (
+    <ul className="divide-y divide-line-soft">
+      {parts.map((part) => (
+        <li key={part.name} className="grid grid-cols-1 gap-x-6 gap-y-0.5 px-5 py-3 sm:grid-cols-[minmax(168px,32%)_1fr]">
+          <span className="flex items-center gap-2.5 text-sm font-medium leading-5 text-ink">
+            <Art src={part.icon} />
+            {part.name}
+          </span>
+          <span className="text-sm leading-5 text-ink-soft">{part.line}</span>
+        </li>
+      ))}
+    </ul>
+  )
 }

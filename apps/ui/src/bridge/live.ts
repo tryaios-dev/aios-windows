@@ -1,15 +1,18 @@
 /**
  * Live data: in the desktop app, every screen's data comes from the backend through window.aios.
  *
- * The screens read the zustand store (`sim/store.ts`); this module loads the backend's data
- * into it and is called again after each change, so every screen shows what the backend holds.
- * In a plain browser (`pnpm dev:ui`) nothing here runs and the simulation stays as is.
+ * The screens read the zustand store (`@/lib/store`); this module loads the backend's data into it
+ * and is called again after each change, so every screen shows what the backend holds. In a plain
+ * browser (`pnpm dev:ui`) the same code runs against the simulated backend in `./sim` (sample data).
+ *
+ * Areas the backend does not have yet (My secure knowledge, skills, resources, backup, a new
+ * recovery key, voice) start empty in the desktop app and say they are not in this build.
  */
 import {
   errorCode,
-  type AllowlistEntry,
   type Conversation as LiveConversation,
   type EvidenceEvent as LiveEvent,
+  type EvidenceStream as LiveStream,
   type Hardware as LiveHardware,
   type Health as LiveHealth,
   type InstalledModel as LiveModel,
@@ -18,7 +21,6 @@ import {
   type Settings as LiveSettings,
   type SetupStatus,
   type SystemStatus as LiveSystemStatus,
-  type EvidenceStream as LiveStream,
 } from "@aios/bridge-contract";
 import type {
   Conversation,
@@ -33,70 +35,68 @@ import type {
   Project,
 } from "@/lib/types";
 import { ZERO_HASH } from "@/lib/hash";
+import { useStore, type LiveFacts } from "@/lib/store";
+import { setCatalogue } from "@/data/catalogue";
 import { bridge, inElectron } from "./index";
-import { useStore } from "./sim/store";
 
 export const isLive = inElectron;
 
-/** Plain-language text for the backend's error codes the user can hit. */
+/** Plain-language text for the backend's error codes the person can hit. */
 const MESSAGES: Record<string, string> = {
   store_exists: "The store on this computer was already created; its recovery key was shown then.",
-  store_not_created: "The encrypted store has not been created yet. Go back to “Secure your data”.",
+  store_not_created: "The encrypted store has not been created yet. Go back to “Protect your work”.",
   invalid_setting: "That setting cannot be empty.",
   update_check_off: "Update checks are switched off.",
   invalid_path: "That location can't be used. Choose another file or folder.",
-  log_folder_missing: "There is no log folder yet, so there is nothing to put in a support bundle.",
-  catalogue_check_off: "The model catalogue check is switched off.",
-  catalogue_unreachable: "The model mirror can't be reached. Check the connection and try again.",
-  catalogue_signature_invalid: "The model mirror answered with a catalogue that could not be verified.",
+  log_folder_missing: "There is no log folder yet, so there is nothing to put in a diagnostic file.",
+  catalogue_check_off: "The check for new AI models is switched off.",
+  catalogue_unreachable: "The list of AI models can't be reached. Check the connection and try again.",
+  catalogue_signature_invalid: "The list of AI models that came back could not be verified.",
   no_recovery_package:
-    "No Recovery Package was found in that folder. Choose the backup of the data folder that contains recovery.pkg.",
+    "No recovery file was found in that folder. Choose the backup of the data folder that contains recovery.pkg.",
   no_backup_database: "That folder has no chats.db. Choose the backup of the whole data folder.",
   r_checksum: "The recovery key has a typing error. Check it character by character.",
-  r_unwrap: "The recovery key doesn't match this Recovery Package. Check it character by character.",
-  r_mismatch: "This recovery key belongs to a different store than the backup in that folder.",
-  r_format: "recovery.pkg in that folder is damaged or not a Recovery Package.",
+  r_unwrap: "The recovery key doesn't match this backup. Check it character by character.",
+  r_mismatch: "This recovery key belongs to a different AIOS than the backup in that folder.",
+  r_format: "recovery.pkg in that folder is damaged or not a recovery file.",
   r_kdf_params: "recovery.pkg in that folder uses settings this version does not accept.",
   r_payload: "recovery.pkg in that folder is damaged.",
   restore_failed: "Restoring failed and everything was put back as it was.",
   invalid_request: "The request was not valid.",
   project_not_found: "That project no longer exists.",
   conversation_not_found: "That conversation no longer exists.",
-  model_not_found: "That model is not installed.",
-  catalogue_entry_not_found: "That model is not in the catalogue.",
+  model_not_found: "That AI model is not installed.",
+  catalogue_entry_not_found: "That AI model is not in the list.",
   confirmation_required: "This needs your confirmation first.",
-  company_provider_disabled: "Company AI is not available on this installation.",
-  no_model: "No local model is installed yet. Download the suggested model in Models.",
-  model_missing: "No installed model can answer. Download the suggested model in Models.",
-  company_unreachable: "The Company AI server can't be reached.",
+  company_provider_disabled: "The company server is not available on this installation.",
+  no_model: "No AI model is installed yet. Add one in AI models.",
+  model_missing: "No installed AI model can answer. Add one in AI models.",
+  company_unreachable: "The company server can't be reached.",
   empty_message: "The message is empty.",
-  message_too_large: "This message is too long for the model's context. Shorten it or split it up.",
-  nothing_to_regenerate: "There is no answer to regenerate yet.",
+  message_too_large: "This message is too long for the AI model. Shorten it or split it up.",
+  nothing_to_regenerate: "There is no answer to ask again yet.",
   file_not_readable: "That file can't be read.",
-  p_zip: "That file is not a Project Package (it is not a valid archive).",
-  p_format: "That file is not a Project Package this version can read.",
-  p_checksum: "The package is damaged: a checksum does not match. Nothing was imported.",
-  p_reference: "The package is damaged: it refers to records it does not contain. Nothing was imported.",
-  p_unlisted: "The package contains files it does not list. Nothing was imported.",
-  p_missing: "The package is missing files it lists. Nothing was imported.",
-  writer_unavailable:
-    "The evidence writer is not part of this build yet, so the log can't be exported. Every event is kept and waits for it.",
-  size_mismatch: "That file is not the model you chose: its size is different from the catalogue entry.",
-  digest_mismatch: "That file does not match the catalogue: its SHA-256 is different. It was not installed.",
-  deviation_not_approved:
-    "That model file matches the catalogue, but its third-party review has not passed yet, so it can't be installed.",
-  not_gguf: "Choose a .gguf model file.",
-  model_installed: "That model is already installed.",
-  mirror_unavailable:
-    "Downloading isn't available in this build: the model mirror is not set up yet. Use Import instead.",
+  p_zip: "That file is not a project file (it is not a valid archive).",
+  p_format: "That file is not a project file this version can read.",
+  p_checksum: "The file is damaged: a checksum does not match. Nothing was added.",
+  p_reference: "The file is damaged: it refers to records it does not contain. Nothing was added.",
+  p_unlisted: "The file contains parts it does not list. Nothing was added.",
+  p_missing: "The file is missing parts it lists. Nothing was added.",
+  writer_unavailable: "Activity recording is paused, so the copy can't be made yet. Every action is kept and waits.",
+  size_mismatch: "That file is not the AI model you chose: its size is different.",
+  digest_mismatch: "That file is not the genuine AI model: its fingerprint is different. It was not installed.",
+  deviation_not_approved: "That AI model has not passed its review yet, so it can't be installed.",
+  not_gguf: "Choose a .gguf AI model file.",
+  model_installed: "That AI model is already installed.",
+  mirror_unavailable: "Downloading isn't available in this build yet. Use the AI model file from the installer instead.",
   not_in_electron: "This needs the desktop app.",
   mirror_unreachable:
-    "The download stopped: Hugging Face could not be reached. What arrived is kept; resume when you are online.",
-  download_incomplete: "The download ended early. What arrived is kept; resume to finish it.",
-  download_exists: "This model is already downloading.",
-  not_enough_disk: "Not enough free disk on the drive AIOS is installed on for this model.",
-  host_not_allowed: "The download was redirected to a host AIOS does not allow, so it was stopped.",
-  engine_failed: "The local engine could not answer. Try again; if it keeps failing, restart AIOS.",
+    "The download stopped: the publisher could not be reached. What arrived is kept; carry on when you are online.",
+  download_incomplete: "The download ended early. What arrived is kept; carry on to finish it.",
+  download_exists: "This AI model is already downloading.",
+  not_enough_disk: "Not enough free space on this computer for this AI model.",
+  host_not_allowed: "The download was sent to a place AIOS does not allow, so it was stopped.",
+  engine_failed: "The AI model could not answer. Try again; if it keeps failing, restart AIOS.",
 };
 
 export function messageFor(err: unknown): string {
@@ -107,6 +107,15 @@ export function messageFor(err: unknown): string {
 /** Show a failed call as a toast. The screen keeps its last good state. */
 export function reportFailure(err: unknown, title: string): void {
   useStore.getState().toast({ kind: "deny", title, description: messageFor(err) });
+}
+
+/** The words for a part of the design the backend does not have yet. */
+export function notInThisBuild(what: string): void {
+  useStore.getState().toast({
+    kind: "info",
+    title: `${what} is not in this build yet`,
+    description: "It comes in a later version of AIOS. Nothing was changed.",
+  });
 }
 
 /* ------------------------------------------------------------------ mapping */
@@ -159,6 +168,7 @@ export function toEvent(e: LiveEvent, streamId: string): EvidenceEvent {
     project_id: opt(e.project_id),
     conversation_id: opt(e.conversation_id),
     provider,
+    model_digest: typeof payload.model_digest === "string" ? payload.model_digest : undefined,
     // Hashes and signatures exist only once the evidence writer has appended the event.
     prev_hash: ZERO_HASH,
     event_hash: ZERO_HASH,
@@ -169,7 +179,7 @@ export function toEvent(e: LiveEvent, streamId: string): EvidenceEvent {
 
 export const toModel = (m: LiveModel): InstalledModel => ({ ...m });
 
-/** The backend's last benchmark when it reports one (null: none has run on this machine). */
+/** The backend's last benchmark when it reports one (null: none has run on this computer). */
 export const toHardware = (h: LiveHardware, previous: Hardware): Hardware => ({
   cpu: h.cpu,
   cores: h.cores,
@@ -186,8 +196,10 @@ export const toHardware = (h: LiveHardware, previous: Hardware): Hardware => ({
 /** Version of the catalogue bundled with the backend; read once (GET /models/catalogue). */
 let bundledCatalogue: string | null = null;
 
-/** Backend settings into the store. Until the mirror has been checked, the version shown is the
- * bundled catalogue's; the last check time is the backend's (null: "Never checked"). */
+/**
+ * Backend settings into the store. Until the mirror has been checked, the version shown is the
+ * bundled catalogue's. Backup and a new recovery key have no backend yet, so they read as never.
+ */
 export function applySettings(s: LiveSettings): void {
   useStore.setState((st) => ({
     settings: {
@@ -195,11 +207,21 @@ export function applySettings(s: LiveSettings): void {
       ...s,
       catalogue_version: s.catalogue_version ?? bundledCatalogue ?? st.settings.catalogue_version,
       last_catalogue_check: s.last_catalogue_check,
+      backup_location: null,
+      last_backup_at: null,
+      last_backup_size: null,
+      recovery_key_issued_at: null,
     },
   }));
 }
 
-/** Company AI and the writer as the backend reports them (Settings > Health, project header, composer). */
+function setLive(patch: Partial<LiveFacts>): void {
+  useStore.setState((s) => ({
+    live: { allowlist: [], licences: [], databaseLocked: false, ...s.live, ...patch },
+  }));
+}
+
+/** Company server and the writer as the backend reports them (Settings, project header, message box). */
 export function applySystemStatus(status: LiveSystemStatus): void {
   useStore.setState((s) => ({
     health: {
@@ -216,7 +238,7 @@ export function applySystemStatus(status: LiveSystemStatus): void {
   }));
 }
 
-/** The evidence stream (Settings > Data, Evidence tab). The device id comes from the evidence writer. */
+/** The activity record's stream (Activity › Verification details). The device id comes from the writer. */
 export function applyStream(stream: LiveStream): void {
   useStore.setState((s) => ({
     stream: {
@@ -230,22 +252,54 @@ export function applyStream(stream: LiveStream): void {
   }));
 }
 
-export function applyAllowlist(entries: AllowlistEntry[]): void {
-  useStore.setState({ liveAllowlist: entries });
+export function applyAllowlist(entries: Awaited<ReturnType<ReturnType<typeof bridge>["settings"]["network"]>>): void {
+  setLive({ allowlist: entries.map((e) => ({ id: e.id, host: e.host, purpose: e.purpose, kind: e.kind, enabled: e.enabled })) });
 }
 
 /** Setup status into the store: first-run state and the store's stream identity. */
 export function applyStatus(status: SetupStatus): void {
-  const st = useStore.getState();
-  // The backend has no finished setup but the browser storage still holds an old workspace
-  // (for example after the data folder was reset): start setup from scratch.
-  if (!status.first_run_complete && st.ui.firstRunComplete) st.resetFirstRun("fresh");
+  // The backend has no finished setup but the browser storage still says it has (for example after
+  // the data folder was reset): setup starts again from its first step, with nothing from before.
+  const restart = !status.first_run_complete && useStore.getState().ui.firstRunComplete;
   useStore.setState((s) => ({
-    ui: { ...s.ui, firstRunComplete: status.first_run_complete },
+    ui: {
+      ...s.ui,
+      firstRunComplete: status.first_run_complete,
+      ...(restart ? { freshInstall: true, lastProjectId: null, setup: { step: 0, keyShownUnconfirmed: false } } : {}),
+    },
     stream: {
       ...s.stream,
       stream_id: status.stream_id ?? s.stream.stream_id,
       signer_key_id: status.signing_key_id ?? s.stream.signer_key_id,
+    },
+  }));
+}
+
+/** Before loading: forget what an earlier load put in the store, so nothing stale is shown. */
+export function clearLoaded(): void {
+  useStore.setState((s) => ({
+    projects: [],
+    conversations: [],
+    messages: [],
+    summaries: [],
+    installedModels: [],
+    downloads: {},
+    events: [],
+    checkpoints: [],
+    generation: null,
+    continueLocally: null,
+    modelChoice: null,
+    fallbackNotice: null,
+    recoveryKey: null,
+    updateNotice: null,
+    live: { allowlist: [], licences: [], databaseLocked: false },
+    settings: {
+      ...s.settings,
+      update_available: null,
+      backup_location: null,
+      last_backup_at: null,
+      last_backup_size: null,
+      recovery_key_issued_at: null,
     },
   }));
 }
@@ -263,23 +317,24 @@ const ticket = (key: string) => {
 };
 
 export async function refreshSettings(): Promise<void> {
-  if (bundledCatalogue === null) {
-    try {
-      bundledCatalogue = (await bridge().models.catalogue()).version;
-    } catch {
-      // The version shown stays as it is; the settings themselves still load.
-    }
+  // The list of AI models AIOS may install comes from the backend (GET /models/catalogue).
+  try {
+    const catalogue = await bridge().models.catalogue();
+    bundledCatalogue = catalogue.version;
+    setCatalogue(catalogue.entries.map((e) => ({ ...e, deviation_approval: e.deviation_approval ?? undefined })));
+  } catch {
+    // The list and version shown stay as they are; the settings themselves still load.
   }
   const [settings, network] = await Promise.all([bridge().settings.get(), bridge().settings.network()]);
   applySettings(settings);
   applyAllowlist(network);
 }
 
-/** Company AI, writer state (GET /system/status) and build facts (GET /system/info). */
+/** Company server, writer state (GET /system/status) and build facts (GET /system/info). */
 export async function refreshSystem(): Promise<void> {
   const [status, info] = await Promise.all([bridge().system.status(), bridge().system.info()]);
   applySystemStatus(status);
-  useStore.setState({ liveInfo: info });
+  setLive({ licences: info.licences });
 }
 
 /** The stream exists once the store has been created; before that there is nothing to load. */
@@ -300,7 +355,7 @@ export async function refreshProjects(): Promise<Project[]> {
   return projects;
 }
 
-/** All conversations of all projects (the sidebar and search list them across projects). */
+/** All conversations of all projects (the menu and search list them across projects). */
 export async function refreshConversations(projectIds?: string[]): Promise<void> {
   const ids = projectIds ?? useStore.getState().projects.map((p) => p.id);
   const newest = ticket(projectIds ? `conversations:${ids.join(",")}` : "conversations");
@@ -380,10 +435,9 @@ export function resetEngineMemory(): void {
   lastBuild = null;
 }
 
-/** No engine running: the build the next start will use. CPU with Safe mode or after a fallback;
- * otherwise the build it last ran on, or the GPU build only if a graphics card with its own memory
- * and a working driver was found (a virtual display adapter has none). The backend decides for
- * real when it starts the engine. */
+/** No engine running: the build the next start will use. Processor with "Use the processor only" or
+ * after a fallback; otherwise the build it last ran on, or the graphics-card build only if a card
+ * with its own memory and a working driver was found. The backend decides for real when it starts. */
 function nextBuild(h: LiveHealth, s: { safeMode: boolean; hardware: Hardware }): EngineBuild {
   if (s.safeMode || h.engine_cpu_fallback) return "cpu";
   if (lastBuild) return lastBuild;
@@ -410,12 +464,13 @@ export function toEngineHealth(
   };
 }
 
-/** Engine state from the backend. A GPU-to-CPU fallback raises the shared notice once per session,
- * so dismissing it is respected (the store is new each time the app starts). */
+/** Engine state from the backend. A graphics-card-to-processor fallback raises the shared notice once
+ * per session, so dismissing it is respected (the store is new each time the app starts). */
 export async function refreshHealth(): Promise<void> {
   const newest = ticket("health");
   const h = await bridge().system.health();
   if (!newest()) return;
+  setLive({ databaseLocked: h.database === "locked" });
   useStore.setState((s) => ({
     health: toEngineHealth(h, {
       health: s.health,
@@ -447,7 +502,7 @@ let downloadPoll: ReturnType<typeof setInterval> | undefined;
 const RUNNING = new Set(["queued", "downloading", "verifying"]);
 
 /** GET /models/downloads into the store. A finished download becomes an installed model, so
- * the models, the settings (default model) and the evidence (model_installed) are read again. */
+ * the models, the settings (default model) and the activity record (model_installed) are read again. */
 export async function refreshDownloads(): Promise<void> {
   const list = await bridge().models.downloads();
   const finished = list.some((d) => d.status === "done");
@@ -475,12 +530,12 @@ export function stopWatchingDownloads(): void {
   downloadPoll = undefined;
 }
 
-/** Everything a signed-in workspace shows. Messages load per conversation. */
+/** Everything a set-up workspace shows. Messages load per conversation. */
 export async function refreshWorkspace(): Promise<void> {
   await refreshProjects();
   await Promise.all([refreshConversations(), refreshEvents(), refreshModels()]);
   await refreshHealthQuietly(); // after the models: the loaded model is matched against them
-  // Facts for Settings and the Evidence tab: a failed read never fails the workspace.
+  // Facts for Settings and Activity: a failed read never fails the workspace.
   await Promise.all([refreshSystem().catch(() => undefined), refreshStream().catch(() => undefined)]);
 }
 
@@ -500,14 +555,16 @@ export async function change<T>(
   }
 }
 
-/** Load everything live before the first render, so the first-run guard sees the real state. */
+/** Load everything before the first render, so the start-up gate sees the real state. Desktop app: from the
+ * backend. Plain browser: from the simulated backend in `./sim` (sample data). */
 export async function hydrate(): Promise<void> {
-  if (!isLive()) return;
+  clearLoaded();
   try {
+    await refreshHealthQuietly(); // a locked database shows "cannot open your data"
     const status = await refreshStatus();
     await refreshSettings();
     if (status.first_run_complete) await refreshWorkspace();
-    else await refreshModels(true); // setup shows this machine's hardware and installed models
+    else await refreshModels(true); // setup shows this computer's hardware and installed models
     await refreshDownloads().catch(() => undefined); // a download that ran before a restart
     startHealthPoll();
   } catch (err) {
