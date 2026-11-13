@@ -1,76 +1,74 @@
-import type { CatalogueEntry, EngineBuild, Hardware, InstalledModel, ModelTier } from "@/lib/types";
-import { formatBytes, formatDuration } from "@/lib/format";
+import type { CatalogueEntry, Hardware, InstalledModel } from '@/lib/types'
+import { formatBytes } from '@/lib/format'
+import { fitOnThisComputer, type Fit } from '@/lib/words'
+import type { DotTone } from '@/components/ui/chips'
 
-export const GB = 1024 ** 3;
-/** Working space the installer keeps free next to the model file while it downloads and verifies. */
-export const WORKING_SPACE_BYTES = 2 * GB;
+export const GB = 1024 ** 3
 
-export function tierLabel(tier: ModelTier): string {
-  return tier === "small" ? "Small" : "Medium";
+/** Dot colour for "how it runs here": green runs well, brass runs slowly, neutral cannot run. */
+export const FIT_TONE: Record<Fit, DotTone> = { well: 'green', slowly: 'brass', no: 'neutral' }
+/** Space AIOS keeps free next to the file while it downloads and checks it. */
+export const WORKING_SPACE_BYTES = 2 * GB
+
+/**
+ * How an entry runs here. A model that is already installed has paid for its
+ * disk space, so the free-space half of the check is taken out for it.
+ */
+export function fitFor(entry: CatalogueEntry, hw: Hardware, installed: boolean): { fit: Fit; line: string } {
+  if (!installed) return fitOnThisComputer(entry, hw)
+  return fitOnThisComputer(entry, { ...hw, free_disk_gb: hw.free_disk_gb + (entry.size_bytes + WORKING_SPACE_BYTES) / GB })
 }
 
-export function contextLabel(contextLength: number): string {
-  return `${Math.round(contextLength / 1024)}k context`;
-}
-
-export function engineBuildLabel(build: EngineBuild): string {
-  return build === "cpu" ? "CPU" : "GPU";
-}
-
-export function bytesNeeded(entry: CatalogueEntry): number {
-  return entry.size_bytes + WORKING_SPACE_BYTES;
-}
-
-/** Free disk covers the file plus working space. Mirrors the disk half of `hardwareSupports`. */
-export function diskFits(entry: CatalogueEntry, hw: Hardware): boolean {
-  return hw.free_disk_gb * GB >= bytesNeeded(entry);
-}
-
-/** Memory or GPU meets the entry's minimum. Mirrors the memory half of `hardwareSupports`. */
-export function memoryFits(entry: CatalogueEntry, hw: Hardware): boolean {
-  if (hw.ram_gb >= entry.min_ram_gb) return true;
-  return !!hw.gpu && entry.min_vram_gb > 0 && hw.gpu.vram_gb >= entry.min_vram_gb;
-}
-
-export function requirementText(entry: CatalogueEntry): string {
+/** Why Install is unavailable, with the figures a person can act on. */
+export function cannotInstallReason(entry: CatalogueEntry, hw: Hardware): string {
+  const needed = entry.size_bytes + WORKING_SPACE_BYTES
+  if (hw.free_disk_gb * GB < needed) return `It needs ${formatBytes(needed)} free. This computer has ${hw.free_disk_gb} GB.`
   return entry.min_vram_gb > 0
-    ? `Needs ${entry.min_ram_gb} GB memory or a GPU with ${entry.min_vram_gb} GB`
-    : `Needs ${entry.min_ram_gb} GB memory`;
+    ? `It needs ${entry.min_ram_gb} GB of memory, or a graphics card with ${entry.min_vram_gb} GB. This computer has ${hw.ram_gb} GB of memory.`
+    : `It needs ${entry.min_ram_gb} GB of memory. This computer has ${hw.ram_gb} GB.`
 }
 
-export function machineHas(hw: Hardware): string {
-  return hw.gpu ? `${hw.ram_gb} GB memory and a GPU with ${hw.gpu.vram_gb} GB` : `${hw.ram_gb} GB memory and no GPU`;
+/** Where an AI model's file is downloaded from: its publisher's own address, for example "huggingface.co". */
+export function publisherHost(entry: Pick<CatalogueEntry, 'mirror_url'>): string {
+  try {
+    return new URL(entry.mirror_url).host
+  } catch {
+    return 'its publisher'
+  }
 }
 
-export function freeSpaceText(entry: CatalogueEntry, hw: Hardware): string {
-  const needed = formatBytes(bytesNeeded(entry));
-  return diskFits(entry, hw)
-    ? `${needed} needed including working space · ${hw.free_disk_gb} GB free`
-    : `Not enough free disk. ${needed} needed including 2 GB working space; ${hw.free_disk_gb} GB free.`;
+export function sourceWords(source: InstalledModel['source'], entry?: Pick<CatalogueEntry, 'mirror_url'>): string {
+  if (source !== 'download') return 'The model file that came with your installer'
+  return entry ? `Downloaded directly from its publisher, ${publisherHost(entry)}` : 'Downloaded directly from its publisher'
 }
 
-export function sourceLabel(source: InstalledModel["source"]): string {
-  return source === "download" ? "Downloaded from the model mirror" : "Imported from an offline package";
+/** Technical requirement line for the Details record. */
+export function requirementText(entry: CatalogueEntry): string {
+  return entry.min_vram_gb > 0 ? `${entry.min_ram_gb} GB RAM, or a GPU with ${entry.min_vram_gb} GB VRAM` : `${entry.min_ram_gb} GB RAM`
 }
 
-export function timeToFirstWord(ms: number): string {
-  return ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms)} ms`;
+/**
+ * One realistic job per size, so "Light" and "Standard" mean something.
+ * (Belongs next to sizeBlurb in src/lib/words.ts once that file is open for edits.)
+ */
+export function sizeExample(tier: CatalogueEntry['tier']): string {
+  return tier === 'small' ? 'Tidying an email, or a quick summary of a page of notes.' : 'A long report, or a careful comparison of two options.'
 }
 
-/** "about 1 min left" style estimate for a running download. Null while the speed is unknown. */
-export function remainingLabel(bytesLeft: number, speedBps: number): string | null {
-  if (speedBps <= 0) return null;
-  const seconds = bytesLeft / speedBps;
-  if (seconds < 10) return "a few seconds left";
-  if (seconds < 60) return `about ${Math.ceil(seconds / 10) * 10} s left`;
-  return `about ${formatDuration(Math.round(seconds / 60) * 60)} left`;
+/** What a computer needs to run an entry, in everyday words. */
+export function needsWords(entry: CatalogueEntry): string {
+  const space = formatBytes(entry.size_bytes + WORKING_SPACE_BYTES, 0)
+  return entry.min_vram_gb > 0
+    ? `${entry.min_ram_gb} GB of memory, or a graphics card with ${entry.min_vram_gb} GB. ${space} of free space.`
+    : `${entry.min_ram_gb} GB of memory. ${space} of free space.`
 }
 
-/** Short relative time for the catalogue check line: "3 h ago". */
-export function shortAgo(iso: string, now = Date.now()): string {
-  const s = Math.max(0, (now - new Date(iso).getTime()) / 1000);
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.round(s / 60)} min ago`;
-  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
-  return `${Math.round(s / 86400)} d ago`;
+/**
+ * The entry to suggest for a first install: the first one of the recommended
+ * size that runs here, otherwise the first Light one that does.
+ */
+export function recommendedEntry(entries: CatalogueEntry[], hw: Hardware, tier: CatalogueEntry['tier'] | null): CatalogueEntry | undefined {
+  if (!tier) return undefined
+  const runs = (e: CatalogueEntry) => fitOnThisComputer(e, hw).fit !== 'no'
+  return entries.find((e) => e.tier === tier && runs(e)) ?? entries.find((e) => e.tier === 'small' && runs(e))
 }

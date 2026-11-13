@@ -1,66 +1,68 @@
-import { api } from "@/bridge/api";
-import { useStore } from "@/bridge/sim/store";
-import type { InstalledModel } from "@/lib/types";
-import { formatBytes } from "@/lib/format";
-import { ConfirmDialog } from "@/components/ui/overlays";
+import { api } from '@/lib/api'
+import { useStore } from '@/lib/store'
+import type { InstalledModel } from '@/lib/types'
+import { formatBytes } from '@/lib/format'
+import { modelLabel } from '@/lib/words'
+import { ConfirmDialog } from '@/components/ui/overlays'
 
-/** Delete an installed model (MVP 4.3, I-04). Destructive; the evidence log keeps a deletion event. */
+/** Remove an installed AI model. Conversations are kept; the activity record notes the removal. */
 export function DeleteModelDialog({
   open,
   onOpenChange,
   model,
+  successor,
+  onRemoved,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  model: InstalledModel;
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  model: InstalledModel
+  /** The newer version that takes over, when this removal finishes an update. New conversations move to it. */
+  successor?: InstalledModel
+  onRemoved?: () => void
 }) {
-  const isDefault = useStore((s) => s.settings.default_model_id === model.id);
-  const nextDefaultName = useStore((s) =>
-    s.settings.default_model_id === model.id ? (s.installedModels.find((m) => m.id !== model.id)?.name ?? null) : null,
-  );
-  const loadedNow = useStore((s) => s.health.loaded_model_id === model.id);
-  const freed = formatBytes(model.size_bytes);
+  const inUse = useStore((s) => s.settings.default_model_id === model.id)
+  const other = useStore((s) => (s.settings.default_model_id === model.id ? s.installedModels.find((m) => m.id !== model.id) : undefined))
+  const next = successor ?? other
+  const label = modelLabel(model)
+  const freed = formatBytes(model.size_bytes)
 
-  const confirm = async () => {
-    const result = await api.models.remove(model.id);
-    onOpenChange(false);
+  const confirm = () => {
+    const answering = !!useStore.getState().generation
+    const result = api.models.remove(model.id)
+    onOpenChange(false)
     if (!result.ok) {
-      useStore.getState().toast({ kind: "deny", title: `${model.name} was not deleted`, description: result.reason });
-      return;
+      useStore.getState().toast({
+        kind: 'deny',
+        title: `${label} was not removed`,
+        description: answering ? 'AIOS is writing an answer. Wait for it to finish, or stop it, then try again.' : result.reason,
+      })
+      return
     }
-    useStore.getState().toast({
-      kind: "info",
-      title: `${model.name} deleted`,
-      description: `${freed} freed. A deletion event was recorded in the evidence log.`,
-    });
-  };
+    // Finishing an update: new conversations go to the newer version, not to whichever other one is installed.
+    if (successor && inUse) api.models.setDefault(successor.id)
+    onRemoved?.()
+    useStore.getState().toast({ kind: 'info', title: `${label} removed`, description: `${freed} freed on this computer.` })
+  }
 
-  const notes: string[] = [];
-  if (isDefault)
-    notes.push(
-      nextDefaultName
-        ? `It is the default for new conversations. ${nextDefaultName} becomes the default.`
-        : "It is the only installed model. Chat is unavailable until you install another; everything else keeps working.",
-    );
-  if (loadedNow) notes.push("The engine has it loaded and unloads it first.");
+  const notes: string[] = []
+  if (inUse) notes.push(next ? `It is the one in use. New conversations will use ${modelLabel(next)} instead.` : 'It is the only AI model installed. Chat will not work until you install another. Everything else keeps working.')
+  notes.push('A conversation that used it will ask which AI model to carry on with.')
 
   return (
     <ConfirmDialog
       open={open}
       onOpenChange={onOpenChange}
-      title={`Delete ${model.name}?`}
-      description={`This frees ${freed}. Conversations that used it keep their record; the next message in one of them asks which model to continue on.`}
-      confirmLabel="Delete model"
+      title={`Remove ${label}?`}
+      description={`This frees ${freed} on this computer. Your conversations are kept, and you can install it again at any time.`}
+      confirmLabel="Remove"
       confirmVariant="destructive"
       onConfirm={confirm}
     >
-      {notes.length > 0 && (
-        <ul className="flex flex-col gap-1 rounded-lg border border-line bg-paper px-3 py-2.5 text-xs leading-4.5 text-ink-soft">
-          {notes.map((n) => (
-            <li key={n}>{n}</li>
-          ))}
-        </ul>
-      )}
+      <ul className="flex flex-col gap-1.5 rounded-lg border border-line bg-paper-raised px-3.5 py-2.5 text-sm leading-5 text-ink-soft">
+        {notes.map((n) => (
+          <li key={n}>{n}</li>
+        ))}
+      </ul>
     </ConfirmDialog>
-  );
+  )
 }

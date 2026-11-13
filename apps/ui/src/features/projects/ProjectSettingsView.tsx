@@ -1,23 +1,18 @@
-import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router";
-import { Archive, ArchiveRestore, Check, FileDown, FileUp, Lock, Shield, Trash2 } from "lucide-react";
-import { api } from "@/bridge/api";
-import { selectProject, useStore } from "@/bridge/sim/store";
-import type { Project } from "@/lib/types";
-import { formatDateTime } from "@/lib/format";
-import { Button } from "@/components/ui/button";
-import { CLASS_META, ClassChip, StatusDot } from "@/components/ui/chips";
-import { Input, Switch } from "@/components/ui/fields";
-import { Hash } from "@/components/ui/layout";
-import { Ledger, PanelNote, SettingGroup, SettingPanel, SettingRow } from "@/components/app/SettingRow";
-import {
-  ChangeClassDialog,
-  ClassLegend,
-  CompanyAiDialog,
-  DeleteProjectDialog,
-  ReviewedCopyNote,
-} from "./ProjectDialogs";
-import { ExportProjectDialog, ImportPackageDialog } from "./PackageDialogs";
+import { useEffect, useRef, useState } from 'react'
+import { useParams } from 'react-router'
+import { Archive, ArchiveRestore, FileDown, FileUp, Shield, Trash2 } from 'lucide-react'
+import { api } from '@/lib/api'
+import { selectProject, useStore } from '@/lib/store'
+import type { Project } from '@/lib/types'
+import { formatDateTime } from '@/lib/format'
+import { Button } from '@/components/ui/button'
+import { CLASS_META, ClassChip, StatusDot } from '@/components/ui/chips'
+import { Input, Switch } from '@/components/ui/fields'
+import { Hash } from '@/components/ui/layout'
+import { Ledger, PanelNote, SettingGroup, SettingPanel, SettingRow } from '@/features/settings/SettingRow'
+import { DrawnCheck } from '@/features/settings/shared'
+import { ChangeClassDialog, ClassLegend, CompanyAiDialog, DeleteProjectDialog, Disclosure, ReviewedCopyNote, SENSITIVITY_NOTE } from './ProjectDialogs'
+import { ExportProjectDialog, ImportPackageDialog } from './PackageDialogs'
 
 /**
  * Project settings tab (MVP 4.2, 4.6, M-04, M-09; tickets K-02, K-09, K-10).
@@ -26,25 +21,28 @@ import { ExportProjectDialog, ImportPackageDialog } from "./PackageDialogs";
  * the dialogs from ProjectDialogs and PackageDialogs.
  */
 export function ProjectSettingsView() {
-  const { projectId } = useParams();
-  const project = useStore(selectProject(projectId));
-  const [changeClass, setChangeClass] = useState(false);
-  const [companyAi, setCompanyAi] = useState(false);
-  const [exp, setExp] = useState(false);
-  const [imp, setImp] = useState(false);
-  const [del, setDel] = useState(false);
+  const { projectId } = useParams()
+  const project = useStore(selectProject(projectId))
+  const companyFlag = useStore((s) => s.sim.companyFlag)
+  const [changeClass, setChangeClass] = useState(false)
+  const [companyAi, setCompanyAi] = useState(false)
+  const [exp, setExp] = useState(false)
+  const [imp, setImp] = useState(false)
+  const [del, setDel] = useState(false)
 
   // ProjectLayout redirects when the project is gone; render nothing in between.
-  if (!project) return null;
+  if (!project) return null
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="flex w-full max-w-2xl flex-col gap-8 px-6 py-6 animate-rise">
+    <div className="scroll-stable min-h-0 flex-1 overflow-y-auto">
+      {/* Starts on the same left edge as the project name above it. Fades in; nothing moves. */}
+      <div className="flex w-full max-w-[46rem] animate-fade flex-col gap-9 px-5 py-7">
         <h2 className="sr-only">Project settings</h2>
         <NameGroup key={project.id} project={project} />
-        <ClassificationGroup project={project} onChange={() => setChangeClass(true)} />
-        <ProviderGroup project={project} onRequestCompanyAi={() => setCompanyAi(true)} />
-        <PackageGroup onExport={() => setExp(true)} onImport={() => setImp(true)} />
+        <SensitivityGroup project={project} onChange={() => setChangeClass(true)} />
+        {/* The company server exists only in lab builds; the pilot never sees this group. */}
+        {companyFlag && <WhereItRunsGroup project={project} onRequestCompanyAi={() => setCompanyAi(true)} />}
+        <MoveGroup onExport={() => setExp(true)} onImport={() => setImp(true)} />
         <ArchiveDeleteGroup project={project} onDelete={() => setDel(true)} />
         <RecordLedger project={project} />
       </div>
@@ -55,41 +53,37 @@ export function ProjectSettingsView() {
       <ImportPackageDialog open={imp} onOpenChange={setImp} />
       <DeleteProjectDialog open={del} onOpenChange={setDel} project={project} />
     </div>
-  );
+  )
 }
 
 /* ---------------- 1. Name ---------------- */
 
 function NameGroup({ project }: { project: Project }) {
-  const [name, setName] = useState(project.name);
-  const [synced, setSynced] = useState(project.name);
-  const [saved, setSaved] = useState(false);
-  const timer = useRef<number | null>(null);
+  const [name, setName] = useState(project.name)
+  const [synced, setSynced] = useState(project.name)
+  const [saved, setSaved] = useState(false)
+  const timer = useRef<number | null>(null)
 
   // Follow renames made elsewhere (header menu, sidebar) without an effect:
   // adjust the draft during render when the stored name changes.
   if (synced !== project.name) {
-    setSynced(project.name);
-    setName(project.name);
+    setSynced(project.name)
+    setName(project.name)
   }
 
-  useEffect(
-    () => () => {
-      if (timer.current) window.clearTimeout(timer.current);
-    },
-    [],
-  );
+  useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current) }, [])
 
-  const trimmed = name.trim();
-  const changed = trimmed.length > 0 && trimmed !== project.name;
+  const trimmed = name.trim()
+  const empty = trimmed.length === 0
+  const changed = !empty && trimmed !== project.name
 
   const save = () => {
-    if (!changed) return;
-    api.projects.rename(project.id, trimmed);
-    setSaved(true);
-    if (timer.current) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setSaved(false), 1600);
-  };
+    if (!changed) return
+    api.projects.rename(project.id, trimmed)
+    setSaved(true)
+    if (timer.current) window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => setSaved(false), 1800)
+  }
 
   return (
     <SettingGroup title="Name">
@@ -97,195 +91,159 @@ function NameGroup({ project }: { project: Project }) {
         <SettingRow
           htmlFor="project-settings-name"
           label="Project name"
-          hint="Shown in the sidebar, on every conversation and in the file name of an export."
+          hint={empty ? <span className="text-deny">A project needs a name.</span> : 'Shown in the sidebar and used to name the file when you save this project.'}
           control={
             <form
-              className="flex items-center gap-2"
+              className="flex max-w-full items-center gap-2"
               onSubmit={(e) => {
-                e.preventDefault();
-                save();
+                e.preventDefault()
+                save()
               }}
             >
-              <span className="flex w-5 items-center justify-end" aria-live="polite">
-                {saved && <Check className="size-3.5 text-green animate-in" aria-label="Saved" role="img" />}
-              </span>
-              <Input
-                id="project-settings-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                maxLength={80}
-                className="w-56"
-                autoComplete="off"
-              />
-              <Button type="submit" variant="primary" disabled={!changed}>
-                Save
+              <Input id="project-settings-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} className="w-60 min-w-0 shrink" autoComplete="off" aria-invalid={empty || undefined} />
+              {/* One fixed width for both labels, so "Saved" does not nudge the field. */}
+              <Button type="submit" variant={changed ? 'primary' : 'secondary'} className="w-[5.5rem]" disabled={!changed && !saved} leading={saved && !changed ? <DrawnCheck className="size-3.5 text-green" /> : undefined}>
+                <span aria-live="polite">{saved && !changed ? 'Saved' : 'Save'}</span>
               </Button>
             </form>
           }
         />
       </SettingPanel>
     </SettingGroup>
-  );
+  )
 }
 
-/* ---------------- 2. Classification ---------------- */
+/* ---------------- 2. Sensitivity ---------------- */
 
-function ClassificationGroup({ project, onChange }: { project: Project; onChange: () => void }) {
-  const meta = CLASS_META[project.classification];
+function SensitivityGroup({ project, onChange }: { project: Project; onChange: () => void }) {
+  const meta = CLASS_META[project.classification]
   return (
-    <SettingGroup title="Classification">
+    <SettingGroup title="Sensitivity">
       <SettingPanel>
         <SettingRow
           align="start"
           label={<ClassChip value={project.classification} size="md" />}
-          hint={meta.detail}
+          hint={meta.summary}
           control={
             <Button leading={<Shield className="size-3.5" />} onClick={onChange}>
-              Change classification
+              Change sensitivity
             </Button>
           }
         >
           {project.derived_from_project_id && <ReviewedCopyNote project={project} />}
         </SettingRow>
-        <div className="bg-paper-raised px-4 py-3">
+        <div className="bg-paper-raised px-5 py-4">
+          <div className="label-mono mb-2">The three labels</div>
           <ClassLegend />
         </div>
-        <PanelNote>Recorded on every conversation, message and summary; not enforced in this version.</PanelNote>
+        <PanelNote>{SENSITIVITY_NOTE}</PanelNote>
       </SettingPanel>
     </SettingGroup>
-  );
+  )
 }
 
-/* ---------------- 3. Where conversations run ---------------- */
+/* ---------------- 3. Where conversations run (lab only) ---------------- */
 
-function ProviderGroup({ project, onRequestCompanyAi }: { project: Project; onRequestCompanyAi: () => void }) {
-  const companyFlag = useStore((s) => s.sim.companyFlag);
-  const company = useStore((s) => s.health.company);
+function WhereItRunsGroup({ project, onRequestCompanyAi }: { project: Project; onRequestCompanyAi: () => void }) {
+  const company = useStore((s) => s.health.company)
 
   const onCheckedChange = (checked: boolean) => {
     if (checked) {
       // The dialog performs the call on confirm; the switch stays off until then.
-      onRequestCompanyAi();
-      return;
+      onRequestCompanyAi()
+      return
     }
-    api.projects.setCompanyAi(project.id, false, true);
-    useStore
-      .getState()
-      .toast({ kind: "info", title: "Company AI is off for new conversations", description: "Nothing was sent." });
-  };
+    api.projects.setCompanyAi(project.id, false, true)
+    useStore.getState().toast({ kind: 'info', title: 'New conversations will stay on this computer', description: 'Nothing was sent.' })
+  }
 
   return (
     <SettingGroup title="Where conversations run">
       <SettingPanel>
-        {!companyFlag ? (
-          <PanelNote tone="green" icon={<Lock />} className="bg-white py-3 text-sm leading-5">
-            <span className="font-medium text-ink">Local only.</span> The company provider is not enabled on this
-            installation; every answer comes from the model on this machine.
-          </PanelNote>
-        ) : (
-          <>
-            <SettingRow
-              htmlFor="project-company-ai"
-              label="Use Company AI for new conversations in this project"
-              hint="Conversation content will be sent to the company server. Turning this on asks first; turning it off never asks and sends nothing."
-              control={
-                <Switch
-                  id="project-company-ai"
-                  checked={project.company_ai_enabled}
-                  onCheckedChange={onCheckedChange}
-                />
-              }
-            />
-            <Ledger
-              dense
-              rows={[
-                {
-                  k: "Company server",
-                  v: company.model_name,
-                  hint: <span className="font-mono tracking-[0.02em]">{company.base_url}</span>,
-                },
-                {
-                  k: "Reachable",
-                  v: (
-                    <span className="inline-flex items-center gap-1.5 text-ink-soft">
-                      <StatusDot
-                        tone={company.reachable ? "green" : "deny"}
-                        label={company.reachable ? "Reachable" : "Not reachable"}
-                      />
-                      {company.reachable
-                        ? "Reachable now"
-                        : "Not reachable at the moment; new conversations start on Local"}
-                    </span>
-                  ),
-                },
-              ]}
-            />
-            <PanelNote>
-              New conversations use Company AI while it is reachable. Existing conversations stay where they are. Moving
-              a conversation to Company AI always asks; moving one back to Local never asks.
-            </PanelNote>
-          </>
-        )}
+        <SettingRow
+          htmlFor="project-company-ai"
+          label="Use Company AI for new conversations in this project"
+          hint="New conversations are sent to the company server. Turning this on asks first. Turning it off never asks and sends nothing."
+          control={<Switch id="project-company-ai" checked={project.company_ai_enabled} onCheckedChange={onCheckedChange} />}
+        />
+        <Ledger
+          dense
+          rows={[
+            { k: 'Company server', v: company.model_name, hint: <span className="font-mono tracking-[0.02em]">{company.base_url}</span> },
+            {
+              k: 'Connection',
+              v: (
+                <span className="inline-flex items-center gap-1.5 text-ink-soft">
+                  <StatusDot tone={company.reachable ? 'green' : 'deny'} label={company.reachable ? 'Connected' : 'Not connected'} />
+                  {company.reachable ? 'It can be reached now.' : 'It cannot be reached at the moment. New conversations start on this computer.'}
+                </span>
+              ),
+            },
+          ]}
+        />
+        <PanelNote>Conversations you already have stay where they are. Moving one to the company server always asks first. Moving one back to this computer never asks.</PanelNote>
       </SettingPanel>
     </SettingGroup>
-  );
+  )
 }
 
-/* ---------------- 4. Project Package ---------------- */
+/* ---------------- 4. Move this project to another computer ---------------- */
 
-function PackageGroup({ onExport, onImport }: { onExport: () => void; onImport: () => void }) {
+function MoveGroup({ onExport, onImport }: { onExport: () => void; onImport: () => void }) {
   return (
-    <SettingGroup
-      title="Project Package"
-      description="Project Package v1 moves a project between AIOS installations as one file."
-    >
+    <SettingGroup title="Move this project to another computer" description="A project file carries one project between computers that run AIOS.">
       <SettingPanel>
         <SettingRow
-          label="Export this project as a Project Package"
-          hint="One .aiosproj file with the manifest, conversations, messages, summaries, classification and provenance on every item, and checksums. Model files are never included."
+          label="Save this project as a file"
+          hint="One file with your conversations and their summaries. Open it in AIOS on the other computer."
           control={
             <Button leading={<FileDown className="size-3.5" />} onClick={onExport}>
-              Export Project Package
+              Save as a file
             </Button>
           }
         />
         <SettingRow
-          label="Import a package into this installation"
-          hint="Adds the package as a new project. Every checksum is verified before anything is written; colliding identifiers are remapped and the originals kept in provenance."
+          label="Add a project from a file"
+          hint="Adds a project that was saved from AIOS. Nothing already here is changed."
           control={
             <Button leading={<FileUp className="size-3.5" />} onClick={onImport}>
-              Import Project Package
+              Add from a file
             </Button>
           }
         />
       </SettingPanel>
     </SettingGroup>
-  );
+  )
 }
 
 /* ---------------- 5. Archive or delete ---------------- */
 
 function ArchiveDeleteGroup({ project, onDelete }: { project: Project; onDelete: () => void }) {
+  const archive = () => {
+    api.projects.archive(project.id, true)
+    useStore.getState().toast({ kind: 'info', title: 'Project archived', description: 'You can still read and search it.', action: { label: 'Undo', onClick: () => api.projects.archive(project.id, false) } })
+  }
+  const restore = () => {
+    api.projects.archive(project.id, false)
+    useStore.getState().toast({ kind: 'success', title: 'Project restored', description: 'It is back in the main list.' })
+  }
   return (
     <SettingGroup title="Archive or delete">
       <SettingPanel>
         <SettingRow
-          label={project.archived ? "Restore from archive" : "Archive project"}
+          label={project.archived ? 'Restore from archive' : 'Archive project'}
           hint={
             project.archived
-              ? "This project is archived. Reading and search still work; restore it to start new conversations."
-              : "Moves the project out of the main list. Reading and search still work, and nothing is deleted."
+              ? 'This project is archived. You can still read and search it. Restore it to start new conversations.'
+              : 'Moves the project out of the main list. You can still read and search it. Nothing is deleted.'
           }
           control={
             project.archived ? (
-              <Button
-                leading={<ArchiveRestore className="size-3.5" />}
-                onClick={() => api.projects.archive(project.id, false)}
-              >
+              <Button leading={<ArchiveRestore className="size-3.5" />} onClick={restore}>
                 Restore from archive
               </Button>
             ) : (
-              <Button leading={<Archive className="size-3.5" />} onClick={() => api.projects.archive(project.id, true)}>
+              <Button leading={<Archive className="size-3.5" />} onClick={archive}>
                 Archive project
               </Button>
             )
@@ -293,30 +251,43 @@ function ArchiveDeleteGroup({ project, onDelete }: { project: Project; onDelete:
         />
         <SettingRow
           label="Delete project"
-          hint="Deleting removes the project, its conversations and summaries from this device. The evidence log keeps a deletion event and never holds content, so nothing can be recovered from it."
+          hint="Removes the project and its conversations from this computer. It cannot be undone."
           control={
-            <Button variant="destructive" leading={<Trash2 className="size-3.5" />} onClick={onDelete}>
+            // Quiet until pressed: the confirmation that follows carries the solid red button.
+            <Button className="border-deny/30 text-deny hover:border-deny/50 hover:bg-deny-soft active:bg-deny-tint" leading={<Trash2 className="size-3.5" />} onClick={onDelete}>
               Delete project
             </Button>
           }
         />
       </SettingPanel>
     </SettingGroup>
-  );
+  )
 }
 
 /* ---------------- 6. Record ---------------- */
 
 function RecordLedger({ project }: { project: Project }) {
   return (
-    <Ledger
-      dense
-      className="border-t border-line-soft"
-      rows={[
-        { k: "Created", v: formatDateTime(project.created_at), mono: true },
-        { k: "Updated", v: formatDateTime(project.updated_at), mono: true },
-        { k: "Project id", v: <Hash value={project.id} full /> },
-      ]}
-    />
-  );
+    <SettingGroup title="About this project">
+      <SettingPanel>
+        <Ledger
+          dense
+          rows={[
+            { k: 'Created', v: formatDateTime(project.created_at), mono: true },
+            { k: 'Last changed', v: formatDateTime(project.updated_at), mono: true },
+          ]}
+        />
+        <div className="bg-paper-raised px-5 py-1.5">
+          <Disclosure label="Details">
+            <dl className="grid grid-cols-[minmax(132px,34%)_1fr] items-baseline gap-x-6 pb-2">
+              <dt className="label-mono">Project ID</dt>
+              <dd className="min-w-0">
+                <Hash value={project.id} full />
+              </dd>
+            </dl>
+          </Disclosure>
+        </div>
+      </SettingPanel>
+    </SettingGroup>
+  )
 }

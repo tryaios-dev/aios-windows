@@ -51,5 +51,17 @@ const browserPreview: AiosBridge = {
 export const inElectron = () => window.aios !== undefined;
 export const bridge = (): AiosBridge => window.aios ?? browserPreview;
 
+/**
+ * Open a link from an answer (M-20). Desktop app: Electron main shows its own confirmation, which
+ * nothing in the page can skip. Browser preview: the caller's dialog has already asked.
+ */
+export async function openExternal(url: string): Promise<void> {
+  if (window.aios) {
+    await window.aios.system.openLink(url);
+    return;
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
 export const useHealth = () =>
   useQuery({ queryKey: ["health"], queryFn: () => bridge().system.health(), refetchInterval: 10_000 });

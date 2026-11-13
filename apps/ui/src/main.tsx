@@ -1,15 +1,34 @@
-import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
-import { App } from "./app/App";
-import { hydrate } from "./bridge/live";
-import "./styles/app.css";
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import { HashRouter } from 'react-router'
+import { MotionConfig } from 'motion/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { TooltipProvider } from '@/components/ui/overlays'
+import { ErrorBoundary } from '@/app/ErrorBoundary'
+import App from './App'
+import './index.css'
 
-// In the desktop app, load first-run state and settings from the backend before the first
-// render, so the first-run guard and every settings screen start from the real values.
-void hydrate().finally(() =>
-  createRoot(document.getElementById("root")!).render(
-    <StrictMode>
-      <App />
-    </StrictMode>,
-  ),
-);
+// Fonts load lazily by default, so the first page to use the mono or display
+// face would paint in a fallback and then swap. Ask for all of them up front.
+for (const face of ['400 1em "Public Sans Variable"', '600 1em "Public Sans Variable"', '400 1em "IBM Plex Mono"', '500 1em "IBM Plex Mono"', '400 1em "Gloock"']) {
+  document.fonts?.load(face).catch(() => undefined)
+}
+
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 5_000 } } })
+
+// Hash routing: Electron loads the renderer from file://, where path routing cannot work.
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <HashRouter>
+          <MotionConfig reducedMotion="user" transition={{ duration: 0.22, ease: [0.2, 0.7, 0.2, 1] }}>
+            <TooltipProvider>
+              <App />
+            </TooltipProvider>
+          </MotionConfig>
+        </HashRouter>
+      </QueryClientProvider>
+    </ErrorBoundary>
+  </StrictMode>,
+)

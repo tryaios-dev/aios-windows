@@ -28,7 +28,7 @@ describe("ac-11 markdown renders model output inert", () => {
     expect(container.querySelector("script")).toBeNull();
     expect(container.querySelector("iframe")).toBeNull();
     expect(container.querySelector("img")).toBeNull(); // every image is replaced by a label
-    expect(container.textContent).toContain("[remote image blocked]");
+    expect(container.textContent).toContain("Image not shown");
     expect((window as unknown as { stolen?: unknown }).stolen).toBeUndefined();
     for (const a of Array.from(container.querySelectorAll("a"))) {
       const href = a.getAttribute("href") ?? "";
@@ -51,6 +51,6 @@ describe("ac-11 markdown renders model output inert", () => {
     render(<Markdown content="See [the docs](https://example.org/guide)." />);
     fireEvent.click(screen.getByText("the docs"));
     expect(opened).not.toHaveBeenCalled();
-    expect(screen.getByText("Open example.org in your browser?")).toBeTruthy();
+    expect(screen.getByText("Open this link in your browser?")).toBeTruthy();
   });
 });
