@@ -50,7 +50,7 @@ def test_network_list_matches_the_contract(client: TestClient) -> None:
         (a[0], a[1], a[2]) for a in ALLOWLIST
     ]
     flows = client.get("/system/network").json()
-    assert [f["enabled"] for f in flows] == [True, True, False]  # Company server off by default
+    assert [f["enabled"] for f in flows] == [True] * (len(flows) - 1) + [False]  # Company off
 
 
 def test_evidence_is_pending_until_the_writer_runs(client: TestClient) -> None:

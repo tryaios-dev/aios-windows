@@ -165,6 +165,8 @@ LICENCES: list[tuple[str, str, str]] = [
     ("llama.cpp", "Local inference engine", "MIT"),
     ("MiniCPM5 2B", "Model weights (Small)", "Apache-2.0"),
     ("Ornith 1.5 9B", "Model weights (Medium)", "MIT"),
+    ("Sage A1.5", "Model weights (Large)", "Apache-2.0"),
+    ("Qwen3.8 27B", "Model weights (Large)", "Apache-2.0"),
     ("SQLCipher", "Encrypted database", "BSD-style"),
     ("Electron", "Desktop shell", "MIT"),
 ]

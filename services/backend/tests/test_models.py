@@ -58,25 +58,31 @@ def test_backend_catalogue_equals_the_one_the_ui_shows() -> None:
 def test_catalogue_endpoint(client: TestClient) -> None:
     out = client.get("/models/catalogue").json()
     assert out["signed"] is False
-    assert {e["entry_id"] for e in out["entries"]} == {SMALL, MEDIUM}
+    assert {e["entry_id"] for e in out["entries"]} == {SMALL, MEDIUM, SAGE, QWEN27}
 
 
 REPO = Path(__file__).resolve().parents[3]
 SMALL = "minicpm5-2b-q4_k_m-openbmb-gguf"
 MEDIUM = "ornith-1.5-9b-q4_k_m-ornith-gguf"
+SAGE = "sage-a1.5-q4_k_m-mradermacher-gguf"
+QWEN27 = "qwen3.8-27b-ud-q4_k_m-unsloth-gguf"
 
 
-def test_catalogue_lists_only_real_installable_files() -> None:
-    """Bug 2: no placeholder sizes or hashes. Every entry is a real published file with its
-    licence text in the repository, and can be installed (third-party: passed review)."""
+def test_catalogue_lists_only_real_published_files() -> None:
+    """Bug 2: no placeholder sizes or hashes. Every entry is a real published file on Hugging
+    Face at a pinned revision, with its licence text in the repository. Only reviewed entries can
+    be installed (MVP 9.6); the two large ones wait for their review."""
     entries = catalogue.entries()
-    assert {e.tier for e in entries} == {"small", "medium"}
+    assert {e.tier for e in entries} == {"small", "medium", "large"}
     for e in entries:
         assert re.fullmatch(r"[0-9a-f]{64}", e.artifact_digest), e.id
         assert len(set(e.artifact_digest)) > 4, e.id  # not a made-up repeating pattern
         assert re.fullmatch(r"[0-9a-f]{40}", e.upstream_revision), e.id
         assert (REPO / e.licence_reference).is_file(), e.licence_reference
-        assert catalogue.installable(e), e.id
+        assert e.mirror_url == (
+            f"https://huggingface.co/{e.upstream_model}/resolve/{e.upstream_revision}/{e.file_name}"
+        )
+    assert {e.id for e in entries if catalogue.installable(e)} == {SMALL, MEDIUM}
     small = catalogue.find(SMALL)
     assert small is not None and small.size_bytes == 1561318368
     assert small.artifact_digest.startswith("ec2d5801")
@@ -184,7 +190,8 @@ def test_download_is_not_available_in_this_build(client: TestClient) -> None:
 def test_hardware_is_read_from_this_machine_and_kept(client: TestClient) -> None:
     hw = client.get("/system/hardware").json()
     assert hw["cores"] >= 1 and hw["ram_gb"] >= 0 and hw["cpu"]
-    assert hw["recommended_tier"] in ("small", "medium", None)
+    assert hw["recommended_tier"] in ("small", "medium", "large", None)
+    assert hw["recommended_entry_id"] in (SMALL, MEDIUM, SAGE, QWEN27, None)
     assert client.get("/system/hardware").json()["checked_at"] == hw["checked_at"]
     assert client.get("/system/hardware?refresh=true").json()["checked_at"] >= hw["checked_at"]
 
@@ -211,3 +218,53 @@ def test_ac_02_a_third_party_entry_without_a_passed_review_is_not_downloaded(
     monkeypatch.setattr(catalogue, "entries", lambda: (entry,))
     r = client.post(f"/models/download/{entry.id}")
     assert (r.status_code, r.json()) == (422, {"error": "deviation_not_approved"})
+
+
+# ------------------------------------------------------------------ the one suggested model
+def _suggest(ram: int, vram: int | None, disk: int = 500, driver_ok: bool = True) -> str | None:
+    from aios_backend.apps.models import hardware
+
+    entry = hardware.recommend(ram, disk, vram, driver_ok, catalogue.entries(), lambda e: True)
+    return entry.id if entry else None
+
+
+@pytest.mark.parametrize(
+    ("ram", "vram", "expected"),
+    [
+        (8, None, SMALL),  # 8 GB RAM, no dedicated GPU
+        (16, None, SMALL),  # 16 GB RAM, no dedicated GPU: still the CPU pick (catalogue v3)
+        (16, 8, MEDIUM),  # 8 GB GPU, 16 GB RAM
+        (32, 8, SAGE),  # 8 GB GPU, 32 GB RAM: experts in system memory
+        (32, 16, SAGE),  # 16 GB GPU, 32 GB RAM
+        (64, 24, QWEN27),  # 24 GB GPU, 64 GB RAM
+        (64, 32, QWEN27),
+        (16, 4, SMALL),  # a 4 GB GPU counts as no dedicated GPU
+    ],
+)
+def test_ac_02_one_model_is_suggested_per_catalogue_v3_windows_profile(
+    ram: int, vram: int | None, expected: str
+) -> None:
+    assert _suggest(ram, vram) == expected
+
+
+def test_ac_02_nothing_is_suggested_below_the_minimum() -> None:
+    assert _suggest(4, None) is None
+    assert _suggest(16, None, disk=9) is None
+
+
+def test_ac_02_a_gpu_without_a_driver_counts_as_no_gpu() -> None:
+    assert _suggest(16, 8, driver_ok=False) == SMALL
+
+
+def test_ac_02_the_next_model_is_suggested_when_the_drive_is_too_small() -> None:
+    # 64 GB RAM and a 24 GB GPU, but only 12 GB free: Qwen (16.6 GB) and Ornith (5.8 GB + 2 GB
+    # working space fits) -> Ornith
+    assert _suggest(64, 24, disk=12) == MEDIUM
+
+
+def test_ac_02_only_reviewed_models_are_suggested() -> None:
+    """MVP 9.6: a third-party file needs a passed review; the large entries have none yet."""
+    from aios_backend.apps.models import hardware
+
+    entry = hardware.recommend(64, 500, 24, True, catalogue.entries(), catalogue.installable)
+    assert entry is not None and entry.id == MEDIUM
