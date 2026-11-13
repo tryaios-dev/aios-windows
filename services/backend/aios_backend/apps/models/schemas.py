@@ -9,7 +9,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-Tier = Literal["small", "medium"]
+Tier = Literal["small", "medium", "large"]
 
 
 class DeviationApproval(BaseModel):
@@ -92,6 +92,8 @@ class HardwareOut(BaseModel):
     free_disk_gb: int
     os: str
     recommended_tier: Tier | None
+    # The one model AIOS suggests for this machine (catalogue entry id), or None.
+    recommended_entry_id: str | None = None
     checked_at: datetime
     benchmark: BenchmarkOut | None = None  # the latest run on this machine
 

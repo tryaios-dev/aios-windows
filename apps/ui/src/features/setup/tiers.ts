@@ -5,11 +5,13 @@ import type { ModelTier } from "@/lib/types";
 export const TIER_ENTRY: Record<ModelTier, string> = {
   small: "minicpm5-2b-q4_k_m-openbmb-gguf",
   medium: "ornith-1.5-9b-q4_k_m-ornith-gguf",
+  large: "sage-a1.5-q4_k_m-mradermacher-gguf",
 };
 
-export const TIER_LABEL: Record<ModelTier, string> = { small: "Small", medium: "Medium" };
+export const TIER_LABEL: Record<ModelTier, string> = { small: "Small", medium: "Medium", large: "Large" };
 
 export const TIER_EXPECTATION: Record<ModelTier, string> = {
   small: "Usable; roughly 5 to 15 words per second on a modern CPU",
   medium: "Good quality; fast on a GPU",
+  large: "Best quality; needs a GPU and 32 GB or more memory",
 };

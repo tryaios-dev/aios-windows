@@ -44,7 +44,7 @@ import { DEFAULT_SIM, type SimFlags } from "./flags";
 import type { SystemInfo as LiveSystemInfo } from "@aios/bridge-contract";
 import { hashHex, uuid, ZERO_HASH } from "@/lib/hash";
 import { estimateTokens, truncate } from "@/lib/format";
-import { CATALOGUE, DEFAULT_HARDWARE, catalogueEntry, tierFor } from "@/bridge/sim/catalogue";
+import { CATALOGUE, DEFAULT_HARDWARE, catalogueEntry, tierFor, recommendFor } from "@/bridge/sim/catalogue";
 import { pickAnswer, summaryFor } from "@/bridge/sim/answers";
 import { platform } from "@/lib/platform";
 import { inElectron } from "@/bridge/index";
@@ -1784,6 +1784,11 @@ const ALLOWLIST_OFF: AllowlistEntry[] = [...ALLOWLIST_FIXED, COMPANY_ENTRY_OFF];
 export const selectAllowlist = (s: Store): AllowlistEntry[] =>
   s.liveAllowlist ?? (s.sim.companyFlag ? ALLOWLIST_ON : ALLOWLIST_OFF);
 export const selectRecommendedTier = (s: Store) => tierFor(s.hardware);
+/** The one model to suggest: the backend's choice in the desktop app, else the same rule here. */
+export const selectRecommendedEntry = (s: Store): string | null =>
+  s.hardware.recommended_entry_id !== undefined
+    ? s.hardware.recommended_entry_id
+    : (recommendFor(s.hardware)?.entry_id ?? null);
 export const selectCatalogue = () => CATALOGUE;
 
 export function toastKindLabel(kind: ToastKind) {

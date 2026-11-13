@@ -19,6 +19,7 @@ import {
   messageFor,
   refreshConversation,
   refreshConversations,
+  refreshDownloads,
   refreshEvents,
   refreshHealthQuietly,
   refreshModels,
@@ -292,11 +293,16 @@ export const api = {
       }
     },
     hardware: () => s().hardware,
-    /** Needs the local engine, which is not in the desktop build yet. */
+    /** POST /system/benchmark: starts the engine with the default model and times a short answer.
+     * The result is kept by the backend and shown with the hardware (Settings, setup). */
     benchmark: async () => {
       if (!isLive()) return s().runBenchmark();
-      await refreshModels(true).catch(() => undefined);
-      toast("info", "Benchmark not run", "The benchmark needs the local engine, which is not part of this build yet.");
+      try {
+        await bridge().models.benchmark();
+      } catch (err) {
+        reportFailure(err, "Benchmark not run");
+      }
+      await Promise.all([refreshModels().catch(() => undefined), refreshHealthQuietly()]);
     },
     dismissFallbackNotice: () => s().dismissFallbackNotice(),
     /** POST /system/support-bundle: the desktop app asks where to save, the backend zips the logs. */
@@ -320,15 +326,36 @@ export const api = {
   /** GET /models, POST /models/download, POST /models/import, DELETE /models/{id} */
   models: {
     installed: () => s().installedModels,
+    /** POST /models/downloads: from the model's origin (Hugging Face), resumable. Progress is
+     * polled into the store until the file is verified and installed. */
     download: (entryId: string) =>
       isLive()
         ? void bridge()
             .models.download(entryId)
+            .then(() => refreshDownloads())
             .catch((err: unknown) => reportFailure(err, "Download not started"))
         : s().startDownload(entryId),
-    pause: (entryId: string) => s().pauseDownload(entryId),
-    resume: (entryId: string) => s().resumeDownload(entryId),
-    cancel: (entryId: string) => s().cancelDownload(entryId),
+    pause: (entryId: string) =>
+      isLive()
+        ? void bridge()
+            .models.pauseDownload(entryId)
+            .then(() => refreshDownloads())
+            .catch((err: unknown) => reportFailure(err, "Download not paused"))
+        : s().pauseDownload(entryId),
+    resume: (entryId: string) =>
+      isLive()
+        ? void bridge()
+            .models.resumeDownload(entryId)
+            .then(() => refreshDownloads())
+            .catch((err: unknown) => reportFailure(err, "Download not resumed"))
+        : s().resumeDownload(entryId),
+    cancel: (entryId: string) =>
+      isLive()
+        ? void bridge()
+            .models.cancelDownload(entryId)
+            .then(() => refreshDownloads())
+            .catch((err: unknown) => reportFailure(err, "Download not cancelled"))
+        : s().cancelDownload(entryId),
     /** Pick a .gguf file; it is installed only if it is this catalogue entry byte for byte. */
     importOffline: async (entryId: string): Promise<void> => {
       if (!isLive()) return s().importModel(entryId);

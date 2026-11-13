@@ -71,6 +71,16 @@ def _engine_root() -> Path:
     return REPO_ROOT / "build" / "out" / "llama"
 
 
+def _models_dir() -> Path:
+    """Installed: ``<install folder>/models``, next to the program on the drive the user chose
+    in the installer (backend.exe is ``<install folder>/resources/backend/backend.exe``). The
+    installer keeps this folder on update (build/installer/installer.nsh). From source: the
+    per-user data folder."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parents[2] / "models"
+    return paths.models_dir()
+
+
 def load(profile: Profile | str | None = None) -> Settings:
     """Settings for ``profile`` (default: $AIOS_ENV, else dev)."""
     chosen = Profile(profile or os.environ.get(PROFILE_ENV) or Profile.DEV)
@@ -86,7 +96,7 @@ def load(profile: Profile | str | None = None) -> Settings:
             backups_dir=paths.data_dir() / "backups",
             engine_root=_engine_root(),
             recovery_pkg=paths.recovery_pkg(),
-            models_dir=paths.models_dir(),
+            models_dir=_models_dir(),
         )
 
     if chosen is Profile.DEV:

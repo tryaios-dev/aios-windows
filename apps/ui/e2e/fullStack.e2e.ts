@@ -93,7 +93,9 @@ describe("desktop app against the real backend", () => {
     expect(store().ui.firstRunComplete).toBe(false);
     expect(store().hardware.cores).toBeGreaterThan(0);
     expect(store().settings.schema_version).toBeGreaterThanOrEqual(4);
-    expect(store().liveAllowlist?.map((e) => e.id)).toEqual(["model-mirror", "update-feed", "company-server"]);
+    const ids = store().liveAllowlist?.map((e) => e.id) ?? [];
+    expect(ids.slice(0, 3)).toEqual(["model-mirror", "update-feed", "model-origin"]); // Hugging Face
+    expect(ids.at(-1)).toBe("company-server");
   });
 
   it("setup: creates the store, shows the recovery key once, finishes with the default project", async () => {

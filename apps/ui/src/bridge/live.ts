@@ -66,8 +66,8 @@ const MESSAGES: Record<string, string> = {
   catalogue_entry_not_found: "That model is not in the catalogue.",
   confirmation_required: "This needs your confirmation first.",
   company_provider_disabled: "Company AI is not available on this installation.",
-  no_model: "No local model is ready to answer. Install a model; the local engine is not part of this build yet.",
-  model_missing: "The model this conversation uses is not installed any more.",
+  no_model: "No local model is installed yet. Download the suggested model in Models.",
+  model_missing: "No installed model can answer. Download the suggested model in Models.",
   company_unreachable: "The Company AI server can't be reached.",
   empty_message: "The message is empty.",
   message_too_large: "This message is too long for the model's context. Shorten it or split it up.",
@@ -90,6 +90,13 @@ const MESSAGES: Record<string, string> = {
   mirror_unavailable:
     "Downloading isn't available in this build: the model mirror is not set up yet. Use Import instead.",
   not_in_electron: "This needs the desktop app.",
+  mirror_unreachable:
+    "The download stopped: Hugging Face could not be reached. What arrived is kept; resume when you are online.",
+  download_incomplete: "The download ended early. What arrived is kept; resume to finish it.",
+  download_exists: "This model is already downloading.",
+  not_enough_disk: "Not enough free disk on the drive AIOS is installed on for this model.",
+  host_not_allowed: "The download was redirected to a host AIOS does not allow, so it was stopped.",
+  engine_failed: "The local engine could not answer. Try again; if it keeps failing, restart AIOS.",
 };
 
 export function messageFor(err: unknown): string {
@@ -171,6 +178,7 @@ export const toHardware = (h: LiveHardware, previous: Hardware): Hardware => ({
   free_disk_gb: h.free_disk_gb,
   os: h.os,
   recommended_tier: h.recommended_tier,
+  recommended_entry_id: h.recommended_entry_id ?? null,
   benchmark: h.benchmark === undefined ? previous.benchmark : (h.benchmark ?? undefined),
 });
 
@@ -433,6 +441,40 @@ export function startHealthPoll(): void {
   healthPoll = setInterval(() => void refreshHealthQuietly(), HEALTH_POLL_MS);
 }
 
+/* ------------------------------------------------------------------ model downloads */
+export const DOWNLOAD_POLL_MS = 1_000;
+let downloadPoll: ReturnType<typeof setInterval> | undefined;
+const RUNNING = new Set(["queued", "downloading", "verifying"]);
+
+/** GET /models/downloads into the store. A finished download becomes an installed model, so
+ * the models, the settings (default model) and the evidence (model_installed) are read again. */
+export async function refreshDownloads(): Promise<void> {
+  const list = await bridge().models.downloads();
+  const finished = list.some((d) => d.status === "done");
+  useStore.setState({
+    downloads: Object.fromEntries(
+      list
+        .filter((d) => d.status !== "done")
+        .map((d) => [d.entry_id, { ...d, error: d.error ? messageFor(new Error(d.error)) : undefined }]),
+    ),
+  });
+  if (finished) await Promise.all([refreshModels(), refreshSettings(), refreshEvents().catch(() => undefined)]);
+  if (list.some((d) => RUNNING.has(d.status))) watchDownloads();
+  else stopWatchingDownloads();
+}
+
+/** Poll once a second while a download runs; it stops by itself when none does. */
+export function watchDownloads(): void {
+  if (downloadPoll !== undefined) return;
+  downloadPoll = setInterval(() => void refreshDownloads().catch(() => undefined), DOWNLOAD_POLL_MS);
+}
+
+export function stopWatchingDownloads(): void {
+  if (downloadPoll === undefined) return;
+  clearInterval(downloadPoll);
+  downloadPoll = undefined;
+}
+
 /** Everything a signed-in workspace shows. Messages load per conversation. */
 export async function refreshWorkspace(): Promise<void> {
   await refreshProjects();
@@ -466,6 +508,7 @@ export async function hydrate(): Promise<void> {
     await refreshSettings();
     if (status.first_run_complete) await refreshWorkspace();
     else await refreshModels(true); // setup shows this machine's hardware and installed models
+    await refreshDownloads().catch(() => undefined); // a download that ran before a restart
     startHealthPoll();
   } catch (err) {
     reportFailure(err, "Could not reach the AIOS backend");

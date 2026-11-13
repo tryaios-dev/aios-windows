@@ -13,7 +13,7 @@ import asyncio
 import json
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from aios_backend.apps.evidence import service as evidence
@@ -109,7 +109,10 @@ def drain(db: Database, writer: WriterClient, batch: int = BATCH) -> int:
         rows = session.scalars(
             select(EvidenceOutbox)
             .where(EvidenceOutbox.seq.is_(None), EvidenceOutbox.type.not_in(WRITER_ONLY))
-            .order_by(EvidenceOutbox.id)
+            # The chain must start with store_created (genesis), but first run queues events
+            # before the store exists (a model downloaded in setup step 3, the store created in
+            # step 5): send store_created first, the rest in the order they were recorded.
+            .order_by(case((EvidenceOutbox.type == "store_created", 0), else_=1), EvidenceOutbox.id)
             .limit(batch)
         ).all()
         if rows:

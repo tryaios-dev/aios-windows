@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AiosBridge, Exchange, Health, InstalledModel, Settings, SetupStatus } from "@aios/bridge-contract";
+import type { AiosBridge, DownloadState, Exchange, Health, InstalledModel, Settings, SetupStatus } from "@aios/bridge-contract";
 import { api } from "./api";
-import { hydrate, refreshHealth, resetEngineMemory } from "./live";
-import { useStore } from "./sim/store";
+import { hydrate, refreshDownloads, refreshHealth, resetEngineMemory, stopWatchingDownloads } from "./live";
+import { selectRecommendedEntry, useStore } from "./sim/store";
 
 const STATUS: SetupStatus = {
   first_run_complete: false,
@@ -384,5 +384,53 @@ describe("desktop app: Settings read the backend, not the simulation", () => {
   it("explains a catalogue check that this build cannot run", async () => {
     const r = await api.settings.checkCatalogue();
     expect(r).toEqual({ ok: false, error: expect.stringContaining("model mirror is not set up") });
+  });
+});
+
+describe("desktop app: the suggested model downloads from Hugging Face (ac-02)", () => {
+  const ENTRY = "minicpm5-2b-q4_k_m-openbmb-gguf";
+  const state = (status: DownloadState["status"], received: number): DownloadState => ({
+    entry_id: ENTRY,
+    status,
+    received_bytes: received,
+    total_bytes: 1_561_318_368,
+    speed_bps: status === "downloading" ? 1_000_000 : 0,
+    error: null,
+    started_at: "2026-11-12T13:00:00Z",
+  });
+
+  it("ac-02 shows the one model the backend suggests for this computer", async () => {
+    fake.bridge.models.hardware = vi.fn(async () => ({ ...HARDWARE, recommended_entry_id: ENTRY }));
+    await hydrate();
+    expect(selectRecommendedEntry(useStore.getState())).toBe(ENTRY);
+  });
+
+  it("ac-02 shows progress, pauses, resumes and installs the finished download", async () => {
+    let current = state("downloading", 100);
+    fake.bridge.models.download = vi.fn(async () => undefined);
+    fake.bridge.models.downloads = vi.fn(async () => [current]);
+    fake.bridge.models.pauseDownload = vi.fn(async () => (current = state("paused", 200)));
+    fake.bridge.models.resumeDownload = vi.fn(async () => (current = state("downloading", 200)));
+
+    api.models.download(ENTRY);
+    await vi.waitFor(() => expect(useStore.getState().downloads[ENTRY]?.received_bytes).toBe(100));
+    api.models.pause(ENTRY);
+    await vi.waitFor(() => expect(useStore.getState().downloads[ENTRY]?.status).toBe("paused"));
+    api.models.resume(ENTRY);
+    await vi.waitFor(() => expect(useStore.getState().downloads[ENTRY]?.status).toBe("downloading"));
+
+    current = state("done", 1_561_318_368);
+    fake.bridge.models.installed = vi.fn(async () => [{ ...MODEL, id: ENTRY, catalogue_entry_id: ENTRY }]);
+    await refreshDownloads();
+    const s = useStore.getState();
+    expect(s.downloads[ENTRY]).toBeUndefined(); // done: it is now an installed model
+    expect(s.installedModels.map((m) => m.id)).toContain(ENTRY);
+    stopWatchingDownloads();
+  });
+
+  it("ac-02 explains a download that stopped", async () => {
+    fake.bridge.models.downloads = vi.fn(async () => [{ ...state("failed", 300), error: "mirror_unreachable" }]);
+    await refreshDownloads();
+    expect(useStore.getState().downloads[ENTRY]?.error).toMatch(/Hugging Face could not be reached/);
   });
 });

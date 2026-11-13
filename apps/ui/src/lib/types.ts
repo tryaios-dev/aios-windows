@@ -10,7 +10,7 @@ export type ClassificationSource = "project" | "import" | "review";
 export type ProviderType = "local" | "company";
 export type MessageRole = "user" | "assistant";
 export type MessageStatus = "complete" | "partial" | "error" | "stopped" | "streaming";
-export type ModelTier = "small" | "medium";
+export type ModelTier = "small" | "medium" | "large";
 export type EngineBuild = "cpu" | "vulkan";
 
 export interface Project {
@@ -166,6 +166,8 @@ export interface Hardware {
   free_disk_gb: number;
   os: string;
   recommended_tier: ModelTier | null;
+  /** The one model AIOS suggests for this machine (catalogue entry id); null below the minimum. */
+  recommended_entry_id?: string | null | undefined;
   benchmark?: Benchmark | undefined;
 }
 
