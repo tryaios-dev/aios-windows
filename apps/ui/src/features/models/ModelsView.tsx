@@ -33,7 +33,8 @@ export function ModelsView() {
   const hardware = useStore((s) => s.hardware)
   const tier = useStore(selectRecommendedTier)
   const defaultId = useStore((s) => s.settings.default_model_id)
-  const newModelOut = useStore((s) => s.sim.newModelOut)
+  // A newer AI model is out when the backend's catalogue lists one that replaces another.
+  const newModelOut = CATALOGUE.some((e) => !!e.replaces)
   // Which entries are downloading, as a plain string: progress ticks belong to the cards, not to the page.
   const downloadingIds = useStore((s) => {
     let ids = ''

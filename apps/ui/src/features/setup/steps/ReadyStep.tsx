@@ -56,26 +56,29 @@ export function ReadyStep({ note, preferredModelId, onBack }: { note?: string; /
     { icon: backup.tone === 'none' ? ART.backupMissing : ART.backup, name: 'Backup', line: backup.tone === 'none' ? 'Not set up yet. Settings › Backup and recovery.' : 'Settings › Backup and recovery.' },
   ]
 
-  const finish = () => {
+  /** Finishing creates the first project in the desktop app, so everything after it waits. */
+  const finish = async () => {
     setLeaving(true)
-    api.firstRun.complete({ installedModelId: model?.id ?? null })
+    const done = await api.firstRun.complete()
+    if (!done) setLeaving(false)
+    return done
   }
 
-  const open = () => {
-    finish()
-    navigate('/')
+  const open = async () => {
+    if (await finish()) navigate('/')
   }
 
-  const startTask = (starter: Starter) => {
-    finish()
+  const startTask = async (starter: Starter) => {
+    if (!(await finish())) return
     const projects = api.projects.list()
     const project = projects[0]
     if (!project) {
       navigate('/')
       return
     }
-    const conversation = api.conversations.create(project.id, starter.conversationTitle)
-    navigate(`/projects/${project.id}/c/${conversation.id}?draft=${encodeURIComponent(starter.id)}`)
+    const conversation = await api.conversations.create(project.id, starter.conversationTitle)
+    if (conversation) navigate(`/projects/${project.id}/c/${conversation.id}?draft=${encodeURIComponent(starter.id)}`)
+    else navigate('/')
   }
 
   return (

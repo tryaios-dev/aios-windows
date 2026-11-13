@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { motion } from 'motion/react'
 import { FolderOpen, KeyRound } from 'lucide-react'
-import { api } from '@/lib/api'
+import { RECOVERY_KEY_LENGTH, api } from '@/lib/api'
 import { useStore } from '@/lib/store'
 import { ZERO_HASH } from '@/lib/hash'
 import { cn } from '@/lib/cn'
 import { Button } from '@/components/ui/button'
-import { Field, Input, Select } from '@/components/ui/fields'
+import { Field, Input } from '@/components/ui/fields'
 import { Callout } from '@/components/ui/feedback'
 import { ConfirmDialog } from '@/components/ui/overlays'
 import { Hash, KeyValue, Mono } from '@/components/ui/layout'
@@ -15,13 +15,8 @@ import { Disclosure, DrawnCheck, IconTile, Plate, Sequence, SetupFrame, StepBody
 
 /**
  * Restore from a backup (MVP 4.5; tickets K-03, E-04). Renders without the
- * app shell. The folder dialog is simulated with two fixed choices.
+ * app shell. The backup folder is chosen in the system folder dialog.
  */
-
-const FOLDERS = [
-  { value: 'E:\\AIOS backups\\AIOS backup 2026-11-08', description: 'Backup from 8 November · complete', hasPackage: true },
-  { value: 'E:\\AIOS backups\\Copied by hand 2026-09-02', description: 'Copied by hand on 2 September · not a complete backup', hasPackage: false },
-]
 
 /** What the person sees. The store works through five technical stages; they map onto these four. */
 const STEPS = ['Checking your key', 'Opening your backup', 'Checking nothing is missing', 'Finishing']
@@ -33,8 +28,9 @@ const STEPS = ['Checking your key', 'Opening your backup', 'Checking nothing is 
  * record checked to its end at 3600, and "Finishing" when the store answers.
  */
 const MARKS = [2300, 3100, 3600]
-const KEY_LENGTH = 32
+const KEY_LENGTH = RECOVERY_KEY_LENGTH
 const GROUPS = KEY_LENGTH / 4
+const GROUP_WORDS: Record<number, string> = { 8: 'Eight', 9: 'Nine' }
 const EASE: [number, number, number, number] = [0.2, 0.7, 0.2, 1]
 
 /** Uppercase, letters and digits only, a hyphen after every four characters. */
@@ -47,7 +43,7 @@ type Failure = 'backup' | 'key' | 'other'
 
 /** The store's message names internal parts. Say the same thing in the product's words. */
 function failureOf(error: string): Failure {
-  if (/not a complete AIOS backup|no recovery package/i.test(error)) return 'backup'
+  if (/not a complete AIOS backup|no recovery package|no recovery file|has no chats\.db/i.test(error)) return 'backup'
   if (/key/i.test(error)) return 'key'
   return 'other'
 }
@@ -97,14 +93,13 @@ export function RestoreScreen() {
 
   const submit = async () => {
     if (!canSubmit || !folder) return
-    const target = FOLDERS.find((f) => f.value === folder)
     clearTimers()
     setPhase('running')
     setDone(0)
     setFailure(null)
     setHelp(null)
     MARKS.forEach((ms, i) => timers.current.push(setTimeout(() => setDone(i + 1), ms)))
-    const result = await api.restore({ backup_path: folder, recovery_key: key, has_package: target?.hasPackage ?? false })
+    const result = await api.restore({ backup_path: folder, recovery_key: key })
     clearTimers()
     if (result.ok) {
       setDone(STEPS.length)
@@ -131,7 +126,6 @@ export function RestoreScreen() {
     return i < done ? 'done' : i === done && running ? 'current' : 'todo'
   }
 
-  const chosen = FOLDERS.find((f) => f.value === folder)
   const keyFailed = failure === 'key'
 
   return (
@@ -152,28 +146,28 @@ export function RestoreScreen() {
                   <IconTile className="size-9">
                     <FolderOpen strokeWidth={1.75} />
                   </IconTile>
-                  <Select
-                    id="backup-folder"
-                    value={folder}
-                    onValueChange={(v) => {
-                      setFolder(v)
-                      resetOutcome()
-                    }}
-                    placeholder="Choose a folder"
-                    disabled={running}
-                    options={FOLDERS.map((f) => ({ value: f.value, label: <span className="font-mono text-sm">{f.value}</span>, description: f.description }))}
-                  />
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <Button
+                        id="backup-folder"
+                        disabled={running}
+                        onClick={async () => {
+                          const path = await api.chooseBackupFolder()
+                          if (path) {
+                            setFolder(path)
+                            resetOutcome()
+                          }
+                        }}
+                      >
+                        {folder ? 'Choose another folder' : 'Choose a folder'}
+                      </Button>
+                      {folder && <span className="min-w-0 truncate font-mono text-sm text-ink">{folder}</span>}
+                    </div>
                 </div>
-                {chosen && (
-                  <p className={cn('mt-1 pl-12 text-xs leading-4.5', chosen.hasPackage ? 'text-ink-50' : 'text-brass-text')} aria-live="polite">
-                    {chosen.description}
-                  </p>
-                )}
               </Field>
 
               <div className="h-px bg-line-soft" role="separator" />
 
-              <Field label="Recovery key" htmlFor="recovery-key" hint="Eight groups of four characters. Hyphens are added as you type.">
+              <Field label="Recovery key" htmlFor="recovery-key" hint={`${GROUP_WORDS[GROUPS] ?? GROUPS} groups of four characters. Hyphens are added as you type.`}>
                 <div className="mt-1 flex items-center gap-3">
                   <IconTile className="size-9">
                     <KeyRound strokeWidth={1.75} />
@@ -187,7 +181,7 @@ export function RestoreScreen() {
                         setKey(formatKey(e.target.value))
                         resetOutcome()
                       }}
-                      placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
+                      placeholder={Array.from({ length: GROUPS }, () => 'XXXX').join('-')}
                       autoComplete="off"
                       autoCapitalize="characters"
                       spellCheck={false}

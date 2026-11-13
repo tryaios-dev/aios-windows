@@ -14,7 +14,7 @@ import { Hash, KeyValue, Mono } from '@/components/ui/layout'
 import { DrawnTick, ProgressBar, timeLeftWords, useTransferStats } from '@/components/app/InstallProgress'
 import { Vignette } from '@/components/app/Vignettes'
 import { Disclosure, Plate, StepBody, StepFooter, StepHeading } from '../SetupFrame'
-import { GIB, TIER_ENTRY, WORKING_SPACE_BYTES, spaceNeededGb, tierEntry } from '../tiers'
+import { GIB, WORKING_SPACE_BYTES, availableTiers, spaceNeededGb, tierEntry } from '../tiers'
 
 const EASE: [number, number, number, number] = [0.2, 0.7, 0.2, 1]
 
@@ -77,7 +77,7 @@ export function SettingUpStep({ note, tier, skipped, onSkip, onUnskip, onBack, o
     started.current = true
     // A download begun for the other size is no longer wanted.
     const inFlight = useStore.getState().downloads
-    for (const other of Object.values(TIER_ENTRY)) {
+    for (const other of availableTiers().map((t) => tierEntry(t).entry_id)) {
       if (other !== entryId && inFlight[other]) api.models.cancel(other)
     }
     if (installed || skipped || download || !enoughSpace) return

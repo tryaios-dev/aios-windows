@@ -57,15 +57,15 @@ export function HomeView() {
   const recent = useMemo(() => [...conversations].filter((c) => !c.archived).sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 5), [conversations])
 
   /** The project new work goes into: the one last used, else the first, else a new "My workspace". */
-  const workProject = () => {
+  const workProject = async () => {
     const open = projects.filter((p) => !p.archived)
-    return open.find((p) => p.id === lastProjectId) ?? open[0] ?? api.projects.create({ name: 'My workspace', classification: 'restricted' })
+    return open.find((p) => p.id === lastProjectId) ?? open[0] ?? (await api.projects.create({ name: 'My workspace', classification: 'restricted' }))
   }
 
-  const start = (starter: Starter, withExample = false) => {
-    const project = workProject()
-    const conv = api.conversations.create(project.id, starter.conversationTitle)
-    navigate(`/projects/${project.id}/c/${conv.id}?draft=${starter.id}${withExample ? '&example=1' : ''}`)
+  const start = async (starter: Starter, withExample = false) => {
+    const project = await workProject()
+    const conv = project && (await api.conversations.create(project.id, starter.conversationTitle))
+    if (project && conv) navigate(`/projects/${project.id}/c/${conv.id}?draft=${starter.id}${withExample ? '&example=1' : ''}`)
   }
 
   const speed = speedWords(benchmark)
@@ -176,10 +176,11 @@ export function HomeView() {
               disabled={!hasModel}
               busy={answering}
               modelLabel={hasModel ? modelLabelById(settings.default_model_id, installed) : null}
-              onAsk={(text) => {
-                const project = workProject()
-                const conv = api.conversations.create(project.id)
-                const sent = api.conversations.send(conv.id, text)
+              onAsk={async (text) => {
+                const project = await workProject()
+                const conv = project && (await api.conversations.create(project.id))
+                if (!project || !conv) return
+                const sent = await api.conversations.send(conv.id, text)
                 // If it could not be sent, the words go with you into the conversation's message box.
                 navigate(`/projects/${project.id}/c/${conv.id}`, sent.ok ? undefined : { state: { draftText: text } })
               }}

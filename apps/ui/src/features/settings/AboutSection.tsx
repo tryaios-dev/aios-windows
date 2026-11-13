@@ -8,14 +8,6 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/chips'
 import { Ledger, SettingGroup, SettingPanel, SettingRow } from './SettingRow'
 
-const LICENCES: Array<{ name: string; role: string; licence: string }> = [
-  { name: 'llama.cpp', role: 'Runs the AI model', licence: 'MIT' },
-  { name: 'Qwen3', role: 'AI model', licence: 'Apache-2.0' },
-  { name: 'Gemma 4', role: 'AI model', licence: 'Apache-2.0' },
-  { name: 'SQLCipher', role: 'Encrypts your conversations', licence: 'BSD-style' },
-  { name: 'Electron', role: 'The application window', licence: 'MIT' },
-]
-
 /**
  * What is in AIOS, in the order of the menu, then the two things that protect all of it.
  * Written out here on purpose: About must read the same whatever the setup screens list.
@@ -33,9 +25,13 @@ const PROTECTION: Array<{ name: string; line: string; icon: string }> = [
   { icon: ART.backup, name: 'Rules', line: 'What the AI may and may not do. Four are built in. The first: nothing leaves this computer unless you say so.' },
 ]
 
+const NO_LICENCES: Array<{ name: string; role: string; licence: string }> = []
+
 /** About: which version this is, what is in AIOS and how it is protected, licences and pilot support. */
 export function AboutSection() {
   const version = useStore((s) => s.settings.app_version)
+  // The open-source software and AI models in this build, as GET /system/info reports them.
+  const licences = useStore((s) => s.live?.licences) ?? NO_LICENCES
   const navigate = useNavigate()
 
   return (
@@ -72,7 +68,7 @@ export function AboutSection() {
         <SettingPanel>
           <Ledger
             dense
-            rows={LICENCES.map((l) => ({
+            rows={licences.map((l) => ({
               rawKey: true,
               k: l.name,
               v: (

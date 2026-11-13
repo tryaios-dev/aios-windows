@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { api } from '@/lib/api'
-import { APP_VERSION, selectRecommendedTier, useStore } from '@/lib/store'
+import { selectRecommendedTier, useStore } from '@/lib/store'
 import type { ModelTier } from '@/lib/types'
 import { SetupFrame, type RailStep } from './SetupFrame'
-import { TIER_ENTRY, usableTier } from './tiers'
+import { tierEntry, usableTier } from './tiers'
 import { WelcomeStep } from './steps/WelcomeStep'
 import { ComputerStep } from './steps/ComputerStep'
 import { SettingUpStep } from './steps/SettingUpStep'
@@ -48,6 +48,7 @@ function readStart(): { index: number; keyPending: boolean } {
 
 export function SetupWizard() {
   const hw = useStore((s) => s.hardware)
+  const version = useStore((s) => s.settings.app_version)
   const recommended = usableTier(useStore(selectRecommendedTier), hw)
   const [start] = useState(readStart)
   const [index, setIndex] = useState(start.index)
@@ -153,12 +154,12 @@ export function SetupWizard() {
       )
       break
     case 'ready':
-      content = <ReadyStep note={note} preferredModelId={tier && !skippedModel ? TIER_ENTRY[tier] : null} onBack={back} />
+      content = <ReadyStep note={note} preferredModelId={tier && !skippedModel ? tierEntry(tier).entry_id : null} onBack={back} />
       break
   }
 
   return (
-    <SetupFrame steps={rail} current={index} rail={step !== 'welcome'} eyebrow={`AIOS ${APP_VERSION} · pilot version`}>
+    <SetupFrame steps={rail} current={index} rail={step !== 'welcome'} eyebrow={`AIOS ${version} · pilot version`}>
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={step}

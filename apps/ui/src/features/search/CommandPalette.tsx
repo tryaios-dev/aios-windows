@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/fields'
 import { Spinner } from '@/components/ui/feedback'
 import { Kbd } from '@/components/ui/layout'
 import { useExampleSearches } from './examples'
+import { useMessageSearch } from './useMessageSearch'
 import { Highlight, RoleLabel } from './highlight'
 import { DocIcon } from './DocIcon'
 import { DOC_STATUS, docFacts, matchDocuments } from './knowledgeDocs'
@@ -78,12 +79,9 @@ export function CommandPalette() {
       .slice(0, MAX_CONVERSATIONS)
   })
 
-  const hits = useMemo<SearchHit[]>(() => {
-    if (!open || needle.length < 2) return []
-    return api.search(needle).slice(0, MAX_MESSAGES)
-    // `messages` is a dependency so results follow the store while the palette is open.
-
-  }, [open, needle, messages])
+  // `messages` re-runs the search so results follow the store while the palette is open.
+  const found = useMessageSearch(open && needle.length >= 2 ? needle : null, messages)
+  const hits = useMemo<SearchHit[]>(() => found.slice(0, MAX_MESSAGES), [found])
 
   // Documents are found by name. The stored list is selected as it is, then narrowed here.
   const knowledge = useExtras((s) => s.knowledge)
@@ -157,8 +155,7 @@ export function CommandPalette() {
     } else if (item.kind === 'document') {
       go('/knowledge')
     } else if (item.id === 'new-conversation' && currentProject) {
-      const conv = api.conversations.create(currentProject.id)
-      go(`/projects/${currentProject.id}/c/${conv.id}`)
+      void api.conversations.create(currentProject.id).then((conv) => conv && go(`/projects/${currentProject.id}/c/${conv.id}`))
     } else if (item.id === 'open-models') {
       go('/models')
     } else if (item.id === 'open-knowledge') {

@@ -34,7 +34,7 @@ function EvidenceRedirect() {
  */
 function StartGate({ children }: { children: React.ReactNode }) {
   const done = useStore((s) => s.ui.firstRunComplete)
-  const keysMissing = useStore((s) => s.sim.keysMissing)
+  const keysMissing = useStore((s) => !!s.live?.databaseLocked)
   if (!done) return <Navigate to="/setup" replace />
   if (keysMissing) return <CannotOpenScreen />
   return <>{children}</>

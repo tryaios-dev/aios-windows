@@ -4,11 +4,10 @@ import { KeyRound } from 'lucide-react'
 import { ART } from '@/assets/icons'
 import { ArtTile } from '@/components/ui/art'
 import { cn } from '@/lib/cn'
-import { useExtras } from '@/lib/extras'
 import { selectAllowlist, useStore, useStoreShallow } from '@/lib/store'
+import { useExtras } from '@/lib/extras'
 import type { AllowlistEntry, Settings } from '@/lib/types'
 import { CATALOGUE } from '@/data/catalogue'
-import { resourceById } from '@/data/resources'
 import { BUILT_IN_RULES } from '@/data/stack'
 import { Badge, StatusDot } from '@/components/ui/chips'
 import { Ledger, NumberedList, PanelNote, PathValue, SettingGroup, SettingPanel } from './SettingRow'
@@ -25,17 +24,19 @@ const LIMITS = [
  * Where AI model files come from: the publisher's own address, read from the catalogue.
  * AIOS does not host AI models; it downloads each one directly from its publisher and checks it.
  */
-const PUBLISHER_HOSTS: string[] = [
-  ...new Set(
-    CATALOGUE.map((e) => {
-      try {
-        return new URL(e.mirror_url).host
-      } catch {
-        return ''
-      }
-    }).filter(Boolean),
-  ),
-]
+function publisherHosts(): string[] {
+  return [
+    ...new Set(
+      CATALOGUE.map((e) => {
+        try {
+          return new URL(e.mirror_url).host
+        } catch {
+          return ''
+        }
+      }).filter(Boolean),
+    ),
+  ]
+}
 
 /** One line of "Connections AIOS can make": what it is for, where it goes, when it happens, and how it stands. */
 interface Connection {
@@ -54,13 +55,13 @@ interface Connection {
 }
 
 /** What each built-in connection is for and when it happens, in plain words. */
-function describe(entry: AllowlistEntry, settings: Settings): { what: string; whatDetail?: string; when: string } {
+function describe(entry: AllowlistEntry, settings: Settings, publishers: string[]): { what: string; whatDetail?: string; when: string } {
   if (entry.host.startsWith('updates.')) {
     // The two daily checks in General: for a new version of AIOS, and for newly listed AI models.
     const daily = settings.update_check || settings.catalogue_check
     return { what: 'Checking for updates and downloading them', whatDetail: 'AIOS itself, and its list of AI models', when: daily ? 'When AIOS starts, and at most once a day.' : 'Only when you press Check now.' }
   }
-  if (PUBLISHER_HOSTS.includes(entry.host)) {
+  if (publishers.includes(entry.host)) {
     return { what: 'Downloading an AI model you install', whatDetail: 'Directly from its publisher', when: 'Only when you install an AI model or update one. AIOS checks it before using it.' }
   }
   if (entry.kind === 'configured') return { what: 'Your company server', when: 'Only while a conversation you chose to run there is being answered.' }
@@ -71,43 +72,29 @@ function describe(entry: AllowlistEntry, settings: Settings): { what: string; wh
 export function PrivacySection() {
   const allowlist = useStoreShallow(selectAllowlist)
   const settings = useStore((s) => s.settings)
-  const companyFlag = useStore((s) => s.sim.companyFlag)
+  const companyFlag = useStore((s) => s.health.company.enabled)
   const company = useStore((s) => s.health.company)
-  // The stored list is selected as it is; the table rows are worked out below.
+  // Linked resources: none until the backend has resources (proposed: GET /resources).
   const linked = useExtras((s) => s.linkedResources)
 
   const connections = useMemo<Connection[]>(() => {
     const rows: Connection[] = []
-    const builtIn = (e: AllowlistEntry): Connection => ({ id: e.host, ...describe(e, settings), address: e.host, addressIsHost: true, status: e.enabled ? 'On' : 'Off', on: e.enabled })
+    // Read when the page opens: the catalogue comes from the backend after this module loads.
+    const publishers = publisherHosts()
+    const builtIn = (e: AllowlistEntry): Connection => ({ id: e.host, ...describe(e, settings, publishers), address: e.host, addressIsHost: true, status: e.enabled ? 'On' : 'Off', on: e.enabled })
     // Updates first, then where AI models come from.
     const fixed = allowlist.filter((e) => e.kind === 'fixed')
     rows.push(...fixed.filter((e) => e.host.startsWith('updates.')).map(builtIn))
     rows.push(...fixed.filter((e) => !e.host.startsWith('updates.')).map(builtIn))
     // A publisher named in the catalogue is always shown, whether or not the built-in list names it yet.
-    for (const host of PUBLISHER_HOSTS) {
+    for (const host of publishers) {
       if (fixed.some((e) => e.host === host)) continue
       rows.push(builtIn({ host, purpose: '', kind: 'fixed', enabled: true }))
     }
     // The company server is lab-only in this version: it is listed only where it is switched on.
     rows.push(...allowlist.filter((e) => e.kind === 'configured' && e.enabled).map(builtIn))
-    // Resources the person has linked. Linking sends nothing; each send is asked about first.
-    for (const l of linked) {
-      const r = resourceById(l.id)
-      if (!r) continue
-      rows.push({
-        id: `resource-${r.id}`,
-        what: r.name,
-        whatDetail: r.kind === 'model' ? 'A cloud AI model you linked' : 'Computing power you linked',
-        address: r.provider,
-        addressDetail: r.region,
-        addressIsHost: false,
-        when: 'Only when you allow a send. AIOS asks each time, and Activity keeps a note of it.',
-        status: 'Linked',
-        on: true,
-      })
-    }
     return rows
-  }, [allowlist, settings, linked])
+  }, [allowlist, settings])
 
   return (
     <>
@@ -240,7 +227,7 @@ export function PrivacySection() {
                 ),
                 hint: e.purpose,
               })).concat(
-                PUBLISHER_HOSTS.filter((host) => !allowlist.some((e) => e.host === host)).map((host) => ({
+                publisherHosts().filter((host) => !allowlist.some((e) => e.host === host)).map((host) => ({
                   rawKey: true,
                   k: <span className="font-mono text-xs font-normal tracking-[0.02em]">{host}</span>,
                   v: (

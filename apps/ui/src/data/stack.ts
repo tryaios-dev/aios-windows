@@ -8,9 +8,8 @@
  * is done. The list and its order follow the 12 November review: the screen
  * shows everything that comes with AIOS, not only the AI model.
  *
- * TO CONFIRM WITH ENGINEERING before the real build: which of these the
- * installer really puts in place (document reading, the knowledge base,
- * voice and memory were named in the review as examples). A line must not
+ * Only what this build really puts in place is listed (document reading, the knowledge base,
+ * voice and memory come later; secure storage is created on the next step). A line must not
  * read "ready" for something the build does not include.
  */
 export interface AiosPart {
@@ -29,13 +28,8 @@ export interface AiosPart {
 }
 
 export const AIOS_PARTS: AiosPart[] = [
-  { id: 'storage', name: 'Secure storage', adding: 'Setting up secure storage', ready: 'Secure storage is ready', detail: 'Everything is encrypted on this computer', why: 'Everything AIOS keeps is locked on this computer, and only you hold the key.', at: 6 },
-  { id: 'documents', name: 'Document reading', adding: 'Adding document reading', ready: 'Document reading is ready', detail: 'AIOS can take in your PDFs and files', why: 'Drop in PDFs, Word files and spreadsheets, and your AI can work from them.', at: 18 },
-  { id: 'knowledge', name: 'Knowledge base', adding: 'Preparing your knowledge base', ready: 'Your knowledge base is ready', detail: 'One protected place for the documents you add', why: 'The documents you add are kept together in one protected place, ready for your AI to use.', at: 31 },
-  { id: 'voice', name: 'Voice', adding: 'Adding voice', ready: 'Voice is ready', detail: 'Speak instead of typing', why: 'Talk to your AI instead of typing, and turn recordings into text.', at: 44 },
-  { id: 'memory', name: 'Memory', adding: 'Turning on memory', ready: 'Memory is on', detail: 'Your AI keeps track of what was said earlier', why: 'Your AI keeps track of long conversations, so you do not have to repeat yourself.', at: 57 },
-  { id: 'rules', name: 'Rules', adding: 'Turning on the rules', ready: 'Rules are on', detail: 'Nothing leaves this computer unless you say so', why: 'Built-in rules decide what your AI may do. The first: nothing leaves this computer unless you say so.', at: 70 },
-  { id: 'activity', name: 'Activity log', adding: 'Starting the activity log', ready: 'Activity log is on', detail: 'You can see everything your AI does', why: 'Every action is written down in plain words, in order, so you can always see what your AI did.', at: 83 },
+  { id: 'rules', name: 'Rules', adding: 'Turning on the rules', ready: 'Rules are on', detail: 'Nothing leaves this computer unless you say so', why: 'Built-in rules decide what your AI may do. The first: nothing leaves this computer unless you say so.', at: 6 },
+  { id: 'activity', name: 'Activity log', adding: 'Starting the activity log', ready: 'Activity log is on', detail: 'You can see everything your AI does', why: 'Every action is written down in plain words, in order, so you can always see what your AI did.', at: 18 },
   { id: 'model', name: 'AI model', adding: 'Downloading your AI model', ready: 'Your AI model is downloaded and checked', detail: 'It runs on this computer, even with no internet', why: 'The AI itself. It runs on this computer and keeps working with no internet.', at: 100 },
 ]
 

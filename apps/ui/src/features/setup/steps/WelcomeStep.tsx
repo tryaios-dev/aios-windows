@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router'
 import { ArrowRight, Check } from 'lucide-react'
 import { motion } from 'motion/react'
-import { APP_VERSION } from '@/lib/store'
+import { useStore } from '@/lib/store'
 import { Wordmark } from '@/components/ui/brand'
 import { Button } from '@/components/ui/button'
 import { Vignette, type VignetteKind } from '@/components/app/Vignettes'
@@ -38,6 +38,7 @@ const CAPABILITIES: Array<{ kind: VignetteKind; name: string; title: string; lin
  */
 export function WelcomeStep({ onContinue }: { onContinue: () => void }) {
   const navigate = useNavigate()
+  const version = useStore((s) => s.settings.app_version)
   return (
     <div className="scroll-stable relative min-h-0 flex-1 overflow-y-auto">
       {/* A little light behind the cards; the page stays paper. */}
@@ -47,7 +48,7 @@ export function WelcomeStep({ onContinue }: { onContinue: () => void }) {
         {/* The logo is part of the page, not a bar above it, so nothing scrolls underneath it. */}
         <div className="flex shrink-0 items-center justify-between gap-4">
           <Wordmark height={15} />
-          <span className="label-mono">AIOS {APP_VERSION} · pilot version</span>
+          <span className="label-mono">AIOS {version} · pilot version</span>
         </div>
 
         <div className="grid flex-1 items-center gap-x-14 gap-y-12 py-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:py-6">

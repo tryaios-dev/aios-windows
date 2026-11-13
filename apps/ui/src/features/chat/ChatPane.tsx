@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router'
 import { ArrowLeft, ArrowRightLeft, Cpu, FileText, Pencil } from 'lucide-react'
 import { api } from '@/lib/api'
 import { STARTERS } from '@/data/stack'
-import { COMPANY_MODEL_NAME, useStore, useStoreShallow } from '@/lib/store'
+import { selectCompanyModelName, useStore, useStoreShallow } from '@/lib/store'
 import type { Conversation, Message, Project } from '@/lib/types'
 import { cn } from '@/lib/cn'
 import { dayLabel, formatTime, pluralise, relativeTime } from '@/lib/format'
@@ -32,12 +32,18 @@ export function ChatPane({ conversation, project, onBack }: { conversation: Conv
   const [rename, setRename] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
+
+  // Desktop app: this conversation's messages come from the backend when it opens (GET /conversations/{id}/messages).
+  useEffect(() => {
+    api.conversations.load(conversation.id)
+  }, [conversation.id])
   const highlightId = params.get('m')
 
   const noModel = installed.length === 0
   const isCompany = conversation.current_provider === 'company'
   /** "Standard · Qwen3 8B" for an answer from this computer; the server's own name otherwise. */
-  const modelName = (m: Message) => (m.provider === 'company' ? COMPANY_MODEL_NAME : modelLabelById(m.model_id, installed))
+  const companyModel = useStore(selectCompanyModelName)
+  const modelName = (m: Message) => (m.provider === 'company' ? companyModel : modelLabelById(m.model_id, installed))
 
   // A starter fills the message box through the same parameters Home uses: ?draft=<id>, plus example=1 for the full example.
   const fillFrom = (id: string, withExample: boolean) => {

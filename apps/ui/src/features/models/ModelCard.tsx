@@ -310,7 +310,7 @@ function Details({ entry, installed }: { entry: CatalogueEntry; installed?: Inst
     { k: 'Publisher', v: entry.publisher },
     { k: 'Download source', v: <Mono className="break-all text-ink">{entry.mirror_url}</Mono> },
     { k: 'Provenance', v: entry.pipeline === 'own' ? 'Own quantisation pipeline' : 'Third-party artefact, reviewed before listing' },
-    { k: 'Source weights digest', v: <Hash value={entry.source_weight_digest} head={10} tail={6} /> },
+    { k: 'Source weights digest', v: entry.source_weight_digest ? <Hash value={entry.source_weight_digest} head={10} tail={6} /> : 'Not published by the model’s maker' },
     { k: 'Artefact digest', v: <Hash value={entry.artifact_digest} head={10} tail={6} /> },
     { k: 'File', v: <Mono className="break-all text-ink">{installed ? installed.file_path : entry.file_name}</Mono> },
   ]

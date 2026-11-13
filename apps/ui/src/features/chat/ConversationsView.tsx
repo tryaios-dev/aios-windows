@@ -16,7 +16,7 @@ export function ConversationsView() {
   const single = useMediaQuery(BP.singleColumn)
   const hasConversations = useStore((s) => s.conversations.some((c) => c.project_id === projectId))
   // Lab builds only: a project can start its new conversations on the company server.
-  const startsOnCompany = useStore((s) => s.sim.companyFlag && s.sim.companyReachable) && !!project?.company_ai_enabled
+  const startsOnCompany = useStore((s) => s.health.company.enabled && s.health.company.reachable) && !!project?.company_ai_enabled
 
   if (!project) return <Navigate to="/" replace />
   if (conversationId && (!conversation || conversation.project_id !== project.id)) return <Navigate to={`/projects/${project.id}`} replace />
@@ -39,9 +39,9 @@ export function ConversationsView() {
                 <Button
                   variant="primary"
                   leading={<MessageSquarePlus className="size-4" />}
-                  onClick={() => {
-                    const conv = api.conversations.create(project.id)
-                    navigate(`/projects/${project.id}/c/${conv.id}`)
+                  onClick={async () => {
+                    const conv = await api.conversations.create(project.id)
+                    if (conv) navigate(`/projects/${project.id}/c/${conv.id}`)
                   }}
                 >
                   New conversation

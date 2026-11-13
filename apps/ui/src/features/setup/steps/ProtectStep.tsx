@@ -4,10 +4,11 @@ import { Check, Copy, Printer } from 'lucide-react'
 import { ART } from '@/assets/icons'
 import { ArtTile } from '@/components/ui/art'
 import { api } from '@/lib/api'
+import { notInThisBuild } from '@/bridge/live'
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/cn'
 import { Button } from '@/components/ui/button'
-import { Field, Input, Select } from '@/components/ui/fields'
+import { Field, Input } from '@/components/ui/fields'
 import { Callout } from '@/components/ui/feedback'
 import { SectionLabel, useCopy } from '@/components/ui/layout'
 import { Disclosure, DrawnCheck, Plate, StepBody, StepFooter, StepHeading } from '../SetupFrame'
@@ -21,22 +22,6 @@ const STATEMENTS = [
   { icon: ART.vault, text: 'The key is not a backup. It opens one. You need both.' },
   { icon: ART.warning, text: 'AIOS does not keep this key. Keep it somewhere other than this computer.' },
 ]
-
-/** Stand-ins for the Windows save dialog. */
-const SAVE_PLACES = [
-  { value: 'E:\\', label: 'E:\\ (USB drive)', sameDisk: false },
-  { value: 'C:\\Users\\pilot\\Documents', label: 'C:\\Users\\pilot\\Documents', sameDisk: true },
-]
-
-/** Stand-ins for the Windows folder dialog. */
-const LATER = 'later'
-const BACKUP_PLACES = [
-  { value: 'E:\\AIOS backups', label: 'E:\\AIOS backups (USB drive)' },
-  { value: '\\\\office-nas\\backups\\AIOS', label: '\\\\office-nas\\backups\\AIOS' },
-  { value: LATER, label: 'Set up later' },
-]
-
-const KEY_FILE = 'AIOS recovery key.txt'
 
 export interface ProtectDraft {
   /** What has been typed into "the last four characters". */
@@ -62,8 +47,6 @@ function lastFourMatches(typed: string, key: string | null): boolean {
  */
 export function ProtectStep({ note, reissue, onIssued, confirmed, newKeyNotice, draft, onDraft, onBack, onContinue }: { note?: string; /** Issue a new key even if one is already held. */ reissue: boolean; onIssued: (isNew: boolean) => void; /** The key on screen was already confirmed earlier in this visit. */ confirmed: boolean; newKeyNotice: boolean; draft: ProtectDraft; onDraft: (patch: Partial<ProtectDraft>) => void; onBack: () => void; onContinue: () => void }) {
   const key = useStore((s) => s.recoveryKey)
-  const storedPlace = useStore((s) => s.settings.backup_location)
-  const hasBackup = useStore((s) => !!s.settings.last_backup_at)
   const issued = useRef(false)
   const { copied, copy } = useCopy()
 
@@ -71,7 +54,11 @@ export function ProtectStep({ note, reissue, onIssued, confirmed, newKeyNotice, 
     if (issued.current) return
     issued.current = true
     const isNew = reissue || !useStore.getState().recoveryKey
-    if (isNew) api.firstRun.issueRecoveryKey()
+    if (isNew)
+      void api.firstRun.issueRecoveryKey().then((r) => {
+        // Desktop app: the backend shows the key exactly once; a second request is refused.
+        if (!r.ok) useStore.getState().toast({ kind: 'deny', title: 'No new recovery key', description: r.error })
+      })
     // Until the person confirms it, a key on screen counts as not saved (decision D13).
     if (isNew || !confirmed) api.firstRun.setProgress({ step: 3, keyShownUnconfirmed: true })
     onIssued(isNew)
@@ -82,16 +69,8 @@ export function ProtectStep({ note, reissue, onIssued, confirmed, newKeyNotice, 
   const typedClean = clean(draft.typed)
   const matches = lastFourMatches(draft.typed, key)
   const wrong = !matches && typedClean.length >= 4
-  const savePlace = SAVE_PLACES.find((p) => p.value === draft.savedTo)
-  // A place already chosen (for example when setup is replayed) is shown as chosen.
-  const backupChoice = draft.backupChoice ?? (BACKUP_PLACES.some((p) => p.value === storedPlace) ? (storedPlace ?? undefined) : undefined)
-
-  const print = () => useStore.getState().toast({ kind: 'info', title: 'Sent to your printer' })
-
-  const chooseBackup = (value: string) => {
-    onDraft({ backupChoice: value })
-    api.backup.setLocation(value === LATER ? null : value)
-  }
+  // Printing and saving the key as a file are not in this build yet; Copy works.
+  const print = () => notInThisBuild('Printing the key')
 
   return (
     <>
@@ -134,34 +113,11 @@ export function ProtectStep({ note, reissue, onIssued, confirmed, newKeyNotice, 
                       <Button leading={<Printer className="size-3.5" />} onClick={print}>
                         Print
                       </Button>
-                      <Select
-                        aria-label="Save as a file"
-                        value={draft.savedTo}
-                        onValueChange={(v) => onDraft({ savedTo: v })}
-                        placeholder="Save as a file"
-                        className="h-8.5 w-auto min-w-[168px] flex-1 border-line bg-paper-raised text-sm font-medium data-[placeholder]:text-ink sm:flex-none"
-                        options={SAVE_PLACES.map((p) => ({ value: p.value, label: <span className="font-mono text-sm">{p.label}</span>, description: p.sameDisk ? 'The same disk as your AIOS' : 'Kept apart from this computer' }))}
-                      />
-                      <span className="ml-auto hidden font-mono text-xs leading-4.5 tabular text-ink-50 sm:inline">8 groups of 4</span>
+                      <span className="ml-auto hidden font-mono text-xs leading-4.5 tabular text-ink-50 sm:inline">{groups.length} groups of 4</span>
                     </div>
                   </div>
                 </Plate>
 
-                {savePlace && (
-                  <div className="mt-3 flex flex-col gap-3" aria-live="polite">
-                    <p className="flex items-start gap-2 px-1 text-sm leading-5 text-ink-soft">
-                      <DrawnCheck className="mt-1 size-3 text-green" />
-                      <span>
-                        Saved as <span className="font-mono text-xs text-ink">{KEY_FILE}</span> in <span className="font-mono text-xs text-ink">{savePlace.value}</span>
-                      </span>
-                    </p>
-                    {savePlace.sameDisk && (
-                      <Callout tone="caution" compact>
-                        That is the same disk as your AIOS. If this computer fails, the key is lost with it. Choose a USB drive or another place.
-                      </Callout>
-                    )}
-                  </div>
-                )}
                 <p className="mt-3 px-1 text-sm leading-5 text-ink-soft">Good places for it: on paper, on a USB drive, or in a password manager.</p>
               </section>
 
@@ -205,23 +161,7 @@ export function ProtectStep({ note, reissue, onIssued, confirmed, newKeyNotice, 
                     <p className="mt-1 max-w-[56ch] text-sm leading-5 text-ink-soft">Choose a folder or drive for your encrypted backup. It stays where you put it. A USB drive or a shared folder is safest, because it is not this computer.</p>
                   </div>
                 </div>
-                <Select
-                  aria-label="Where backups go"
-                  value={backupChoice}
-                  onValueChange={chooseBackup}
-                  placeholder="Choose a folder"
-                  className="mt-4 h-10"
-                  options={BACKUP_PLACES.map((p) => ({ value: p.value, label: p.value === LATER ? p.label : <span className="font-mono text-sm">{p.label}</span> }))}
-                />
-                <p className="mt-3 px-1 text-sm leading-5 text-ink-soft" aria-live="polite">
-                  {backupChoice === LATER
-                    ? 'If you skip this, your AIOS data stays only on this computer. You can turn on backup at any time in Settings › Backup and recovery.'
-                    : backupChoice
-                      ? hasBackup
-                        ? 'Backups will go here, and stay there.'
-                        : 'Backups will go here, and stay there. No backup exists yet: make the first one from Settings › Backup and recovery once AIOS is open.'
-                      : 'If you skip this, your AIOS data stays only on this computer. You can turn on backup at any time in Settings › Backup and recovery.'}
-                </p>
+                <p className="mt-4 px-1 text-sm leading-5 text-ink-soft">Backup comes in a later version of AIOS. Until then, your AIOS data stays only on this computer. Keep your recovery key safe all the same.</p>
               </section>
 
               <Disclosure label="What AIOS cannot protect you from">

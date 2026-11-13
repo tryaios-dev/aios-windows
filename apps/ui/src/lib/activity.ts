@@ -108,8 +108,12 @@ export function describeEvent(e: EvidenceEvent, l: ActivityLookups): ActivityLin
       return { ...base, kind: 'projects', what: p.reviewed_copy ? `Made a copy of a project with a new sensitivity label, ${labelWord(p.to_class)}` : `Changed a project\u2019s sensitivity label to ${labelWord(p.to_class)}`, about: project }
     case 'project_deleted':
       return { ...base, kind: 'projects', what: typeof p.conversations === 'number' ? (p.conversations > 0 ? `Deleted a project and the ${pluralise(p.conversations, 'conversation')} in it` : 'Deleted an empty project') : 'Deleted a project and its conversations' }
+    case 'conversation_created':
+      return { ...base, kind: 'projects', what: 'Started a conversation', about: project }
     case 'conversation_deleted':
       return { ...base, kind: 'projects', what: 'Deleted a conversation', about: project }
+    case 'disclosure_confirmed':
+      return { ...base, kind: 'sharing', what: 'Agreed to send a conversation to the company server', about: conversation }
     case 'model_installed':
       return { ...base, kind: 'models', what: `Installed ${model ? `the AI model ${model}` : 'an AI model'}. AIOS checked it is the genuine, unmodified file`, about: typeof p.size_bytes === 'number' ? formatBytes(p.size_bytes) : undefined }
     case 'model_deleted':
@@ -161,26 +165,4 @@ export function describeEvent(e: EvidenceEvent, l: ActivityLookups): ActivityLin
     default:
       return { ...base, kind: 'system', who: 'AIOS', what: 'Recorded something this version cannot describe in words' }
   }
-}
-
-/* ------------------------------------------------------------------ */
-/* Illustrations for a new installation                                 */
-/* ------------------------------------------------------------------ */
-
-/**
- * Four sentences for the "What you will see here" guide in Activity. They are made by
- * `describeEvent` from stand-in events, so the wording is always the wording real entries get.
- * Nothing here is recorded, and nothing here is ever put in the real list.
- */
-export function exampleLines(): ActivityLine[] {
-  const light = CATALOGUE.find((m) => m.tier === 'small') ?? CATALOGUE[0]
-  const stand = (seq: number, event_type: EvidenceEvent['event_type'], rest: Partial<EvidenceEvent>): EvidenceEvent => ({ seq, format_version: 1, stream_id: 'example', epoch: 0, ts: '', event_type, actor: 'user', prev_hash: '', event_hash: '', ...rest })
-  const conversation = { id: 'example-conversation', title: 'Reply to the landlord', classification_source: 'project' } as Conversation
-  const lookups: ActivityLookups = { projects: [], conversations: [conversation], installed: [], firstQuestions: new Set([-1]) }
-  return [
-    stand(-1, 'request', { conversation_id: conversation.id, provider: 'local', payload: { status: 'complete' } }),
-    stand(-2, 'export', { payload: { kind: 'backup' } }),
-    stand(-3, 'model_installed', { model_digest: light.artifact_digest }),
-    stand(-4, 'refusal', { actor: 'app', provider: 'local' }),
-  ].map((e) => ({ ...describeEvent(e, lookups), about: undefined }))
 }

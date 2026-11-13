@@ -51,7 +51,7 @@ export function RecoveryKeyDialog({ open, onOpenChange, hasDestination, onBackUp
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={() => setRecoveryKey(api.recoveryKey.createNew())}>
+            <Button variant="primary" onClick={async () => setRecoveryKey(await api.recoveryKey.createNew())}>
               Create new key
             </Button>
           </>

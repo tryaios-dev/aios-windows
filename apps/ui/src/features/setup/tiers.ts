@@ -1,18 +1,27 @@
 import type { CatalogueEntry, Hardware, ModelTier } from '@/lib/types'
-import { catalogueEntry } from '@/data/catalogue'
+import { CATALOGUE, catalogueEntry, installable } from '@/data/catalogue'
+import { useStore } from '@/lib/store'
 import { fitOnThisComputer } from '@/lib/words'
 
-/** The AI model AIOS sets up for each size (MVP 4.1: Standard is Qwen3 8B, Light is Qwen3 4B). */
-export const TIER_ENTRY: Record<ModelTier, string> = { small: 'qwen3-4b-q4km', medium: 'qwen3-8b-q4km' }
+export const TIERS: ModelTier[] = ['small', 'medium', 'large']
 
-export const TIERS: ModelTier[] = ['small', 'medium']
+/** The sizes the backend's catalogue offers, smallest first. */
+export function availableTiers(): ModelTier[] {
+  return TIERS.filter((t) => CATALOGUE.some((e) => e.tier === t && installable(e)))
+}
 
 /** Room a download needs beyond the file itself while it is being checked. */
 export const WORKING_SPACE_BYTES = 2 * 1024 ** 3
 export const GIB = 1024 ** 3
 
+/**
+ * The AI model AIOS sets up for a size: the one the backend suggests for this computer when it is
+ * that size, otherwise the first reviewed entry of that size in the backend's catalogue.
+ */
 export function tierEntry(tier: ModelTier): CatalogueEntry {
-  return catalogueEntry(TIER_ENTRY[tier])!
+  const suggested = catalogueEntry(useStore.getState().hardware.recommended_entry_id)
+  if (suggested && suggested.tier === tier) return suggested
+  return CATALOGUE.find((e) => e.tier === tier && installable(e)) ?? CATALOGUE.find((e) => e.tier === tier)!
 }
 
 /** Whole gigabytes of free space the model needs, including room to check it. */
@@ -26,7 +35,7 @@ export function spaceNeededGb(entry: CatalogueEntry): number {
  */
 export function usableTier(recommended: ModelTier | null, hw: Hardware): ModelTier | null {
   if (recommended && fitOnThisComputer(tierEntry(recommended), hw).fit !== 'no') return recommended
-  if (recommended && fitOnThisComputer(tierEntry('small'), hw).fit !== 'no') return 'small'
+  if (recommended && availableTiers().includes('small') && fitOnThisComputer(tierEntry('small'), hw).fit !== 'no') return 'small'
   return null
 }
 

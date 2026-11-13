@@ -167,7 +167,7 @@ function ExportFlow({ project, onBusy, onClose }: { project: Project; onBusy: (b
               dense
               rows={[
                 { k: 'Checksum', v: <Hash value={result.checksum} head={12} tail={8} />, hint: 'Lets the other computer confirm the file is complete and unchanged.' },
-                { k: 'Activity record', v: <ActivityLink seq={result.evidence_seq} onOpen={() => openActivity(result.evidence_seq)} /> },
+                { k: 'Activity record', v: result.evidence_seq === null ? 'Recorded once activity recording is running again' : <ActivityLink seq={result.evidence_seq} onOpen={() => openActivity(result.evidence_seq!)} /> },
               ]}
             />
           </Disclosure>
@@ -267,14 +267,10 @@ export function ImportPackageDialog({ open, onOpenChange }: { open: boolean; onO
 interface PickedFile {
   file_name: string
   size_bytes: number
-  saved_on: string
-}
-
-/** The prototype has no file system; choosing a file picks this sample. */
-const SAMPLE_FILE: PickedFile = {
-  file_name: 'supplier-faq.aiosproj',
-  size_bytes: 86 * 1024,
-  saved_on: '19 Oct 2026',
+  /** When the file was saved, where it is known. */
+  saved_on?: string
+  /** Where the chosen file is. */
+  path?: string
 }
 
 type ImportPhase = { kind: 'pick' } | { kind: 'working' } | { kind: 'done'; result: ImportResult } | { kind: 'failed'; error: string }
@@ -291,7 +287,7 @@ function ImportFlow({ onBusy, onClose }: { onBusy: (b: boolean) => void; onClose
     setPhase({ kind: 'working' })
     onBusy(true)
     try {
-      const outcome = await api.projects.importPackage()
+      const outcome = await api.projects.importPackage(file.path)
       setPhase(outcome.ok ? { kind: 'done', result: outcome.result } : { kind: 'failed', error: outcome.error })
     } catch (e) {
       setPhase({ kind: 'failed', error: e instanceof Error ? e.message : 'No reason was given.' })
@@ -390,7 +386,7 @@ function ImportFlow({ onBusy, onClose }: { onBusy: (b: boolean) => void; onClose
               <>
                 <div className="truncate font-mono text-sm text-ink">{file.file_name}</div>
                 <div className="mt-0.5 text-xs leading-4.5 text-ink-50">
-                  <span className="tabular">{formatBytes(file.size_bytes, 0)}</span> · saved {file.saved_on}
+                  <span className="tabular">{formatBytes(file.size_bytes, 0)}</span>{file.saved_on ? ` · saved ${file.saved_on}` : ''}
                 </div>
               </>
             ) : (
@@ -401,7 +397,11 @@ function ImportFlow({ onBusy, onClose }: { onBusy: (b: boolean) => void; onClose
             )}
           </div>
           {!failed && (
-            <Button size="sm" variant={file ? 'ghost' : 'primary'} onClick={() => setFile(SAMPLE_FILE)} disabled={working}>
+            <Button size="sm" variant={file ? 'ghost' : 'primary'} onClick={async () => {
+                // The system open dialog for a .aiosproj file.
+                const picked = await api.projects.choosePackage()
+                if (picked) setFile(picked)
+              }} disabled={working}>
               {file ? 'Change' : 'Choose file'}
             </Button>
           )}

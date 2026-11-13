@@ -11,7 +11,7 @@ import { RadioCard, RadioGroup } from '@/components/ui/fields'
 import { KeyValue, Mono, SectionLabel } from '@/components/ui/layout'
 import { Disclosure, DrawnCheck, Plate, Sequence, StepBody, StepFooter, StepHeading } from '../SetupFrame'
 import { useSequence } from '../useSequence'
-import { TIERS, cannotRunReason, tierEntry } from '../tiers'
+import { availableTiers, cannotRunReason, tierEntry } from '../tiers'
 import { platform } from '@/lib/platform'
 
 const EASE: [number, number, number, number] = [0.2, 0.7, 0.2, 1]
@@ -144,7 +144,7 @@ export function ComputerStep({ note, tier, recommended, onTierChange, checked, o
                 {tier && (
                   <Disclosure label="Choose a different AI model" hint={recommended && tier !== recommended ? 'Changed' : undefined}>
                     <RadioGroup value={tier} onValueChange={(v) => onTierChange(v as ModelTier)} className="flex flex-col gap-3" aria-label="AI model">
-                      {TIERS.map((t) => {
+                      {availableTiers().map((t) => {
                         const option = tierEntry(t)
                         const reason = cannotRunReason(option, hw)
                         return (

@@ -23,7 +23,7 @@ import { ExportProjectDialog, ImportPackageDialog } from './PackageDialogs'
 export function ProjectSettingsView() {
   const { projectId } = useParams()
   const project = useStore(selectProject(projectId))
-  const companyFlag = useStore((s) => s.sim.companyFlag)
+  const companyFlag = useStore((s) => s.health.company.enabled)
   const [changeClass, setChangeClass] = useState(false)
   const [companyAi, setCompanyAi] = useState(false)
   const [exp, setExp] = useState(false)

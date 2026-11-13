@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { Archive, ArrowUpRight, LibraryBig, ListFilter, MessageSquare, Search, SearchX, X } from 'lucide-react'
-import { api } from '@/lib/api'
 import { useExtras } from '@/lib/extras'
 import { useStore } from '@/lib/store'
 import type { Conversation, KnowledgeDoc, MessageRole, Project, SearchHit } from '@/lib/types'
@@ -16,6 +15,7 @@ import { Kbd, PageBody, PageHeader, SectionLabel } from '@/components/ui/layout'
 import { Tooltip } from '@/components/ui/overlays'
 import { IconTile } from '@/features/settings/shared'
 import { useExampleSearches } from './examples'
+import { useMessageSearch } from './useMessageSearch'
 import { Highlight, RoleLabel } from './highlight'
 import { DocIcon } from './DocIcon'
 import { DOC_STATUS, docFacts, matchDocuments } from './knowledgeDocs'
@@ -89,12 +89,8 @@ export function SearchView() {
   const projectById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects])
   const conversationById = useMemo(() => new Map(conversations.map((c) => [c.id, c])), [conversations])
 
-  const hits = useMemo<SearchHit[]>(() => {
-    if (debounced.length < MIN_QUERY) return []
-    return api.search(debounced)
-    // `messages` keeps results current while the store changes underneath.
-
-  }, [debounced, messages])
+  // `messages` keeps results current while the store changes underneath.
+  const hits: SearchHit[] = useMessageSearch(debounced.length >= MIN_QUERY ? debounced : null, messages)
 
   // Documents are found by name. The whole list is selected, then narrowed here.
   const knowledge = useExtras((s) => s.knowledge)

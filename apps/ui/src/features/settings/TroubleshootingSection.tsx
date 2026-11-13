@@ -4,6 +4,7 @@ import { FileText } from 'lucide-react'
 import { ART } from '@/assets/icons'
 import { ArtTile } from '@/components/ui/art'
 import { useStore } from '@/lib/store'
+import { api } from '@/lib/api'
 import type { Health } from '@/lib/types'
 import { modelLabel } from '@/lib/words'
 import { useEngineStatus, useWriterStatus } from '@/app/useEngineStatus'
@@ -26,7 +27,7 @@ const settingsLink = 'font-medium text-green hover:underline'
 /** Troubleshooting: is everything running, and a diagnostic file for support. */
 export function TroubleshootingSection() {
   const health = useStore((s) => s.health)
-  const companyFlag = useStore((s) => s.sim.companyFlag)
+  const companyFlag = useStore((s) => s.health.company.enabled)
   const hasModel = useStore((s) => s.installedModels.length > 0)
   const model = useStore((s) => s.installedModels.find((m) => m.id === (s.health.loaded_model_id ?? s.settings.default_model_id)))
   const engine = useEngineStatus()
@@ -90,11 +91,16 @@ export function TroubleshootingSection() {
   const createFile = async () => {
     setCreating(true)
     setCreated(false)
-    // Gathering the logs takes a moment; the toast says where the file went.
-    await new Promise<void>((resolve) => setTimeout(resolve, 900))
+    // POST /system/support-bundle: the desktop app asks where to save, then zips the log folder there
+    // (logs only). Gathering the logs takes a moment; the toast says where the file went.
+    const out = await api.system.supportBundle()
     setCreating(false)
+    if (!out.ok) {
+      if (!out.cancelled) useStore.getState().toast({ kind: 'deny', title: 'Diagnostic file not saved', description: out.error })
+      return
+    }
     setCreated(true)
-    useStore.getState().toast({ kind: 'success', title: 'Diagnostic file saved to your Documents folder' })
+    useStore.getState().toast({ kind: 'success', title: 'Diagnostic file saved', description: out.path })
   }
 
   return (

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { AnimatePresence, motion } from 'motion/react'
 import { Info, ListFilter, X } from 'lucide-react'
-import { ACTIVITY_KINDS, describeEvent, firstQuestions, isQuestion, type ActivityKind } from '@/lib/activity'
+import { ACTIVITY_KINDS, describeEvent, firstQuestions, type ActivityKind } from '@/lib/activity'
 import { pluralise } from '@/lib/format'
 import { selectProject, useStore } from '@/lib/store'
 import type { EvidenceEvent } from '@/lib/types'
@@ -14,7 +14,6 @@ import { ActivitySummary } from './ActivitySummary'
 import { ActivityToolbar } from './ActivityToolbar'
 import { ActivityList } from './ActivityList'
 import { ActivityDetailSheet } from './ActivityDetailSheet'
-import { ActivityExamples, examplesHiddenThisSession, hideExamplesThisSession } from './ActivityExamples'
 import { formatSeq } from './verification/eventMeta'
 import { useEventLookups } from './verification/useEventLookups'
 import { VerificationView } from './verification/VerificationView'
@@ -63,7 +62,6 @@ function Activity({ projectId }: { projectId: string | undefined }) {
   /** The ?seq= value written by "Go to #seq". It keeps the Verification details view; any other arrival opens Plain. */
   const [ownParam, setOwnParam] = useState<string | null>(null)
   /** The "What you will see here" guide, hidden for the rest of the session once dismissed. */
-  const [examplesHidden, setExamplesHidden] = useState(examplesHiddenThisSession)
 
   const clearFilters = () => {
     setKinds(new Set())
@@ -92,8 +90,6 @@ function Activity({ projectId }: { projectId: string | undefined }) {
 
   // Which entries start a conversation is worked out from the whole record, not from what is in view.
   const starts = useMemo(() => firstQuestions(allEvents), [allEvents])
-  // A new installation has set-up entries only. Until the first question, a guide shows what will appear.
-  const hasQuestions = useMemo(() => allEvents.some(isQuestion), [allEvents])
 
   const rows = useMemo<ActivityRow[]>(() => {
     const source = projectFilter === ALL_PROJECTS ? scoped : scoped.filter((e) => e.project_id === projectFilter)
@@ -217,11 +213,6 @@ function Activity({ projectId }: { projectId: string | undefined }) {
   const saveProject = project ?? (projectFilter !== ALL_PROJECTS ? projects.find((p) => p.id === projectFilter) : undefined)
   const saveEvents = saveProject ? allEvents.filter((e) => e.project_id === saveProject.id || e.project_id === undefined) : []
 
-  const showExamples = view === 'plain' && !hasQuestions && !examplesHidden
-  const hideExamples = () => {
-    hideExamplesThisSession()
-    setExamplesHidden(true)
-  }
 
   // What the filters are hiding, in words, for the line above the list and for the empty state.
   const hiddenCount = scoped.length - filteredRows.length
@@ -254,11 +245,9 @@ function Activity({ projectId }: { projectId: string | undefined }) {
         }}
       />
 
-      {showExamples && <ActivityExamples onHide={hideExamples} />}
 
       {hasEvents ? (
         <>
-          {showExamples && <h2 className="label-mono mt-2">Recorded on this computer so far</h2>}
           <ActivityToolbar
             kinds={kinds}
             kindCounts={kindCounts}

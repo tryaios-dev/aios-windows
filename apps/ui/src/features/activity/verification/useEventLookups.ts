@@ -4,17 +4,16 @@
  * reads as removed instead of leaking a stale title.
  */
 import { useMemo } from 'react'
-import { COMPANY_MODEL_ID, COMPANY_MODEL_NAME, useStore } from '@/lib/store'
+import { selectCompanyModelName, useStore } from '@/lib/store'
 import { CATALOGUE, catalogueEntry } from '@/data/catalogue'
-import { hashHex } from '@/lib/hash'
 import type { ContextLookups } from './eventMeta'
-
-const COMPANY_DIGEST = hashHex(`company|${COMPANY_MODEL_ID}`)
 
 export function useEventLookups(): ContextLookups {
   const conversations = useStore((s) => s.conversations)
   const projects = useStore((s) => s.projects)
   const installed = useStore((s) => s.installedModels)
+  const company = useStore((s) => s.health.company)
+  const companyModel = useStore(selectCompanyModelName)
 
   return useMemo<ContextLookups>(
     () => ({
@@ -26,11 +25,12 @@ export function useEventLookups(): ContextLookups {
           if (local) return local.name
           const listed = CATALOGUE.find((e) => e.artifact_digest === digest)
           if (listed) return listed.name
-          if (digest === COMPANY_DIGEST) return COMPANY_MODEL_NAME
         }
-        return entryId ? catalogueEntry(entryId)?.name : undefined
+        if (entryId) return catalogueEntry(entryId)?.name
+        // The company server reports its model by name only (GET /system/status).
+        return company.enabled ? companyModel : undefined
       },
     }),
-    [conversations, projects, installed],
+    [conversations, projects, installed, company, companyModel],
   )
 }

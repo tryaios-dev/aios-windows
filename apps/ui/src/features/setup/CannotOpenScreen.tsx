@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { ArrowRight, DatabaseBackup, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useStore } from '@/lib/store'
+import { notInThisBuild } from '@/bridge/live'
 import { ConfirmDialog } from '@/components/ui/overlays'
 import { KeyValue, Mono } from '@/components/ui/layout'
 import { Disclosure, IconTile, Plate, SetupFrame, StepBody, StepHeading } from './SetupFrame'
@@ -87,11 +87,8 @@ export function CannotOpenScreen() {
         confirmVariant="destructive"
         onConfirm={() => {
           setConfirmOpen(false)
-          // An empty installation with new keys; the old data stays unreadable on disk.
-          const store = useStore.getState()
-          store.setSim({ keysMissing: false })
-          store.resetFirstRun('fresh')
-          navigate('/setup')
+          // An empty installation with new keys needs the backend to set the old data aside; it cannot yet.
+          notInThisBuild('Starting fresh')
         }}
       />
     </SetupFrame>

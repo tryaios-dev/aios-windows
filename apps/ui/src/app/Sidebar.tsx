@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate, useParams } from 'react-router'
 import { Archive, ChevronDown, ChevronsLeft, ChevronsRight, FolderPlus, Plus, Search } from 'lucide-react'
 import { ART } from '@/assets/icons'
 import { cn } from '@/lib/cn'
+import { CATALOGUE } from '@/data/catalogue'
 import { useStore } from '@/lib/store'
 import { useExtras } from '@/lib/extras'
 import { backupStatus, KEYS } from '@/lib/words'
@@ -17,7 +18,8 @@ import { CreateProjectDialog } from '@/features/projects/ProjectDialogs'
 export type SidebarMode = 'full' | 'rail' | 'sheet'
 
 /** The catalogue entry that is a newer version of an installed model (src/data/catalogue.ts). */
-const NEWER_MODEL_ID = 'qwen3-5-8b-q4km'
+// The catalogue entry that is a newer version of another one, when there is one (`replaces`).
+const NEWER_MODEL_ID = CATALOGUE.find((e) => e.replaces)?.entry_id ?? null
 
 /**
  * Primary navigation: the six things AIOS is, then projects, then Settings.
@@ -50,10 +52,12 @@ export function Sidebar({ mode = 'full', onCollapse, onExpand }: { mode?: Sideba
   }, [conversations])
 
   // "New" beside AI models: green, with a soft pulse three times, from the moment a newer model is listed until the page is opened; quiet after that until it is installed.
-  const newModelOut = useStore((s) => s.sim.newModelOut)
+  // A newer AI model is out when the backend's catalogue lists one that replaces another.
+  const newModelOut = CATALOGUE.some((e) => !!e.replaces)
   const newerInstalled = useStore((s) => s.installedModels.some((m) => m.id === NEWER_MODEL_ID))
   const modelsSeen = useExtras((s) => s.modelsSeen)
-  const newModel = newModelOut && !newerInstalled
+  // Only when the catalogue really lists a newer version of an AI model (`replaces`).
+  const newModel = NEWER_MODEL_ID !== null && newModelOut && !newerInstalled
   const newModelUnseen = newModel && !modelsSeen
 
   const engine = useEngineStatus()

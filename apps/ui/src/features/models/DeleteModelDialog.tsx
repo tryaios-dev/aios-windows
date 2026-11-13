@@ -26,9 +26,9 @@ export function DeleteModelDialog({
   const label = modelLabel(model)
   const freed = formatBytes(model.size_bytes)
 
-  const confirm = () => {
+  const confirm = async () => {
     const answering = !!useStore.getState().generation
-    const result = api.models.remove(model.id)
+    const result = await api.models.remove(model.id)
     onOpenChange(false)
     if (!result.ok) {
       useStore.getState().toast({

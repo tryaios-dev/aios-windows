@@ -52,7 +52,8 @@ export interface ModelUpdateState {
  */
 export function useModelUpdate(): ModelUpdateState | null {
   const installed = useStore((s) => s.installedModels)
-  const newModelOut = useStore((s) => s.sim.newModelOut)
+  // A newer AI model is out when the backend's catalogue lists one that replaces another.
+  const newModelOut = CATALOGUE.some((e) => !!e.replaces)
   // A plain string, so a download's progress ticks do not re-render the page.
   const downloadingIds = useStore((s) => {
     let ids = ''

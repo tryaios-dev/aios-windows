@@ -91,12 +91,13 @@ export function CreateProjectDialog({ open, onOpenChange }: { open: boolean; onO
     }
   }
 
-  const submit = () => {
+  const submit = async () => {
     if (!name.trim()) {
       setMissing(true)
       return
     }
-    const project = api.projects.create({ name: name.trim(), classification: cls })
+    const project = await api.projects.create({ name: name.trim(), classification: cls })
+    if (!project) return
     onOpenChange(false)
     navigate(`/projects/${project.id}`)
   }
@@ -236,8 +237,10 @@ export function ChangeClassDialog({ open, onOpenChange, project }: { open: boole
     setAck(false)
   }
 
-  const submit = () => {
-    const { project: result, reviewedCopy } = api.projects.reclassify(project.id, cls)
+  const submit = async () => {
+    const out = await api.projects.reclassify(project.id, cls)
+    if (!out) return
+    const { project: result, reviewedCopy } = out
     onOpenChange(false)
     if (reviewedCopy) {
       toast({ kind: 'success', title: 'Copy made', description: `"${result.name}" is labelled ${label}. "${project.name}" is as it was.`, action: { label: 'Open the copy', href: `/projects/${result.id}` } })

@@ -7,8 +7,8 @@ import { catalogueEntry, hardwareSupports } from '@/data/catalogue'
 import { relativeTime } from './format'
 
 /** Size word people see instead of "small tier" / "medium tier". */
-export function sizeWord(tier: ModelTier): 'Light' | 'Standard' {
-  return tier === 'small' ? 'Light' : 'Standard'
+export function sizeWord(tier: ModelTier): 'Light' | 'Standard' | 'Large' {
+  return tier === 'small' ? 'Light' : tier === 'medium' ? 'Standard' : 'Large'
 }
 
 /** "Standard · Qwen3 8B": the size word first, the real model name always after it. */
@@ -24,9 +24,9 @@ export function modelLabelById(id: string | null | undefined, installed: Install
 
 /** What each size is good for, in one line. */
 export function sizeBlurb(tier: ModelTier): string {
-  return tier === 'small'
-    ? 'Quick answers, rewriting and short summaries. Runs on most computers.'
-    : 'Better at longer drafts, careful summaries and working a problem through.'
+  if (tier === 'small') return 'Quick answers, rewriting and short summaries. Runs on most computers.'
+  if (tier === 'medium') return 'Better at longer drafts, careful summaries and working a problem through.'
+  return 'The strongest answers. Needs a strong graphics card and a lot of memory.'
 }
 
 export type Fit = 'well' | 'slowly' | 'no'

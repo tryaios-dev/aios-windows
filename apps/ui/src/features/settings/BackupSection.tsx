@@ -11,19 +11,12 @@ import { formatBytes, formatDateTime, pluralise, relativeTime } from '@/lib/form
 import { backupStatus } from '@/lib/words'
 import { Button } from '@/components/ui/button'
 import { StatusDot, type DotTone } from '@/components/ui/chips'
-import { Hint, Label, Select } from '@/components/ui/fields'
+import { Hint, Label } from '@/components/ui/fields'
 import { Callout, Progress } from '@/components/ui/feedback'
 import { Ledger, PanelNote, PathValue, SettingGroup, SettingPanel, SettingRow } from './SettingRow'
 import { Advanced, DrawnCheck, Reveal, StatementList } from './shared'
 import { RecoveryKeyDialog } from './RecoveryKeyDialog'
 import { platform } from '@/lib/platform'
-
-/** Stands in for the Windows folder dialog. */
-const DESTINATIONS: Array<{ value: string; label: string }> = [
-  { value: 'E:\\AIOS backups', label: 'E:\\AIOS backups (USB drive)' },
-  { value: '\\\\office-nas\\backups\\AIOS', label: '\\\\office-nas\\backups\\AIOS (network folder)' },
-  { value: 'D:\\Backups\\AIOS', label: 'D:\\Backups\\AIOS (second disk)' },
-]
 
 const HOLDS = ['Your projects and conversations', 'Your secure knowledge (the copies AIOS keeps of your documents)', 'The activity record', 'What is needed to open them with your recovery key']
 
@@ -322,10 +315,13 @@ export function BackupSection() {
 
 /* ---------------- Pieces ---------------- */
 
+/** The backup folder. Backup has no backend yet (proposed: POST /backup), so choosing one says so. */
 function DestinationSelect({ id, value, className }: { id: string; value: string | null; className?: string }) {
-  // A folder chosen somewhere else (during setup, say) still has to show as the current choice.
-  const options = value && !DESTINATIONS.some((d) => d.value === value) ? [{ value, label: value }, ...DESTINATIONS] : DESTINATIONS
-  return <Select id={id} aria-label="Backup folder" className={className} value={value ?? undefined} onValueChange={(v) => api.backup.setLocation(v)} options={options} placeholder="Choose a folder" />
+  return (
+    <Button id={id} className={className} onClick={() => api.backup.setLocation(value)}>
+      {value ?? 'Choose a folder'}
+    </Button>
+  )
 }
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {

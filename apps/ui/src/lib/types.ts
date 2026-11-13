@@ -10,7 +10,7 @@ export type ClassificationSource = 'project' | 'import' | 'review'
 export type ProviderType = 'local' | 'company'
 export type MessageRole = 'user' | 'assistant'
 export type MessageStatus = 'complete' | 'partial' | 'error' | 'stopped' | 'streaming'
-export type ModelTier = 'small' | 'medium'
+export type ModelTier = 'small' | 'medium' | 'large'
 export type EngineBuild = 'cpu' | 'vulkan'
 
 export interface Project {
@@ -103,7 +103,8 @@ export interface CatalogueEntry {
   tier: ModelTier
   upstream_model: string
   upstream_revision: string
-  source_weight_digest: string
+  /** null for a third-party GGUF whose upstream publishes no safetensors (catalogue v1). */
+  source_weight_digest: string | null
   conversion_tool: string
   conversion_version: string
   quantisation_method: string
@@ -173,6 +174,8 @@ export interface Hardware {
   free_disk_gb: number
   os: string
   recommended_tier: ModelTier | null
+  /** The one model AIOS suggests for this computer (catalogue entry id); null below the minimum. */
+  recommended_entry_id?: string | null
   benchmark?: Benchmark
 }
 
@@ -186,6 +189,7 @@ export type EventType =
   | 'project_created'
   | 'project_reclassified'
   | 'project_deleted'
+  | 'conversation_created'
   | 'conversation_deleted'
   | 'request'
   | 'provider_changed'
@@ -195,6 +199,7 @@ export type EventType =
   | 'continuation'
   | 'key_rotation'
   | 'refusal'
+  | 'disclosure_confirmed'
   | 'shutdown'
   /* Added on 12 November 2026 for knowledge, skills and resources. Proposed; the wire-format owner has to agree them. */
   | 'knowledge_added'
@@ -249,6 +254,8 @@ export interface EvidenceStream {
 }
 
 export interface AllowlistEntry {
+  /** The backend's id for the entry (desktop app). */
+  id?: string
   host: string
   purpose: string
   kind: 'fixed' | 'configured'
@@ -307,7 +314,8 @@ export interface ExportResult {
   size_bytes: number
   path: string
   checksum: string
-  evidence_seq: number
+  /** Null until the evidence writer has appended the export event. */
+  evidence_seq: number | null
 }
 
 export interface ImportResult {

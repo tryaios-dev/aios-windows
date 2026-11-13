@@ -1,3 +1,4 @@
+/** Browser preview only: sample workspace from the design handover. Never reaches the desktop app. */
 import type {
   Checkpoint,
   Classification,
@@ -12,9 +13,8 @@ import type {
   Summary,
 } from '@/lib/types'
 import { hashHex, ZERO_HASH } from '@/lib/hash'
-import { CATALOGUE } from './catalogue'
+import { SIM_CATALOGUE as CATALOGUE } from './catalogue'
 import { pickAnswer, summaryFor } from './answers'
-import { platform } from '@/lib/platform'
 
 /* ------------------------------------------------------------------ */
 /* Time helpers: everything is relative to "now" so the data reads     */
@@ -47,15 +47,16 @@ const live = (offset: number) => shortDay(addDays(HANDBOOK_LIVE, offset))
 /* Models                                                               */
 /* ------------------------------------------------------------------ */
 
-const qwen8 = CATALOGUE[0]
-const qwen4 = CATALOGUE[1]
+// The sample installation has the Standard and the Light AI model of the catalogue.
+const qwen8 = CATALOGUE.find((e) => e.tier === 'medium')!
+const qwen4 = CATALOGUE.find((e) => e.tier === 'small')!
 
 export const SEED_INSTALLED_MODELS: InstalledModel[] = [
   {
     id: qwen8.entry_id,
     catalogue_entry_id: qwen8.entry_id,
     name: qwen8.name,
-    file_path: `${platform.folders.models}${qwen8.file_name}`,
+    file_path: `%LOCALAPPDATA%\\AIOS\\models\\${qwen8.file_name}`,
     artifact_digest: qwen8.artifact_digest,
     size_bytes: qwen8.size_bytes,
     context_length: qwen8.context_length,
@@ -68,7 +69,7 @@ export const SEED_INSTALLED_MODELS: InstalledModel[] = [
     id: qwen4.entry_id,
     catalogue_entry_id: qwen4.entry_id,
     name: qwen4.name,
-    file_path: `${platform.folders.models}${qwen4.file_name}`,
+    file_path: `%LOCALAPPDATA%\\AIOS\\models\\${qwen4.file_name}`,
     artifact_digest: qwen4.artifact_digest,
     size_bytes: qwen4.size_bytes,
     context_length: qwen4.context_length,
@@ -689,7 +690,7 @@ interface Draft {
 const drafts: Draft[] = []
 const installT = NOW - (19 * DAY + 2 * HOUR)
 
-drafts.push({ ts: installT, type: 'install', actor: 'app', payload: { app_version: '0.9.4', installer: platform.installer } })
+drafts.push({ ts: installT, type: 'install', actor: 'app', payload: { app_version: '0.9.4', installer: 'Setup.exe' } })
 drafts.push({ ts: installT + 70_000, type: 'store_created', actor: 'app', payload: { schema_version: 7 } })
 drafts.push({ ts: installT + 72_000, type: 'recovery_package_written', actor: 'app', payload: { package_version: 1 } })
 drafts.push({ ts: installT + 73_000, type: 'recovery_key_issued', actor: 'app' })

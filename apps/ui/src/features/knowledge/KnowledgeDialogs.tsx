@@ -1,120 +1,17 @@
-import { useMemo, useState } from 'react'
-import { AlertTriangle, Check, Copy } from 'lucide-react'
+import { Check, Copy } from 'lucide-react'
 import type { KnowledgeDoc } from '@/lib/types'
-import { SAMPLE_FOLDERS, kindOf, unreadableReason, type SampleFolder } from '@/data/knowledge'
-import { formatDate, pluralise } from '@/lib/format'
+import { formatDate } from '@/lib/format'
 import { Button, IconButton } from '@/components/ui/button'
-import { Badge } from '@/components/ui/chips'
-import { RadioCard, RadioGroup } from '@/components/ui/fields'
 import { useCopy } from '@/components/ui/layout'
 import { ConfirmDialog, Dialog, Tooltip } from '@/components/ui/overlays'
-import { Reveal } from '@/features/settings/shared'
 import { FileTile } from './KnowledgeArt'
-import { alreadyHere, isPath, pagesWords, sizeWords } from './helpers'
-
-const total = (files: Array<{ size_bytes: number }>) => files.reduce((n, f) => n + f.size_bytes, 0)
+import { isPath, pagesWords, sizeWords } from './helpers'
 
 function PathText({ children }: { children: string }) {
   return <span className="break-all font-mono text-xs tracking-[0.02em] text-ink">{children}</span>
 }
 
 /* ---------------- Choose a folder ---------------- */
-
-/**
- * Stands in for the Windows folder dialog, then does the one thing Windows
- * would not: says what will be copied and where the originals stay, before
- * anything is added.
- */
-export function ChooseFolderDialog({ open, onOpenChange, docs, onAdd }: { open: boolean; onOpenChange: (open: boolean) => void; docs: KnowledgeDoc[]; onAdd: (folder: SampleFolder, files: SampleFolder['files']) => void }) {
-  const [path, setPath] = useState('')
-  const folders = useMemo(() => {
-    const here = alreadyHere(docs)
-    return SAMPLE_FOLDERS.map((folder) => ({ folder, fresh: folder.files.filter((f) => !here(folder.name, f.name)) }))
-  }, [docs])
-  const chosen = folders.find((f) => f.folder.path === path)
-  const already = chosen ? chosen.folder.files.length - chosen.fresh.length : 0
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title="Choose a folder"
-      description="AIOS copies what is in the folder. The folder itself is not moved or changed."
-      footer={
-        <>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button variant="primary" disabled={!chosen || !chosen.fresh.length} onClick={() => chosen && onAdd(chosen.folder, chosen.fresh)}>
-            {chosen?.fresh.length ? `Add ${pluralise(chosen.fresh.length, 'file')}` : 'Add folder'}
-          </Button>
-        </>
-      }
-    >
-      <RadioGroup value={path} onValueChange={setPath} aria-label="Folders on this computer" className="flex flex-col gap-2">
-        {folders.map(({ folder, fresh }) => (
-          <RadioCard
-            key={folder.path}
-            value={folder.path}
-            title={folder.name}
-            meta={<span className="tabular">{`${pluralise(folder.files.length, 'file')} · ${sizeWords(total(folder.files))}`}</span>}
-            description={<span className="break-all font-mono text-xs tracking-[0.02em] text-ink-50">{folder.path}</span>}
-          >
-            {!fresh.length && (
-              <span className="mt-1.5">
-                <Badge tone="green" icon={<Check />}>
-                  Already in your knowledge
-                </Badge>
-              </span>
-            )}
-          </RadioCard>
-        ))}
-      </RadioGroup>
-
-      <Reveal open={!!chosen} className="pt-4">
-        {chosen && (
-          <div className="overflow-hidden rounded-lg border border-line-soft bg-paper-raised" role="status">
-            {chosen.fresh.length ? (
-              <p className="px-4 py-3 text-sm leading-5 text-ink-soft">
-                <span className="font-medium tabular text-ink">
-                  {pluralise(chosen.fresh.length, 'file')}, {sizeWords(total(chosen.fresh))}
-                </span>{' '}
-                will be copied. {already > 0 && `${already === 1 ? 'One is' : `${already} are`} already in your knowledge. `}The originals stay in <PathText>{chosen.folder.path}</PathText>.
-              </p>
-            ) : (
-              <p className="px-4 py-3 text-sm leading-5 text-ink-soft">Everything in this folder is already in your knowledge. Nothing would be copied twice.</p>
-            )}
-            {chosen.fresh.length > 0 && (
-              <ul className="divide-y divide-line-soft border-t border-line-soft bg-white">
-                {chosen.fresh.map((file) => {
-                  const problem = unreadableReason(file.name)
-                  return (
-                    <li key={file.name} className="px-4 py-2">
-                      <div className="flex items-baseline gap-3">
-                        <span className="min-w-0 flex-1 truncate text-sm leading-5 text-ink">{file.name}</span>
-                        <span className="shrink-0 text-xs leading-5 tabular text-ink-50">
-                          {kindOf(file.name)} · {sizeWords(file.size_bytes)}
-                        </span>
-                      </div>
-                      {problem && (
-                        <p className="mt-0.5 flex items-start gap-1.5 text-xs leading-4.5 text-brass-text">
-                          <AlertTriangle className="mt-[3px] size-3 shrink-0" aria-hidden />
-                          <span>AIOS will not be able to read this one. {problem}</span>
-                        </p>
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </div>
-        )}
-      </Reveal>
-    </Dialog>
-  )
-}
-
-/* ---------------- Where the original is ---------------- */
 
 export function OriginalDialog({ doc, open, onOpenChange }: { doc: KnowledgeDoc; open: boolean; onOpenChange: (open: boolean) => void }) {
   const { copied, copy } = useCopy()

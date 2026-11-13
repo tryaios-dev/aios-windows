@@ -5,7 +5,7 @@
  */
 import type { ActivityKind, ActivityLine } from '@/lib/activity'
 import type { Conversation, EvidenceEvent, InstalledModel } from '@/lib/types'
-import { COMPANY_MODEL_NAME } from '@/lib/store'
+import { selectCompanyModelName, useStore } from '@/lib/store'
 import { CATALOGUE } from '@/data/catalogue'
 import { modelLabel } from '@/lib/words'
 import { ART, modelLogo } from '@/assets/icons'
@@ -99,6 +99,6 @@ export function modelFact(event: EvidenceEvent, installed: InstalledModel[]): st
   if (!event.model_digest) return null
   const model = installed.find((m) => m.artifact_digest === event.model_digest) ?? CATALOGUE.find((m) => m.artifact_digest === event.model_digest)
   if (model) return modelLabel(model)
-  if (event.provider === 'company') return COMPANY_MODEL_NAME
+  if (event.provider === 'company') return selectCompanyModelName(useStore.getState())
   return 'An AI model that is no longer on this computer'
 }

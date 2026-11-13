@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { IncomingFile } from '@/lib/extras'
 import type { KnowledgeDoc } from '@/lib/types'
-import { SAMPLE_FILES } from '@/data/knowledge'
 import { formatBytes, pluralise } from '@/lib/format'
 
 /** The collection single files go into, and what is recorded for a file that was dragged in. */
@@ -38,25 +37,6 @@ export function alreadyHere(docs: KnowledgeDoc[]): (collection: string, name: st
 }
 
 /* ---------------- "Add files" ---------------- */
-
-/**
- * Stands in for the Windows file dialog: the next two files that are not in
- * the library yet. When every one has been used it goes round again, and the
- * store says they were added before.
- */
-export function nextSampleFiles(docs: KnowledgeDoc[], turn: number): Array<{ origin: string; files: IncomingFile[] }> {
-  const here = alreadyHere(docs)
-  const unused = SAMPLE_FILES.filter((f) => !here(LOOSE, f.name))
-  const start = (turn * 2) % SAMPLE_FILES.length
-  const picked = unused.length ? unused.slice(0, 2) : [SAMPLE_FILES[start], SAMPLE_FILES[(start + 1) % SAMPLE_FILES.length]]
-  const byOrigin = new Map<string, IncomingFile[]>()
-  for (const f of picked) {
-    const list = byOrigin.get(f.origin) ?? []
-    list.push({ name: f.name, size_bytes: f.size_bytes, pages: f.pages })
-    byOrigin.set(f.origin, list)
-  }
-  return [...byOrigin.entries()].map(([origin, files]) => ({ origin, files }))
-}
 
 /* ---------------- Dropped files ---------------- */
 

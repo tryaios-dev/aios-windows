@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TooltipProvider } from '@/components/ui/overlays'
 import { ErrorBoundary } from '@/app/ErrorBoundary'
 import App from './App'
+import { hydrate } from '@/bridge/live'
 import './index.css'
 
 // Fonts load lazily by default, so the first page to use the mono or display
@@ -16,8 +17,11 @@ for (const face of ['400 1em "Public Sans Variable"', '600 1em "Public Sans Vari
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 5_000 } } })
 
+// Load the data before the first render, so the start-up gate and every screen start from it.
+// Desktop app: the real backend. Plain browser (`pnpm dev:ui`): the simulated backend, sample data.
 // Hash routing: Electron loads the renderer from file://, where path routing cannot work.
-createRoot(document.getElementById('root')!).render(
+void hydrate().finally(() =>
+  createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
@@ -31,4 +35,5 @@ createRoot(document.getElementById('root')!).render(
       </QueryClientProvider>
     </ErrorBoundary>
   </StrictMode>,
+),
 )

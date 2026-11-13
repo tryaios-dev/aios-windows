@@ -7,14 +7,13 @@ import { useExtras } from '@/lib/extras'
 import { truncate } from '@/lib/format'
 import { useStore } from '@/lib/store'
 import type { KnowledgeDoc } from '@/lib/types'
-import type { SampleFolder } from '@/data/knowledge'
 import { Button } from '@/components/ui/button'
 import { PageBody, PageHeader } from '@/components/ui/layout'
 import { EmptyKnowledge } from './EmptyKnowledge'
 import { StoreDrawing } from './KnowledgeArt'
-import { ChooseFolderDialog, OriginalDialog, RemoveDialog } from './KnowledgeDialogs'
+import { OriginalDialog, RemoveDialog } from './KnowledgeDialogs'
 import { Library, type LibraryFilter } from './Library'
-import { DROPPED, LOOSE, nextSampleFiles, stem, useAddingRun, usePageDrop, type DroppedBatch } from './helpers'
+import { stem, useAddingRun, usePageDrop, type DroppedBatch } from './helpers'
 
 const NONE: ReadonlySet<string> = new Set()
 
@@ -37,52 +36,33 @@ export function KnowledgeView() {
 
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<LibraryFilter>('all')
-  const [folderDialog, setFolderDialog] = useState({ open: false, run: 0 })
   const [original, setOriginal] = useState<{ doc: KnowledgeDoc; open: boolean } | null>(null)
   const [removal, setRemoval] = useState<{ doc: KnowledgeDoc; open: boolean } | null>(null)
   const [leaving, setLeaving] = useState<ReadonlySet<string>>(NONE)
   const [retried, setRetried] = useState<ReadonlySet<string>>(NONE)
   const top = useRef<HTMLDivElement>(null)
-  const turn = useRef(0)
 
   const run = useAddingRun(knowledge, retried)
   const empty = knowledge.length === 0
 
-  /** New documents arrive at the top of the list, so show the whole list from the top. */
-  const showArrivals = () => {
-    setQuery('')
-    setFilter('all')
-    top.current?.closest('.overflow-y-auto')?.scrollTo({ top: 0 })
-  }
-
-  const addFiles = () => {
-    for (const pick of nextSampleFiles(knowledge, turn.current)) api.knowledge.add(pick.files, { collection: LOOSE, origin: pick.origin })
-    turn.current += 1
-    showArrivals()
-  }
-
-  const addFolder = (folder: SampleFolder, files: SampleFolder['files']) => {
-    setFolderDialog((d) => ({ ...d, open: false }))
-    api.knowledge.add(files, { collection: folder.name, origin: folder.path })
-    showArrivals()
-  }
+  // The backend has no knowledge store yet (proposed: POST /knowledge), so adding says so and changes nothing.
+  const addFiles = () => api.knowledge.add()
 
   const addDropped = (batches: DroppedBatch[]) => {
     if (!batches.length) {
       useStore.getState().toast({ kind: 'info', title: 'Nothing to add', description: 'There were no files in what you dropped.' })
       return
     }
-    for (const batch of batches) api.knowledge.add(batch.files, { collection: batch.collection, origin: DROPPED })
-    showArrivals()
+    api.knowledge.add()
   }
 
   const dragging = usePageDrop(addDropped)
 
-  const ask = (doc: KnowledgeDoc) => {
+  const ask = async (doc: KnowledgeDoc) => {
     const open = api.projects.list().filter((p) => !p.archived)
-    const project = open.find((p) => p.id === lastProjectId) ?? open[0] ?? api.projects.create({ name: 'My workspace', classification: 'restricted' })
-    const conversation = api.conversations.create(project.id, `About ${truncate(stem(doc.name), 48)}`)
-    navigate(`/projects/${project.id}/c/${conversation.id}`, { state: { draftText: `About “${doc.name}” in my secure knowledge: ` } })
+    const project = open.find((p) => p.id === lastProjectId) ?? open[0] ?? (await api.projects.create({ name: 'My workspace', classification: 'restricted' }))
+    const conversation = project && (await api.conversations.create(project.id, `About ${truncate(stem(doc.name), 48)}`))
+    if (project && conversation) navigate(`/projects/${project.id}/c/${conversation.id}`, { state: { draftText: `About “${doc.name}” in my secure knowledge: ` } })
   }
 
   const retry = (doc: KnowledgeDoc) => {
@@ -103,7 +83,7 @@ export function KnowledgeView() {
     }, ROW_CLOSES_MS)
   }
 
-  const openFolders = () => setFolderDialog((d) => ({ open: true, run: d.run + 1 }))
+  const openFolders = () => api.knowledge.add()
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
@@ -176,7 +156,6 @@ export function KnowledgeView() {
         {dragging ? 'Drop to add to your secure knowledge' : ''}
       </p>
 
-      <ChooseFolderDialog key={folderDialog.run} open={folderDialog.open} onOpenChange={(open) => setFolderDialog((d) => ({ ...d, open }))} docs={knowledge} onAdd={addFolder} />
       {original && <OriginalDialog doc={original.doc} open={original.open} onOpenChange={(open) => setOriginal((o) => (o ? { ...o, open } : o))} />}
       {removal && (
         <RemoveDialog

@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { ArrowUp, Building2, ChevronDown, Cpu, Lock, MonitorSmartphone, Square } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useExtras } from '@/lib/extras'
-import { COMPANY_MODEL_NAME, useStore } from '@/lib/store'
+import { selectCompanyModelName, useStore } from '@/lib/store'
 import type { Conversation } from '@/lib/types'
 import { cn } from '@/lib/cn'
 import { modelLabel, sizeBlurb } from '@/lib/words'
@@ -47,14 +47,15 @@ export function Composer({ conversation, disabled }: { conversation: Conversatio
   const handedText = handedOverText(location.state)
   const generation = useStore((s) => s.generation)
   const installed = useStore((s) => s.installedModels)
-  const companyFlag = useStore((s) => s.sim.companyFlag)
+  const companyFlag = useStore((s) => s.health.company.enabled)
   const company = useStore((s) => s.health.company)
   const pendingText = useStore((s) => s.continueLocally?.pending_text ?? s.modelChoice?.pending_text)
   const busy = !!generation && generation.conversation_id === conversation.id
   const otherBusy = !!generation && generation.conversation_id !== conversation.id
   const isCompany = conversation.current_provider === 'company'
   const currentModel = installed.find((m) => m.id === conversation.model_id)
-  const currentLabel = isCompany ? `Company server · ${COMPANY_MODEL_NAME}` : currentModel ? modelLabel(currentModel) : 'Choose an AI model'
+  const companyModel = useStore(selectCompanyModelName)
+  const currentLabel = isCompany ? `Company server · ${companyModel}` : currentModel ? modelLabel(currentModel) : 'Choose an AI model'
 
   // Documents from My secure knowledge this conversation is using. This is kept in the interface only:
   // nothing is added to the message text. Once a message is in the conversation, the names are noted against it.
@@ -168,11 +169,11 @@ export function Composer({ conversation, disabled }: { conversation: Conversatio
   })
   const speaking = dictation.phase !== 'idle'
 
-  const send = () => {
+  const send = async () => {
     if (!text.trim() || busy || otherBusy || disabled) return
     const names = isCompany ? [] : chosenDocs.map((d) => d.name)
     sending.current = names.length ? { text: text.trim(), names } : null
-    const result = api.conversations.send(conversation.id, text)
+    const result = await api.conversations.send(conversation.id, text)
     if (result.ok) {
       setText('')
       setFromVoice(false)

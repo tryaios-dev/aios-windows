@@ -21,15 +21,15 @@ export function ConversationList({ project, activeId, full }: { project: Project
   const active = useMemo(() => conversations.filter((c) => !c.archived).sort((a, b) => b.updated_at.localeCompare(a.updated_at)), [conversations])
   const archived = useMemo(() => conversations.filter((c) => c.archived).sort((a, b) => b.updated_at.localeCompare(a.updated_at)), [conversations])
 
-  const newConversation = () => {
-    const conv = api.conversations.create(project.id)
-    navigate(`/projects/${project.id}/c/${conv.id}`)
+  const newConversation = async () => {
+    const conv = await api.conversations.create(project.id)
+    if (conv) navigate(`/projects/${project.id}/c/${conv.id}`)
   }
 
   // A starter opens a new conversation with its message written and ready to edit.
-  const startFrom = (starter: Starter) => {
-    const conv = api.conversations.create(project.id, starter.conversationTitle)
-    navigate(`/projects/${project.id}/c/${conv.id}?draft=${starter.id}`)
+  const startFrom = async (starter: Starter) => {
+    const conv = await api.conversations.create(project.id, starter.conversationTitle)
+    if (conv) navigate(`/projects/${project.id}/c/${conv.id}?draft=${starter.id}`)
   }
 
   return (
