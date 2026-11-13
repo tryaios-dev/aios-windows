@@ -67,6 +67,7 @@ class EngineManager:
         watch_interval_s: float = WATCH_INTERVAL_S,
         start_fn: StartFn = start,
         probe_fn: ProbeFn = list_gpus,
+        model_fn: Callable[[], Path | None] | None = None,
     ) -> None:
         self._root = engine_root  # holds cpu/ and vulkan/
         self._models_dir = models_dir
@@ -77,6 +78,9 @@ class EngineManager:
         self._watch_interval_s = watch_interval_s
         self._start_fn = start_fn
         self._probe_fn = probe_fn
+        # Which model file to load when none is asked for: the default installed model
+        # (aios_backend.local), else the first .gguf in the models folder.
+        self._model_fn = model_fn or (lambda: find_model(self._models_dir))
 
         self._engine: Engine | None = None
         self._lock = asyncio.Lock()
@@ -124,24 +128,42 @@ class EngineManager:
     # ---- use ------------------------------------------------------------------------------
 
     @contextlib.asynccontextmanager
-    async def use(self) -> AsyncIterator[Engine]:
+    async def use(self, model: Path | None = None) -> AsyncIterator[Engine]:
         """The running engine, started if needed. Not unloaded while in use."""
-        engine = await self.ensure()
-        self._leases += 1
+        engine = await self.acquire(model)
         try:
             yield engine
         finally:
-            self._leases -= 1
-            self._last_used = time.monotonic()
+            self.release()
 
-    async def ensure(self) -> Engine:
-        """Start the engine if it is not running. Raises ``NoModel`` or ``EngineError``."""
+    async def acquire(self, model: Path | None = None) -> Engine:
+        """Like ``use``, for callers in a worker thread: pair every call with ``release``."""
+        engine = await self.ensure(model)
+        self._leases += 1
+        return engine
+
+    def release(self) -> None:
+        self._leases -= 1
+        self._last_used = time.monotonic()
+
+    async def ensure(self, model: Path | None = None) -> Engine:
+        """Start the engine if it is not running, with ``model`` (default: the default model).
+        One model is loaded at a time (MVP 2.2): asking for another one restarts the engine,
+        unless an answer is still streaming. Raises ``NoModel`` or ``EngineError``."""
         async with self._lock:
             self._last_used = time.monotonic()
             self._reap()
+            wanted = model or self._model_fn()
+            engine = self._engine
+            if engine is not None and wanted is not None and engine.model != wanted:
+                if self._leases:
+                    return engine  # never cut off an answer in progress
+                self._engine = None
+                await asyncio.to_thread(engine.stop)
+                self._set(ComponentState.NOT_STARTED)
             if self._engine is not None:
                 return self._engine
-            return await self._start()
+            return await self._start(wanted)
 
     async def lost_gpu(self, engine: Engine, wait_s: float = 3.0) -> bool:
         """True if ``engine`` is the GPU build and has exited (a request to it just failed).
@@ -155,9 +177,9 @@ class EngineManager:
 
     # ---- internals (called with the lock held) --------------------------------------------
 
-    async def _start(self) -> Engine:
-        model = find_model(self._models_dir)
-        if model is None:
+    async def _start(self, model: Path | None = None) -> Engine:
+        model = model or self._model_fn()
+        if model is None or not model.is_file():
             raise NoModel
         build = await self._pick_build()
         self._set(ComponentState.STARTING, build, model)
@@ -170,7 +192,7 @@ class EngineManager:
                 self._set(ComponentState.FAILED)
                 raise
             self._fall_back(str(exc))
-            return await self._start()
+            return await self._start(model)
         self._engine = engine
         self._last_used = time.monotonic()
         self._set(ComponentState.OK, build, model)

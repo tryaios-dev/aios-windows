@@ -368,7 +368,7 @@ export const EvidenceStream = z.object({
 export type EvidenceStream = z.infer<typeof EvidenceStream>;
 
 /* ------------------------------------------------------------------ models */
-export const Tier = z.enum(["small", "medium"]);
+export const Tier = z.enum(["small", "medium", "large"]);
 
 export const CatalogueEntry = z.object({
   entry_id: z.string(),
@@ -424,6 +424,8 @@ export const Hardware = z.object({
   free_disk_gb: z.number().int(),
   os: z.string(),
   recommended_tier: Tier.nullable(),
+  /** The one model AIOS suggests for this machine (catalogue entry id); null below the minimum. */
+  recommended_entry_id: z.string().nullable().optional(),
   checked_at: z.string(),
   /** The latest benchmark on this machine; null until one has run. */
   benchmark: z
@@ -439,8 +441,44 @@ export const Hardware = z.object({
 });
 export type Hardware = z.infer<typeof Hardware>;
 
-export const EngineStatus = z.object({ state: z.enum(["not_built", "no_model"]), installed: z.number().int() });
+export const EngineStatus = z.object({
+  state: z.enum([
+    "not_built",
+    "no_model",
+    "not_started",
+    "loading",
+    "ready",
+    "generating",
+    "idle_unloaded",
+    "failed",
+  ]),
+  installed: z.number().int(),
+  build: z.enum(["cpu", "vulkan"]).nullable().optional(),
+  loaded_model_id: z.string().nullable().optional(),
+});
 export type EngineStatus = z.infer<typeof EngineStatus>;
+
+/** One benchmark run (POST /system/benchmark): a short answer from the local engine. */
+export const BenchmarkRun = z.object({
+  model_id: z.string(),
+  engine: z.enum(["cpu", "vulkan"]),
+  tokens_per_second: z.number(),
+  time_to_first_token_ms: z.number().int(),
+  run_at: z.string(),
+});
+export type BenchmarkRun = z.infer<typeof BenchmarkRun>;
+
+/** A model download (GET /models/downloads): from the model's origin, resumable. */
+export const DownloadState = z.object({
+  entry_id: z.string(),
+  status: z.enum(["queued", "downloading", "paused", "verifying", "failed", "done"]),
+  received_bytes: z.number().int(),
+  total_bytes: z.number().int(),
+  speed_bps: z.number().int(),
+  error: z.string().nullable(),
+  started_at: z.string(),
+});
+export type DownloadState = z.infer<typeof DownloadState>;
 
 /* ------------------------------------------------------------------ bridge */
 export interface AiosBridge {
@@ -512,9 +550,17 @@ export interface AiosBridge {
     chooseFile(): Promise<PickedFile | null>;
     importFile(path: string, entryId: string | null): Promise<InstalledModel>;
     download(entryId: string): Promise<void>;
+    /** Downloads in progress, paused, failed or just finished. */
+    downloads(): Promise<DownloadState[]>;
+    pauseDownload(entryId: string): Promise<DownloadState>;
+    resumeDownload(entryId: string): Promise<DownloadState>;
+    /** Stops the download and deletes what was received. */
+    cancelDownload(entryId: string): Promise<void>;
     remove(id: string): Promise<void>;
     hardware(refresh: boolean): Promise<Hardware>;
     engine(): Promise<EngineStatus>;
+    /** Starts the engine with the default model if needed and times a short answer. */
+    benchmark(): Promise<BenchmarkRun>;
   };
   /** SPIKE-D04 (temporary). */
   spike: {

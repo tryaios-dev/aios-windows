@@ -1,6 +1,6 @@
 {
   "catalogue_version": 1,
-  "issued_at": "2026-11-10T00:00:00.000Z",
+  "issued_at": "2026-11-12T00:00:00.000Z",
   "entries": [
     {
       "id": "minicpm5-2b-q4_k_m-openbmb-gguf",
@@ -22,7 +22,7 @@
         "filename": "MiniCPM5-2B-Q4_K_M.gguf",
         "size_bytes": 1561318368,
         "sha256": "ec2d5801640099e97d8d7e8003ad4d81f336e757811f03a26173dddf386602fd",
-        "mirror_url": "https://models.example.eu/v1/MiniCPM5-2B-Q4_K_M.gguf"
+        "mirror_url": "https://huggingface.co/openbmb/MiniCPM5-2B-GGUF/resolve/2079a22f3beaa4e306449978533478fe0522f4b3/MiniCPM5-2B-Q4_K_M.gguf"
       },
       "licence": {
         "spdx": "Apache-2.0",
@@ -60,7 +60,7 @@
         "filename": "Ornith-1.5-9B-Q4_K_M.gguf",
         "size_bytes": 5780090816,
         "sha256": "70c112196e0b7023803c9762752e46d29e612a92c83f995bc3ba1ceb07e8fab6",
-        "mirror_url": "https://models.example.eu/v1/Ornith-1.5-9B-Q4_K_M.gguf"
+        "mirror_url": "https://huggingface.co/ornith-ai/Ornith-1.5-9B-GGUF/resolve/abdd624b12ebf020b767fff532ff44fe552b28c3/Ornith-1.5-9B-Q4_K_M.gguf"
       },
       "licence": {
         "spdx": "MIT",
@@ -77,6 +77,74 @@
       "context_length": 32768,
       "min_vram_gb": 8,
       "description": "Good quality for drafting, summarising and reasoning. Fits fully on a GPU with 8 GB."
+    },
+    {
+      "id": "sage-a1.5-q4_k_m-mradermacher-gguf",
+      "tier": "large",
+      "display_name": "Sage A1.5",
+      "upstream": {
+        "repo": "mradermacher/Sage-A1.5-GGUF",
+        "revision": "fedd56b69117f706f48d0ac4ec565e9211d4407d"
+      },
+      "source_weights_digest": null,
+      "conversion": {
+        "tool": "llama.cpp (as published upstream; exact build not stated)",
+        "version": "unknown — not stated in upstream repo"
+      },
+      "quantisation": {
+        "method": "Q4_K_M"
+      },
+      "artefact": {
+        "filename": "Sage-A1.5.Q4_K_M.gguf",
+        "size_bytes": 21713464320,
+        "sha256": "43ff9ee24508e58c1bdebb1987dffa14e86d77a3d916eb2c33eeba3757ddad9d",
+        "mirror_url": "https://huggingface.co/mradermacher/Sage-A1.5-GGUF/resolve/fedd56b69117f706f48d0ac4ec565e9211d4407d/Sage-A1.5.Q4_K_M.gguf"
+      },
+      "licence": {
+        "spdx": "Apache-2.0",
+        "reference": "licenses/models/Sage-A1.5-GGUF-LICENSE.txt"
+      },
+      "publisher": "mradermacher (community GGUF of InternScience/Sage-A1.5)",
+      "pipeline": "third-party",
+      "deviation_review": null,
+      "min_ram_gb": 32,
+      "context_length": 32768,
+      "min_vram_gb": 8,
+      "description": "35B mixture-of-experts model (3B active): its experts run from system memory, the rest on an 8 GB or larger GPU. Strong general and coding answers."
+    },
+    {
+      "id": "qwen3.8-27b-ud-q4_k_m-unsloth-gguf",
+      "tier": "large",
+      "display_name": "Qwen3.8 27B",
+      "upstream": {
+        "repo": "unsloth/Qwen3.8-27B-GGUF",
+        "revision": "4af51b3542f775b0a8e4b310bfb3f17e01c306c9"
+      },
+      "source_weights_digest": null,
+      "conversion": {
+        "tool": "llama.cpp (as published upstream; exact build not stated)",
+        "version": "unknown — not stated in upstream repo"
+      },
+      "quantisation": {
+        "method": "UD-Q4_K_M"
+      },
+      "artefact": {
+        "filename": "Qwen3.8-27B-UD-Q4_K_M.gguf",
+        "size_bytes": 16564259744,
+        "sha256": "1bce504dfecd84153666928a41d8a66706f0158d3a317bc5196b72819d7dc529",
+        "mirror_url": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/4af51b3542f775b0a8e4b310bfb3f17e01c306c9/Qwen3.8-27B-UD-Q4_K_M.gguf"
+      },
+      "licence": {
+        "spdx": "Apache-2.0",
+        "reference": "licenses/models/Qwen3.8-27B-LICENSE.txt"
+      },
+      "publisher": "Unsloth (community GGUF of Qwen/Qwen3.8-27B)",
+      "pipeline": "third-party",
+      "deviation_review": null,
+      "min_ram_gb": 64,
+      "context_length": 32768,
+      "min_vram_gb": 24,
+      "description": "Runs fully on a GPU with 24 GB or more. The most widely used model of its size; 201 languages."
     }
   ]
 }

@@ -32,7 +32,10 @@ FIXED_FLAGS = (
     "--no-slots",
     "--no-ui-mcp-proxy",
 )
-CONTEXT_TOKENS = 4096
+# Local Model Catalogue v3 sizes every model for a fixed 16k-token context with a q8_0 cache
+# ("Start llama-server with a fixed context and a q8_0 cache, because the sizes assume both").
+CONTEXT_TOKENS = 16384
+SIZE_FLAGS = ("-ctk", "q8_0", "-ctv", "q8_0", "-fa", "on")
 START_TIMEOUT_S = 180.0  # loading a 2.5 GB model from a slow disk
 PROBE_TIMEOUT_S = 30.0
 
@@ -156,6 +159,7 @@ def start(
                 str(port),
                 "-c",
                 str(CONTEXT_TOKENS),
+                *SIZE_FLAGS,
                 *FIXED_FLAGS,
             ],
             stdin=subprocess.PIPE,

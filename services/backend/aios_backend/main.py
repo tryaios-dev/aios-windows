@@ -30,6 +30,8 @@ from aios_backend.errors import AppError
 from aios_backend.evidence import process as writer_process
 from aios_backend.evidence import pump
 from aios_backend.evidence.client import WriterClient
+from aios_backend.local import LocalModels
+from aios_backend.origin import HuggingFaceOrigin
 from aios_backend.routes import VERSION
 from aios_backend.routes import router as system_router
 from aios_backend.runtime import Generations
@@ -100,6 +102,7 @@ def create_app(
     writer: WriterClient | None = None,
     start_writer: bool = False,
     signing_seed: Callable[[], bytes] | None = None,
+    local: bool = False,
 ) -> FastAPI:
     """The seams below are None until their modules exist; the endpoints then answer 409/503.
 
@@ -109,20 +112,31 @@ def create_app(
     ``writer``: the evidence writer's API (tests pass one); ``start_writer`` starts
     evidence-writer as a child process instead (backend.exe, ``aios-backend serve``).
     Without either, evidence stays queued in the outbox (pending) and export answers 503.
+    ``local``: answer with the installed model through the engine and download models from
+    their origin (backend.exe, ``aios-backend serve``); seams passed explicitly still win.
     """
     database = db or Database(settings)
     components = Components()
+    local_models: LocalModels | None = None
     engine = EngineManager(
         settings.engine_root,
         settings.models_dir,
-        settings.models_dir.parent / "engine-tmp",
+        settings.backups_dir.parent / "engine-tmp",  # data folder; models may sit elsewhere
         components,
         idle_unload_s=settings.engine_idle_unload_s,
+        model_fn=(lambda: local_models.default_path() if local_models else None) if local else None,
     )
+    if local:
+        local_models = LocalModels(database, engine, components)
+        answers = answers or local_models
+        local_engine = local_engine or local_models
+        mirror = mirror or HuggingFaceOrigin()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         manager: EngineManager = app.state.engine
+        if local_models is not None:
+            local_models.bind(asyncio.get_running_loop())
         await manager.set_safe_mode(load_safe_mode(database))  # before any engine can start
         await manager.startup()  # ends orphaned engines (IPC-52), starts the watcher
         child = None

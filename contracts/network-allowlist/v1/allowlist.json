@@ -19,6 +19,70 @@
       "when": "start + max once/day, switchable"
     },
     {
+      "id": "model-origin",
+      "host": "huggingface.co",
+      "port": 443,
+      "scheme": "https",
+      "client": "backend-net",
+      "when": "a model download the user starts (Hugging Face origin and its redirect hosts)"
+    },
+    {
+      "id": "model-origin-cdn-aws",
+      "host": "us.aws.cdn.hf.co",
+      "port": 443,
+      "scheme": "https",
+      "client": "backend-net",
+      "when": "a model download the user starts (Hugging Face origin and its redirect hosts)"
+    },
+    {
+      "id": "model-origin-cdn-gcp",
+      "host": "us.gcp.cdn.hf.co",
+      "port": 443,
+      "scheme": "https",
+      "client": "backend-net",
+      "when": "a model download the user starts (Hugging Face origin and its redirect hosts)"
+    },
+    {
+      "id": "model-origin-xet-bridge",
+      "host": "cas-bridge.xethub.hf.co",
+      "port": 443,
+      "scheme": "https",
+      "client": "backend-net",
+      "when": "a model download the user starts (Hugging Face origin and its redirect hosts)"
+    },
+    {
+      "id": "model-origin-xet-transfer",
+      "host": "transfer.xethub.hf.co",
+      "port": 443,
+      "scheme": "https",
+      "client": "backend-net",
+      "when": "a model download the user starts (Hugging Face origin and its redirect hosts)"
+    },
+    {
+      "id": "model-origin-lfs",
+      "host": "cdn-lfs.hf.co",
+      "port": 443,
+      "scheme": "https",
+      "client": "backend-net",
+      "when": "a model download the user starts (Hugging Face origin and its redirect hosts)"
+    },
+    {
+      "id": "model-origin-lfs-us",
+      "host": "cdn-lfs-us-1.hf.co",
+      "port": 443,
+      "scheme": "https",
+      "client": "backend-net",
+      "when": "a model download the user starts (Hugging Face origin and its redirect hosts)"
+    },
+    {
+      "id": "model-origin-lfs-eu",
+      "host": "cdn-lfs-eu-1.hf.co",
+      "port": 443,
+      "scheme": "https",
+      "client": "backend-net",
+      "when": "a model download the user starts (Hugging Face origin and its redirect hosts)"
+    },
+    {
       "id": "company-server",
       "host": "configured",
       "port": 443,

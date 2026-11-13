@@ -6,7 +6,7 @@ import { api } from "@/bridge/api";
 import { useStore } from "@/bridge/sim/store";
 import type { InstalledModel } from "@/lib/types";
 import { formatBytes } from "@/lib/format";
-import { CATALOGUE } from "@/bridge/sim/catalogue";
+import { CATALOGUE, installable } from "@/bridge/sim/catalogue";
 import { Button } from "@/components/ui/button";
 import { Hint, Select } from "@/components/ui/fields";
 import { EmptyState } from "@/components/ui/feedback";
@@ -22,10 +22,14 @@ export function ModelsView() {
   const catalogueVersion = useStore((s) => s.settings.catalogue_version);
   const lastCheck = useStore((s) => s.settings.last_catalogue_check);
 
-  // Installed entries first; the catalogue order is kept otherwise.
+  // Installed entries first; the catalogue order is kept otherwise. Only entries that may be
+  // installed are listed: a third-party file needs a passed review first (MVP 9.6), the same
+  // rule the backend applies to a download.
   const entries = useMemo(() => {
     const isInstalled = (id: string) => installed.some((m) => m.catalogue_entry_id === id);
-    return [...CATALOGUE].sort((a, b) => Number(isInstalled(b.entry_id)) - Number(isInstalled(a.entry_id)));
+    return CATALOGUE.filter(installable).sort(
+      (a, b) => Number(isInstalled(b.entry_id)) - Number(isInstalled(a.entry_id)),
+    );
   }, [installed]);
 
   return (
