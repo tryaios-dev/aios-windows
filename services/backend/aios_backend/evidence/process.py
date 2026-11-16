@@ -4,6 +4,9 @@ The backend writes one handshake frame to the writer's stdin with ``derive(T, ev
 and reads its READY line. The token never appears in argv or the environment; the only arguments
 are the data folder (a path) and, from source, the development profile. The writer is assigned to
 the backend's kill-on-close job, so it dies with the backend however the backend ends.
+
+If a writer left behind by a crashed backend still holds evidence.db, the new one exits with
+code 3; ``start`` then ends the leftover and tries once more (D-07, ``leftover``).
 """
 
 import json
@@ -14,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from aios_backend.config import Profile, Settings
+from aios_backend.evidence import leftover
 from aios_backend.evidence.client import WRITER_PURPOSE, HttpWriterClient
 from aios_common import platforms
 from aios_common.handshake import derive
@@ -73,6 +77,17 @@ def command(settings: Settings) -> tuple[list[str], dict[str, str] | None]:
 
 
 def start(settings: Settings, job: ChildJob) -> WriterProcess:
+    try:
+        return _start_once(settings, job)
+    except WriterStartError as exc:
+        if str(exc) != "writer_locked" or not leftover.end_leftover_writer(
+            settings.chats_db.parent
+        ):
+            raise
+    return _start_once(settings, job)
+
+
+def _start_once(settings: Settings, job: ChildJob) -> WriterProcess:
     argv, env = command(settings)
     token = derive(WRITER_PURPOSE)
     proc = subprocess.Popen(  # noqa: S603 - fixed program and arguments, no shell

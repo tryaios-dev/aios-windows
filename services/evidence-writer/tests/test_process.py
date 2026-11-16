@@ -11,6 +11,8 @@ from pathlib import Path
 import psutil
 import pytest
 
+from aios_common import pidfile
+
 TOKEN = "cd" * 32
 
 
@@ -114,3 +116,27 @@ def test_ac_14_second_writer_on_the_same_file_exits(
     out, err = second.communicate(timeout=30)
     assert second.returncode == 3
     assert b"READY" not in out
+
+
+def test_d07_the_writer_records_who_holds_the_file(
+    writer: tuple[subprocess.Popen[bytes], int], tmp_path: Path
+) -> None:
+    proc, _ = writer
+    holder = pidfile.read(tmp_path / pidfile.WRITER_PID_FILE)
+    assert holder is not None
+    # From source on Windows the venv launcher runs the interpreter as a child.
+    holders = {p.pid: p for p in _family(proc.pid)}
+    assert holder.pid in holders
+    assert abs(holders[holder.pid].create_time() - holder.created) < 0.01
+    starter = holders[holder.pid].parent()
+    assert starter is not None and holder.parent_pid == starter.pid
+
+
+def test_d07_a_second_writer_leaves_the_first_ones_record(
+    writer: tuple[subprocess.Popen[bytes], int], tmp_path: Path
+) -> None:
+    before = pidfile.read(tmp_path / pidfile.WRITER_PID_FILE)
+    second = _start(tmp_path, json.dumps({"token": TOKEN}).encode() + b"\n")
+    second.communicate(timeout=30)
+    assert second.returncode == 3
+    assert pidfile.read(tmp_path / pidfile.WRITER_PID_FILE) == before
