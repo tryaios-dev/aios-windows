@@ -1,11 +1,10 @@
 import type { CatalogueEntry, Hardware } from "@/lib/types";
 
 /**
- * Model Catalogue v1 (MVP 9.6): the same entries as the backend's catalogue_dev.json (a backend
- * test checks). Real published files with their real size and SHA-256; only the mirror host is a
- * placeholder until B-06.
+ * Browser preview only: the AI models the simulated backend lists. A copy of the backend's
+ * catalogue_dev.json so the preview shows the same models as the desktop app.
  */
-export const CATALOGUE: CatalogueEntry[] = [
+export const SIM_CATALOGUE: CatalogueEntry[] = [
   {
     entry_id: "ornith-1.5-9b-q4_k_m-ornith-gguf",
     name: "Ornith 1.5 9B",
@@ -31,7 +30,7 @@ export const CATALOGUE: CatalogueEntry[] = [
     context_length: 32_768,
     min_ram_gb: 16,
     min_vram_gb: 8,
-    mirror_url: "https://models.example.eu/v1/Ornith-1.5-9B-Q4_K_M.gguf",
+    mirror_url: "https://huggingface.co/ornith-ai/Ornith-1.5-9B-GGUF/resolve/abdd624b12ebf020b767fff532ff44fe552b28c3/Ornith-1.5-9B-Q4_K_M.gguf",
     description: "Good quality for drafting, summarising and reasoning. Fits fully on a GPU with 8 GB.",
   },
   {
@@ -59,12 +58,61 @@ export const CATALOGUE: CatalogueEntry[] = [
     context_length: 32_768,
     min_ram_gb: 8,
     min_vram_gb: 0,
-    mirror_url: "https://models.example.eu/v1/MiniCPM5-2B-Q4_K_M.gguf",
+    mirror_url: "https://huggingface.co/openbmb/MiniCPM5-2B-GGUF/resolve/2079a22f3beaa4e306449978533478fe0522f4b3/MiniCPM5-2B-Q4_K_M.gguf",
     description: "Runs on 8 GB machines without a GPU: about 15 words per second on a 4-core CPU.",
+  },
+  {
+    entry_id: "sage-a1.5-q4_k_m-mradermacher-gguf",
+    name: "Sage A1.5",
+    tier: "large",
+    upstream_model: "mradermacher/Sage-A1.5-GGUF",
+    upstream_revision: "fedd56b69117f706f48d0ac4ec565e9211d4407d",
+    source_weight_digest: null,
+    conversion_tool: "llama.cpp (as published upstream; exact build not stated)",
+    conversion_version: "unknown — not stated in upstream repo",
+    quantisation_method: "Q4_K_M",
+    artifact_digest: "43ff9ee24508e58c1bdebb1987dffa14e86d77a3d916eb2c33eeba3757ddad9d",
+    size_bytes: 21_713_464_320,
+    file_name: "Sage-A1.5.Q4_K_M.gguf",
+    licence: "Apache-2.0",
+    licence_reference: "licenses/models/Sage-A1.5-GGUF-LICENSE.txt",
+    publisher: "mradermacher (community GGUF of InternScience/Sage-A1.5)",
+    pipeline: "third-party",
+    context_length: 32_768,
+    min_ram_gb: 32,
+    min_vram_gb: 8,
+    mirror_url: "https://huggingface.co/mradermacher/Sage-A1.5-GGUF/resolve/fedd56b69117f706f48d0ac4ec565e9211d4407d/Sage-A1.5.Q4_K_M.gguf",
+    description:
+      "35B mixture-of-experts model (3B active): its experts run from system memory, the rest on an 8 GB or larger GPU. Strong general and coding answers.",
+  },
+  {
+    entry_id: "qwen3.8-27b-ud-q4_k_m-unsloth-gguf",
+    name: "Qwen3.8 27B",
+    tier: "large",
+    upstream_model: "unsloth/Qwen3.8-27B-GGUF",
+    upstream_revision: "4af51b3542f775b0a8e4b310bfb3f17e01c306c9",
+    source_weight_digest: null,
+    conversion_tool: "llama.cpp (as published upstream; exact build not stated)",
+    conversion_version: "unknown — not stated in upstream repo",
+    quantisation_method: "UD-Q4_K_M",
+    artifact_digest: "1bce504dfecd84153666928a41d8a66706f0158d3a317bc5196b72819d7dc529",
+    size_bytes: 16_564_259_744,
+    file_name: "Qwen3.8-27B-UD-Q4_K_M.gguf",
+    licence: "Apache-2.0",
+    licence_reference: "licenses/models/Qwen3.8-27B-LICENSE.txt",
+    publisher: "Unsloth (community GGUF of Qwen/Qwen3.8-27B)",
+    pipeline: "third-party",
+    context_length: 32_768,
+    min_ram_gb: 64,
+    min_vram_gb: 24,
+    mirror_url: "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/4af51b3542f775b0a8e4b310bfb3f17e01c306c9/Qwen3.8-27B-UD-Q4_K_M.gguf",
+    description:
+      "Runs fully on a GPU with 24 GB or more. The most widely used model of its size; 201 languages.",
   },
 ];
 
-export const DEFAULT_HARDWARE: Hardware = {
+/** The computer the browser preview pretends to run on. */
+export const SIM_HARDWARE: Hardware = {
   cpu: "Intel Core i7-13700H",
   cores: 14,
   ram_gb: 16,
@@ -72,22 +120,6 @@ export const DEFAULT_HARDWARE: Hardware = {
   free_disk_gb: 184,
   os: "Windows 11 Pro 24H2 (build 26100)",
   recommended_tier: "medium",
+  recommended_entry_id: "ornith-1.5-9b-q4_k_m-ornith-gguf",
+  benchmark: { model_id: "ornith-1.5-9b-q4_k_m-ornith-gguf", engine: "vulkan", tokens_per_second: 38.4, time_to_first_token_ms: 420, run_at: new Date(Date.now() - 19 * 86400000).toISOString() },
 };
-
-export const MINIMUM_PROFILE = { ram_gb: 8, free_disk_gb: 10 };
-
-export function catalogueEntry(id: string | null | undefined): CatalogueEntry | undefined {
-  return CATALOGUE.find((e) => e.entry_id === id);
-}
-
-export function tierFor(hw: Hardware): "medium" | "small" | null {
-  if (hw.ram_gb < MINIMUM_PROFILE.ram_gb || hw.free_disk_gb < MINIMUM_PROFILE.free_disk_gb) return null;
-  if (hw.ram_gb >= 16 || (hw.gpu && hw.gpu.vram_gb >= 8)) return "medium";
-  return "small";
-}
-
-export function hardwareSupports(entry: CatalogueEntry, hw: Hardware): boolean {
-  if (hw.free_disk_gb * 1024 ** 3 < entry.size_bytes + 2 * 1024 ** 3) return false;
-  if (hw.ram_gb >= entry.min_ram_gb) return true;
-  return !!hw.gpu && hw.gpu.vram_gb >= entry.min_vram_gb && entry.min_vram_gb > 0;
-}

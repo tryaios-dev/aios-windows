@@ -84,6 +84,25 @@ def _events(client: TestClient) -> list[dict[str, Any]]:
     return list(client.get("/evidence").json())
 
 
+def test_ac_12_events_from_before_the_store_are_chained_after_store_created(
+    app_client: TestClient, db: Database, writer: FlakyWriter
+) -> None:
+    """First run downloads the model (step 3) before it creates the store (step 5): the
+    model_installed event is queued first, yet the chain must start with store_created."""
+    from db import outbox
+
+    with db.session() as session:
+        outbox.record(session, "model_installed", actor="app", body={"model_id": "m", "count": 1})
+        session.commit()
+    first_run(app_client)
+    pump.drain(db, writer)  # type: ignore[arg-type]
+    events = sorted(_events(app_client), key=lambda e: e["seq"])
+    assert all(not e["pending"] for e in events)
+    assert events[0]["event_type"] == "store_created" and events[0]["seq"] == 0
+    assert "model_installed" in [e["event_type"] for e in events]
+    assert app_client.get("/evidence/status").json() == {"writer": "ok", "pending": 0}
+
+
 def test_f05_queued_events_are_chained_with_their_hashes(
     app_client: TestClient, db: Database, writer: FlakyWriter
 ) -> None:

@@ -23,9 +23,12 @@ permissions:
   contents: read
 
 env:
-  # Tiny model used only to prove the engine starts, authenticates and answers (D-03).
-  TEST_MODEL_URL: https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories260K.gguf
-  TEST_MODEL_SHA256: 270cba1bd5109f42d03350f60406024560464db173c0e387d91f0426d3bd256d
+  # Small model used only to prove the engine starts, authenticates and answers (D-03).
+  # Its attention heads (64) must be a multiple of 32: the engine runs with a q8_0 KV cache
+  # (launcher.SIZE_FLAGS), which llama.cpp refuses for smaller heads (stories260K has 8).
+  # SmolLM2-135M-Instruct, Apache-2.0, pinned revision, ~100 MB.
+  TEST_MODEL_URL: https://huggingface.co/bartowski/SmolLM2-135M-Instruct-GGUF/resolve/09816acd5d99df7be770d85ea30822623dab342c/SmolLM2-135M-Instruct-Q4_K_M.gguf
+  TEST_MODEL_SHA256: 2e8040ceae7815abe0dcb3540b9995eaa1fa0d2ca9e797d0a635ae4433c68c2d
 
 jobs:
   py-lint:

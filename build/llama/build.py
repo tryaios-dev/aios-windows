@@ -64,7 +64,7 @@ def checkout(manifest: dict[str, object]) -> Path:
             raise SystemExit(f"{patch['name']}: SHA-256 {got} differs from manifest.json")
 
     src = WORK / "src"
-    shutil.rmtree(src, ignore_errors=True)
+    remove_tree(src)
     tag, commit = str(manifest["llama_cpp_release"]), str(manifest["commit"])
     # No CRLF conversion (Windows default): the patches must apply to the exact upstream bytes.
     run(
@@ -88,6 +88,18 @@ def checkout(manifest: dict[str, object]) -> Path:
     return src
 
 
+def remove_tree(path: Path) -> None:
+    """Delete an earlier checkout. Git marks its object files read-only, which Windows refuses to
+    delete; clear the flag and retry instead of silently leaving the folder behind."""
+
+    def writable_then_retry(func: object, target: str, _exc: BaseException) -> None:
+        os.chmod(target, 0o700)
+        func(target)  # type: ignore[operator]
+
+    if path.exists():
+        shutil.rmtree(path, onexc=writable_then_retry)
+
+
 def build(src: Path, variant: str) -> Path:
     flags = list(COMMON_FLAGS)
     if WINDOWS:
@@ -97,6 +109,10 @@ def build(src: Path, variant: str) -> Path:
             f"-DCMAKE_TOOLCHAIN_FILE={src / 'cmake' / 'x64-windows-llvm.cmake'}",
             "-DGGML_BACKEND_DL=ON",
             "-DGGML_CPU_ALL_VARIANTS=ON",
+            # Clang 22 (Visual Studio 2026) makes incompatible-pointer-types an error; the pinned
+            # ggml source passes block pointers where a char pointer is declared (quants.c), which
+            # older Clang only warns about. Same code is generated either way.
+            "-DCMAKE_C_FLAGS=-Wno-error=incompatible-pointer-types",
         ]
     if variant == "vulkan":
         flags.append("-DGGML_VULKAN=ON")

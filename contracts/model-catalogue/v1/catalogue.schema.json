@@ -64,7 +64,8 @@
         "tier": {
           "enum": [
             "small",
-            "medium"
+            "medium",
+            "large"
           ]
         },
         "display_name": {

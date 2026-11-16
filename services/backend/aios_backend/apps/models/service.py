@@ -243,7 +243,14 @@ def get_hardware(session: Session, settings: Settings, refresh: bool) -> Hardwar
         if row.gpu_name
         else None
     )
-    tier = hardware.recommended_tier(row.ram_gb, row.free_disk_gb, row.vram_gb)
+    suggested = hardware.recommend(
+        row.ram_gb,
+        row.free_disk_gb,
+        row.vram_gb,
+        row.gpu_driver_ok,
+        catalogue.entries(),
+        catalogue.installable,
+    )
     bench = repo.latest_benchmark(session)
     return HardwareOut(
         benchmark=_benchmark_out(bench) if bench else None,
@@ -253,7 +260,8 @@ def get_hardware(session: Session, settings: Settings, refresh: bool) -> Hardwar
         gpu=gpu,
         free_disk_gb=row.free_disk_gb,
         os=row.os,
-        recommended_tier=tier,
+        recommended_tier=suggested.tier if suggested else None,
+        recommended_entry_id=suggested.id if suggested else None,
         checked_at=row.checked_at,
     )
 

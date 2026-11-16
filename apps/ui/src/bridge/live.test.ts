@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AiosBridge, Exchange, Health, InstalledModel, Settings, SetupStatus } from "@aios/bridge-contract";
-import { api } from "./api";
-import { hydrate, refreshHealth, resetEngineMemory } from "./live";
-import { useStore } from "./sim/store";
+import type { AiosBridge, DownloadState, Exchange, Health, InstalledModel, Settings, SetupStatus } from "@aios/bridge-contract";
+import { RECOVERY_KEY_LENGTH, api } from "@/lib/api";
+import { hydrate, refreshDownloads, refreshHealth, resetEngineMemory, stopWatchingDownloads } from "./live";
+import { selectRecommendedEntry, useStore } from "@/lib/store";
 
 const STATUS: SetupStatus = {
   first_run_complete: false,
@@ -140,7 +140,7 @@ function fakeBridge() {
 let fake: ReturnType<typeof fakeBridge>;
 
 beforeEach(() => {
-  useStore.getState().resetFirstRun("fresh");
+  useStore.getState().resetFirstRun();
   resetEngineMemory();
   fake = fakeBridge();
   window.aios = fake.bridge;
@@ -159,7 +159,7 @@ describe("desktop app: setup and settings come from the backend", () => {
     expect(s.stream.stream_id).toBe("stream-9");
     expect(s.settings.safe_mode_cpu).toBe(true);
     expect(s.settings.default_model_id).toBe("qwen3-4b-q4km");
-    expect(s.liveAllowlist?.map((e) => e.host)).toEqual(["models.example.eu"]);
+    expect(s.live?.allowlist.map((e) => e.host)).toEqual(["models.example.eu"]);
   });
 
   it("saves a changed setting in the backend and shows what it stored", async () => {
@@ -179,15 +179,15 @@ describe("desktop app: setup and settings come from the backend", () => {
 
   it("finishes first run in the backend before opening the app", async () => {
     await api.firstRun.issueRecoveryKey();
-    expect(await api.firstRun.complete({ installedModelId: null })).toBe(true);
+    expect(await api.firstRun.complete()).toBe(true);
     expect(fake.bridge.setup.complete).toHaveBeenCalledOnce();
     expect(useStore.getState().ui.firstRunComplete).toBe(true);
   });
 
   it("explains a failed restore in plain words", async () => {
-    const r = await api.restore({ backup_path: "D:\\backup", recovery_key: "x", has_package: true });
-    expect(r).toEqual({ ok: false, error: expect.stringContaining("doesn't match this Recovery Package") });
-    expect(api.backup.keyLength()).toBe(36);
+    const r = await api.restore({ backup_path: "D:\\backup", recovery_key: "x" });
+    expect(r).toEqual({ ok: false, error: expect.stringContaining("doesn't match this backup") });
+    expect(RECOVERY_KEY_LENGTH).toBe(36);
   });
 });
 
@@ -354,7 +354,7 @@ describe("desktop app: Settings read the backend, not the simulation", () => {
       model_name: "company-model",
     });
     expect(s.health.evidence_pending).toBe(7);
-    expect(s.liveInfo?.licences.map((l) => l.name)).toEqual(["Catalogue Model"]);
+    expect(s.live?.licences.map((l) => l.name)).toEqual(["Catalogue Model"]);
   });
 
   it("shows the bundled catalogue version and the backend's last check, never simulated ones", async () => {
@@ -383,6 +383,54 @@ describe("desktop app: Settings read the backend, not the simulation", () => {
 
   it("explains a catalogue check that this build cannot run", async () => {
     const r = await api.settings.checkCatalogue();
-    expect(r).toEqual({ ok: false, error: expect.stringContaining("model mirror is not set up") });
+    expect(r).toEqual({ ok: false, error: expect.stringContaining("can’t be checked in this build yet") });
+  });
+});
+
+describe("desktop app: the suggested model downloads from Hugging Face (ac-02)", () => {
+  const ENTRY = "minicpm5-2b-q4_k_m-openbmb-gguf";
+  const state = (status: DownloadState["status"], received: number): DownloadState => ({
+    entry_id: ENTRY,
+    status,
+    received_bytes: received,
+    total_bytes: 1_561_318_368,
+    speed_bps: status === "downloading" ? 1_000_000 : 0,
+    error: null,
+    started_at: "2026-11-12T13:00:00Z",
+  });
+
+  it("ac-02 shows the one model the backend suggests for this computer", async () => {
+    fake.bridge.models.hardware = vi.fn(async () => ({ ...HARDWARE, recommended_entry_id: ENTRY }));
+    await hydrate();
+    expect(selectRecommendedEntry(useStore.getState())).toBe(ENTRY);
+  });
+
+  it("ac-02 shows progress, pauses, resumes and installs the finished download", async () => {
+    let current = state("downloading", 100);
+    fake.bridge.models.download = vi.fn(async () => undefined);
+    fake.bridge.models.downloads = vi.fn(async () => [current]);
+    fake.bridge.models.pauseDownload = vi.fn(async () => (current = state("paused", 200)));
+    fake.bridge.models.resumeDownload = vi.fn(async () => (current = state("downloading", 200)));
+
+    api.models.download(ENTRY);
+    await vi.waitFor(() => expect(useStore.getState().downloads[ENTRY]?.received_bytes).toBe(100));
+    api.models.pause(ENTRY);
+    await vi.waitFor(() => expect(useStore.getState().downloads[ENTRY]?.status).toBe("paused"));
+    api.models.resume(ENTRY);
+    await vi.waitFor(() => expect(useStore.getState().downloads[ENTRY]?.status).toBe("downloading"));
+
+    current = state("done", 1_561_318_368);
+    fake.bridge.models.installed = vi.fn(async () => [{ ...MODEL, id: ENTRY, catalogue_entry_id: ENTRY }]);
+    await refreshDownloads();
+    const s = useStore.getState();
+    expect(s.downloads[ENTRY]).toBeUndefined(); // done: it is now an installed model
+    expect(s.installedModels.map((m) => m.id)).toContain(ENTRY);
+    stopWatchingDownloads();
+  });
+
+  it("ac-02 explains a download that stopped", async () => {
+    fake.bridge.models.downloads = vi.fn(async () => [{ ...state("failed", 300), error: "mirror_unreachable" }]);
+    await refreshDownloads();
+    expect(useStore.getState().downloads[ENTRY]?.error).toMatch(/publisher could not be reached/);
   });
 });

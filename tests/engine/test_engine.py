@@ -4,7 +4,7 @@ and runs with the hardened flag set from build/llama/README.md.
 Skipped unless two environment variables are set (CI engine jobs set them):
 
     AIOS_LLAMA_SERVER  path to the built llama-server(.exe), e.g. build/out/llama/cpu/llama-server
-    AIOS_TEST_MODEL    path to a small GGUF model (CI uses stories260K.gguf)
+    AIOS_TEST_MODEL    path to a small GGUF model (CI: SmolLM2-135M-Instruct Q4_K_M)
 
 The launcher below is the reference for the process manager (D-05): same
 flags, same minimal environment, key over stdin. See build/llama/README.md.

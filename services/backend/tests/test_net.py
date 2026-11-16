@@ -84,5 +84,8 @@ def test_the_proxy_does_not_change_what_is_checked() -> None:
     assert not allowlist.allows("https://proxy.corp.internal:8080/")
 
 
-def test_the_allowlist_has_exactly_three_flows() -> None:
-    assert [flow[0] for flow in ALLOWLIST] == ["model-mirror", "update-feed", "company-server"]
+def test_the_allowlist_has_the_contract_flows() -> None:
+    ids = [flow[0] for flow in ALLOWLIST]
+    assert ids[:2] == ["model-mirror", "update-feed"] and ids[-1] == "company-server"
+    assert all(i.startswith("model-origin") for i in ids[2:-1])  # Hugging Face and its CDN hosts
+    assert len(set(ids)) == len(ids)

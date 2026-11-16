@@ -28,6 +28,8 @@ export interface PlatformText {
   installer: string;
   /** Path separator for showing file paths. */
   sep: string;
+  /** Where the microphone is switched on. */
+  soundSettings: string;
 }
 
 const WINDOWS: PlatformText = {
@@ -49,6 +51,7 @@ const WINDOWS: PlatformText = {
   diskEncryptionSettings: "Windows settings",
   installer: "Setup.exe",
   sep: "\\",
+  soundSettings: "Windows sound settings",
 };
 
 /** Platforms AIOS ships for, by id. Add an entry when another OS is ported. */

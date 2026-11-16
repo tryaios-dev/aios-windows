@@ -68,9 +68,14 @@ const bridge: AiosBridge = {
     chooseFile: () => invoke("models.chooseFile"),
     importFile: (path, entryId) => invoke("models.importFile", path, entryId),
     download: (entryId) => invoke("models.download", entryId),
+    downloads: () => invoke("models.downloads"),
+    pauseDownload: (entryId) => invoke("models.pauseDownload", entryId),
+    resumeDownload: (entryId) => invoke("models.resumeDownload", entryId),
+    cancelDownload: (entryId) => invoke("models.cancelDownload", entryId),
     remove: (id) => invoke("models.remove", id),
     hardware: (refresh) => invoke("models.hardware", refresh),
     engine: () => invoke("models.engine"),
+    benchmark: () => invoke("models.benchmark"),
   },
   spike: {
     ask: (prompt: string) => invoke("spike.ask", prompt), // SPIKE-D04 (temporary)

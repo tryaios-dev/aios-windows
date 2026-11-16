@@ -9,7 +9,11 @@
       "@/*": [
         "./src/*"
       ]
-    }
+    },
+    // The screens are the design prototype's code, kept as close to it as possible so new
+    // design drops copy in. It was written with `strict` but without these two flags.
+    "noUncheckedIndexedAccess": false,
+    "exactOptionalPropertyTypes": false
   },
   "include": [
     "src"

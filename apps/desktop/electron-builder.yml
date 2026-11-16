@@ -42,6 +42,9 @@ win:
 nsis:
   oneClick: false
   perMachine: false          # per-user install, no admin
+  # The user may pick the drive or folder (default %LOCALAPPDATA%\Programs\AIOS, as before);
+  # choosing D:\ installs to D:\AIOS. Downloaded models are kept in <install folder>\models.
+  allowToChangeInstallationDirectory: true
   allowElevation: false
   deleteAppDataOnUninstall: false
   installerIcon: ../../build/icons/icon.ico

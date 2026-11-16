@@ -69,11 +69,14 @@ async def serve(
     parent: psutil.Process | None = None,
     answers: AnswerSource | None = None,
     start_writer: bool = True,
+    local: bool = True,
 ) -> None:
+    """``local``: the installed model answers and models download from their origin. The
+    end-to-end tests turn it off, so they never touch the network or need a model."""
     sock = bind_loopback(port)
     server = uvicorn.Server(
         uvicorn.Config(
-            create_app(settings, db, answers, start_writer=start_writer),
+            create_app(settings, db, answers, start_writer=start_writer, local=local),
             host="127.0.0.1",
             log_config=None,
             access_log=False,

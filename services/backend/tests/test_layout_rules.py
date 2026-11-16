@@ -49,6 +49,7 @@ HTTP_CLIENTS = {
     "aios_backend/evidence/client.py",
     "aios_backend/apps/spike/service.py",  # loopback to the engine; removed by G-01
     "aios_backend/engine/launcher.py",  # loopback: polls the engine's /health (IPC-33)
+    "aios_backend/engine/client.py",  # loopback: answers from the engine (G-02)
 }
 NETWORK_MODULES = {"httpx", "requests", "urllib.request", "http.client", "aiohttp", "socket"}
 

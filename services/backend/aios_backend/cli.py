@@ -176,7 +176,7 @@ def cmd_serve_e2e(args: argparse.Namespace) -> int:
     db = Database(settings)
     migrate.upgrade(db)
     answers = EchoAnswers() if args.echo else None
-    asyncio.run(serve(settings, db, hs.api_port, answers=answers))
+    asyncio.run(serve(settings, db, hs.api_port, answers=answers, local=False))
     return 0
 
 

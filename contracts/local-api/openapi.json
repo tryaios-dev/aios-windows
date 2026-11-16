@@ -215,7 +215,8 @@
           "tier": {
             "enum": [
               "small",
-              "medium"
+              "medium",
+              "large"
             ],
             "title": "Tier",
             "type": "string"
@@ -1705,12 +1706,24 @@
             "title": "Ram Gb",
             "type": "integer"
           },
+          "recommended_entry_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Entry Id"
+          },
           "recommended_tier": {
             "anyOf": [
               {
                 "enum": [
                   "small",
-                  "medium"
+                  "medium",
+                  "large"
                 ],
                 "type": "string"
               },
@@ -1898,7 +1911,8 @@
           "tier": {
             "enum": [
               "small",
-              "medium"
+              "medium",
+              "large"
             ],
             "title": "Tier",
             "type": "string"
@@ -1971,7 +1985,8 @@
           "tier": {
             "enum": [
               "small",
-              "medium"
+              "medium",
+              "large"
             ],
             "title": "Tier",
             "type": "string"

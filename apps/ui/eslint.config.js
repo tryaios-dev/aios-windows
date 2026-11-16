@@ -7,7 +7,7 @@ export default tseslint.config(
     files: ["src/**/*.{ts,tsx}"],
     rules: {
       // `const { dropped, ...rest } = obj` is the idiomatic way to omit fields.
-      "@typescript-eslint/no-unused-vars": ["error", { ignoreRestSiblings: true }],
+      "@typescript-eslint/no-unused-vars": ["error", { ignoreRestSiblings: true, argsIgnorePattern: "^_" }],
     },
   },
   {

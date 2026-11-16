@@ -3,7 +3,8 @@
 Every outbound request of the backend goes through ``outbound_client``. Before a request is sent,
 including every redirect hop, its destination must be on the allowlist:
 
-* the model mirror and the update feed, fixed in the build (``FIXED``);
+* the model mirror, the update feed and Hugging Face (the origin of the catalogue's model
+  files, with the CDN hosts its downloads redirect to), fixed in the build (``FIXED``);
 * the configured company server, only while the operator flag is on, checked at request time
   against the configured value.
 
@@ -45,6 +46,62 @@ ALLOWLIST: list[tuple[str, str, int, str, str]] = [
         "fixed",
     ),
     (
+        "model-origin",
+        "huggingface.co",
+        443,
+        "Model downloads from Hugging Face (downloads you start)",
+        "fixed",
+    ),
+    (
+        "model-origin-cdn-aws",
+        "us.aws.cdn.hf.co",
+        443,
+        "Hugging Face file storage (redirect of a model download)",
+        "fixed",
+    ),
+    (
+        "model-origin-cdn-gcp",
+        "us.gcp.cdn.hf.co",
+        443,
+        "Hugging Face file storage (redirect of a model download)",
+        "fixed",
+    ),
+    (
+        "model-origin-xet-bridge",
+        "cas-bridge.xethub.hf.co",
+        443,
+        "Hugging Face file storage (redirect of a model download)",
+        "fixed",
+    ),
+    (
+        "model-origin-xet-transfer",
+        "transfer.xethub.hf.co",
+        443,
+        "Hugging Face file storage (redirect of a model download)",
+        "fixed",
+    ),
+    (
+        "model-origin-lfs",
+        "cdn-lfs.hf.co",
+        443,
+        "Hugging Face file storage (redirect of a model download)",
+        "fixed",
+    ),
+    (
+        "model-origin-lfs-us",
+        "cdn-lfs-us-1.hf.co",
+        443,
+        "Hugging Face file storage (redirect of a model download)",
+        "fixed",
+    ),
+    (
+        "model-origin-lfs-eu",
+        "cdn-lfs-eu-1.hf.co",
+        443,
+        "Hugging Face file storage (redirect of a model download)",
+        "fixed",
+    ),
+    (
         "company-server",
         "configured",
         443,
@@ -52,6 +109,9 @@ ALLOWLIST: list[tuple[str, str, int, str, str]] = [
         "configured",
     ),
 ]
+# Callers set timeouts without importing an HTTP client themselves (layout rule, AC-21).
+Timeout = httpx.Timeout
+
 FIXED = frozenset((host, port) for _, host, port, _, kind in ALLOWLIST if kind == "fixed")
 MAX_REDIRECTS = 3
 
