@@ -17,6 +17,7 @@ from aios_backend.apps.chat.schemas import (
     ProviderChange,
     ProvidersStatus,
     SendIn,
+    SummaryOut,
 )
 from aios_backend.deps import AppSettings
 from aios_backend.runtime import GenerationsDep
@@ -101,7 +102,9 @@ def send(
     answers: Answers,
     generations: GenerationsDep,
 ) -> Exchange:
-    return service.send(session, settings, answers, generations, conversation_id, body.text)
+    return service.send(
+        session, settings, answers, generations, conversation_id, body.text, body.knowledge_ids
+    )
 
 
 @router.post(
@@ -118,7 +121,9 @@ def send_stream(
     answers: Answers,
     generations: GenerationsDep,
 ) -> StreamingResponse:
-    frames = service.stream_send(db, settings, answers, generations, conversation_id, body.text)
+    frames = service.stream_send(
+        db, settings, answers, generations, conversation_id, body.text, body.knowledge_ids
+    )
     return StreamingResponse(frames, media_type="text/event-stream", headers=SSE_HEADERS)
 
 
@@ -158,6 +163,14 @@ def regenerate_stream(
 )
 def stop(conversation_id: str, generations: GenerationsDep) -> MessageOut:
     return service.stop(generations, conversation_id)
+
+
+@router.get(
+    "/conversations/{conversation_id}/summary",
+    summary="The summary of the earlier part of a long conversation; null while it fits (M-07)",
+)
+def conversation_summary(conversation_id: str, session: DbSession) -> SummaryOut | None:
+    return service.summary_of(session, conversation_id)
 
 
 @router.get(

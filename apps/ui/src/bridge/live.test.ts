@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AiosBridge, DownloadState, Exchange, Health, InstalledModel, Settings, SetupStatus } from "@aios/bridge-contract";
 import { RECOVERY_KEY_LENGTH, api } from "@/lib/api";
-import { hydrate, refreshDownloads, refreshHealth, resetEngineMemory, stopWatchingDownloads } from "./live";
+import { ANSWER_POLL_MS, hydrate, refreshDownloads, refreshHealth, resetEngineMemory, stopWatchingDownloads, watchAnswer } from "./live";
 import { selectRecommendedEntry, useStore } from "@/lib/store";
 
 const STATUS: SetupStatus = {
@@ -94,6 +94,12 @@ function fakeBridge() {
         return { default_project_id: "proj-1" };
       }),
       chooseBackupFolder: vi.fn(async () => null),
+      chooseBackupLocation: vi.fn(async () => null),
+      setBackupLocation: vi.fn(async () => state.status),
+      newRecoveryKey: vi.fn(async () => ({ recovery_key: "AAAA-BBBB", package_id: "pkg-2", issued_at: "2026-11-15T07:00:00Z" })),
+      backup: vi.fn(async () => {
+        throw remote("no_backup_location");
+      }),
       restore: vi.fn(async () => {
         throw remote("r_unwrap");
       }),
@@ -122,10 +128,17 @@ function fakeBridge() {
       ...unused(),
       list: vi.fn(async () => []),
       providers: vi.fn(async () => PROVIDERS),
+      generation: vi.fn(async () => ({ generating: false, message_id: null, phase: null, provider: null, text: null })),
+      summary: vi.fn(async () => null),
+      stop: vi.fn(async () => {
+        throw remote("not_generating");
+      }),
       send: vi.fn(async () => ({}) as Exchange),
       messages: vi.fn(async () => []),
     },
     search: unused(),
+    knowledge: { ...unused(), list: vi.fn(async () => []), pathOf: vi.fn(() => "") },
+    skills: { ...unused(), list: vi.fn(async () => ({ catalogue: [], installed: [] })) },
     evidence: { ...unused(), list: vi.fn(async () => []), status: vi.fn(async () => EVIDENCE) },
     models: {
       ...unused(),
@@ -432,5 +445,52 @@ describe("desktop app: the suggested model downloads from Hugging Face (ac-02)",
     fake.bridge.models.downloads = vi.fn(async () => [{ ...state("failed", 300), error: "mirror_unreachable" }]);
     await refreshDownloads();
     expect(useStore.getState().downloads[ENTRY]?.error).toMatch(/publisher could not be reached/);
+  });
+});
+
+describe("desktop app: live answers and Stop", () => {
+  it("shows the answer as it is written, then hands over to the stored messages", async () => {
+    vi.useFakeTimers();
+    try {
+      const conv = {
+        id: "c-1",
+        project_id: "p-1",
+        title: "Prices",
+        classification_effective: "internal" as const,
+        classification_source: "project" as const,
+        provider_mode: "local" as const,
+        current_provider: "local" as const,
+        model_id: null,
+        archived: false,
+        created_at: "2026-11-16T09:00:00Z",
+        updated_at: "2026-11-16T09:00:00Z",
+      };
+      useStore.setState({ conversations: [conv], messages: [], generation: null });
+      fake.bridge.conversations.generation = vi.fn(async () => ({
+        generating: true,
+        message_id: "m-live",
+        phase: "streaming" as const,
+        provider: "local" as const,
+        text: "The first words",
+      }));
+      const end = watchAnswer("c-1", "Where is the price list?");
+      expect(useStore.getState().messages.map((m) => m.content)).toEqual(["Where is the price list?"]);
+      await vi.advanceTimersByTimeAsync(ANSWER_POLL_MS);
+      const s = useStore.getState();
+      expect(s.generation).toEqual({ conversation_id: "c-1", message_id: "m-live", phase: "streaming", provider: "local" });
+      expect(s.messages.find((m) => m.id === "m-live")).toMatchObject({ status: "streaming", content: "The first words" });
+
+      end();
+      expect(useStore.getState().generation).toBeNull();
+      expect(useStore.getState().messages.some((m) => m.content === "Where is the price list?")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("Stop asks the backend to end the answer being written", async () => {
+    useStore.setState({ generation: { conversation_id: "c-1", message_id: "m-live", phase: "streaming", provider: "local" } });
+    api.conversations.stop();
+    await vi.waitFor(() => expect(fake.bridge.conversations.stop).toHaveBeenCalledWith("c-1"));
   });
 });

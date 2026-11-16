@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { api } from '@/lib/api'
 import type { IncomingFile } from '@/lib/extras'
 import type { KnowledgeDoc } from '@/lib/types'
 import { formatBytes, pluralise } from '@/lib/format'
@@ -43,6 +44,14 @@ export function alreadyHere(docs: KnowledgeDoc[]): (collection: string, name: st
 export interface DroppedBatch {
   collection: string
   files: IncomingFile[]
+  /** A dropped folder's place on this computer, when known: the backend reads the folder itself. */
+  path?: string
+}
+
+/** A file's name and size, and where it is when the desktop app knows. */
+function incoming(file: File): IncomingFile {
+  const path = api.knowledge.pathOf(file)
+  return path ? { name: file.name, size_bytes: file.size, path } : { name: file.name, size_bytes: file.size }
 }
 
 /** Files Windows and macOS scatter about that nobody means to add. */
@@ -77,7 +86,7 @@ async function filesInside(dir: FileSystemDirectoryEntry, depth = 0, into: Incom
       if (depth < DEEPEST) await filesInside(entry as FileSystemDirectoryEntry, depth + 1, into)
     } else {
       const file = await fileOf(entry as FileSystemFileEntry)
-      if (file) into.push({ name: file.name, size_bytes: file.size })
+      if (file) into.push(incoming(file))
     }
   }
   return into
@@ -90,28 +99,28 @@ async function filesInside(dir: FileSystemDirectoryEntry, depth = 0, into: Incom
  */
 export async function readDrop(dt: DataTransfer): Promise<DroppedBatch[]> {
   const loose: IncomingFile[] = []
-  const folders: FileSystemDirectoryEntry[] = []
+  const folders: { entry: FileSystemDirectoryEntry; path: string }[] = []
   // The browser only hands these over while the drop is happening, so they are all collected before the first wait.
   const items = dt.items ? Array.from(dt.items).filter((i) => i.kind === 'file') : []
   if (items.length) {
     for (const item of items) {
       const entry = typeof item.webkitGetAsEntry === 'function' ? item.webkitGetAsEntry() : null
+      const file = item.getAsFile()
       if (entry?.isDirectory) {
-        folders.push(entry as FileSystemDirectoryEntry)
+        folders.push({ entry: entry as FileSystemDirectoryEntry, path: file ? api.knowledge.pathOf(file) : '' })
         continue
       }
-      const file = item.getAsFile()
-      if (file && !HIDDEN.test(file.name)) loose.push({ name: file.name, size_bytes: file.size })
+      if (file && !HIDDEN.test(file.name)) loose.push(incoming(file))
     }
   } else {
-    for (const file of Array.from(dt.files)) if (!HIDDEN.test(file.name)) loose.push({ name: file.name, size_bytes: file.size })
+    for (const file of Array.from(dt.files)) if (!HIDDEN.test(file.name)) loose.push(incoming(file))
   }
 
   const batches: DroppedBatch[] = []
   if (loose.length) batches.push({ collection: LOOSE, files: loose.slice(0, MOST_FILES) })
   for (const folder of folders) {
-    const files = await filesInside(folder)
-    if (files.length) batches.push({ collection: folder.name, files })
+    const files = await filesInside(folder.entry)
+    if (files.length) batches.push(folder.path ? { collection: folder.entry.name, files, path: folder.path } : { collection: folder.entry.name, files })
   }
   return batches
 }

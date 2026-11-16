@@ -1,15 +1,16 @@
 /**
- * My secure knowledge, skills and resources. The backend has none of the three yet (proposed:
- * GET /knowledge, GET /skills, GET /resources), so every list is empty and stays empty until it
- * does. Nothing here is sample data and nothing here pretends to add, read, install or link.
+ * My secure knowledge, skills and resources. Knowledge and skills are loaded from the backend
+ * (GET /knowledge, GET /skills, `@/bridge/live`). Nothing here is sample data.
  */
 import { create } from 'zustand'
-import type { InstalledSkill, KnowledgeDoc, LinkedResource } from './types'
+import type { InstalledSkill, KnowledgeDoc, LinkedResource, SkillEntry } from './types'
 
 export interface IncomingFile {
   name: string
   size_bytes: number
   pages?: number
+  /** Where it is on this computer (desktop app); missing when it is not known. */
+  path?: string
 }
 
 export interface SkillInstall {
@@ -20,6 +21,8 @@ export interface SkillInstall {
 
 interface ExtrasState {
   knowledge: KnowledgeDoc[]
+  /** The skills AIOS lists, and those added from a file (GET /skills). */
+  skillCatalogue: SkillEntry[]
   installedSkills: InstalledSkill[]
   skillInstalls: Record<string, SkillInstall>
   linkedResources: LinkedResource[]
@@ -30,6 +33,7 @@ interface ExtrasState {
 
 export const useExtras = create<ExtrasState>()((set) => ({
   knowledge: [],
+  skillCatalogue: [],
   installedSkills: [],
   skillInstalls: {},
   linkedResources: [],

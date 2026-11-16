@@ -12,11 +12,15 @@ import type {
   DownloadState as LiveDownload,
   EvidenceEvent as LiveEvent,
   InstalledModel as LiveModel,
+  InstalledSkill as LiveInstalledSkill,
+  KnowledgeDoc as LiveKnowledgeDoc,
+  SkillEntry as LiveSkillEntry,
   Message as LiveMessage,
   Project as LiveProject,
   Settings as LiveSettings,
 } from "@aios/bridge-contract";
 import type { Conversation, EvidenceEvent, Message, Project } from "@/lib/types";
+import { kindOf, unreadableReason } from "@/data/knowledge";
 import { pickAnswer } from "./answers";
 import { SIM_CATALOGUE, SIM_HARDWARE } from "./catalogue";
 import {
@@ -95,12 +99,17 @@ const toCatalogueEntry = (e: (typeof SIM_CATALOGUE)[number]): LiveCatalogueEntry
 /* ------------------------------------------------------------------ state */
 const state = {
   firstRunComplete: true,
+  backupLocation: null as string | null,
+  lastBackupAt: null as string | null,
+  lastBackupSize: null as number | null,
   projects: SEED_PROJECTS.map(toProject),
   conversations: SEED_CONVERSATIONS.map(toConversation),
   messages: SEED_MESSAGES.map(toMessage),
   events: SEED_EVENTS.map(toEvent),
   models: SEED_INSTALLED_MODELS.map((m) => ({ ...m })) as LiveModel[],
   downloads: new Map<string, LiveDownload>(),
+  knowledge: [] as LiveKnowledgeDoc[],
+  skills: [] as LiveInstalledSkill[],
   settings: {
     update_check: true,
     catalogue_check: true,
@@ -130,6 +139,62 @@ function record(event_type: string, fields: { project_id?: string | null; conver
     pending: false,
   });
   return seq;
+}
+
+const CONVERSATION = "The conversation you are in";
+/** The same skills the backend lists (services/backend/aios_backend/apps/skills/catalogue.py). */
+const SIM_SKILLS: LiveSkillEntry[] = [
+  ["write", "Write and summarise", "Draft, rewrite and shorten. The everyday work.", "Writing", "Draft a short, friendly email to our landlord about the heating.", true],
+  ["read-documents", "Read my documents", "Answer from what is in My secure knowledge.", "Documents", "What notice period does the lease give us?", true],
+  ["minutes", "Meeting minutes", "Turn rough notes or a transcript into minutes with actions.", "Writing", "Write minutes from these notes, with an action list.", false],
+  ["spreadsheets", "Spreadsheet analyst", "Ask questions of a table and get figures back.", "Numbers", "Which supplier was cheapest over the year, and by how much?", false],
+  ["contracts", "Contract checker", "Flag unusual clauses and missing terms in an agreement.", "Documents", "Check this lease for anything unusual before I sign.", false],
+  ["translate", "Translator", "Translate between languages without going online.", "Languages", "Translate this letter into German and keep it formal.", false],
+  ["voice", "Voice notes", "Turn a recording of a meeting or a voice note into text.", "Voice", "Turn this recording of Tuesday’s call into text.", false],
+  ["charts", "Chart maker", "Turn figures into a clear chart you can paste into a report.", "Images", "Make a bar chart of monthly sales from this table.", false],
+].map(([id, name, line, category, example, included]) => ({
+  id: id as string,
+  name: name as string,
+  line: line as string,
+  detail: line as string,
+  category: category as LiveSkillEntry["category"],
+  publisher: "AIOS",
+  licence: included ? "Included" : "Apache-2.0",
+  open_source: !included,
+  size_bytes: included ? 0 : 420,
+  version: "1.0",
+  uses: [CONVERSATION],
+  example: example as string,
+  included: included as boolean,
+  ...(id === "voice" ? { available: false, publisher: "Whisper community build", licence: "MIT", version: "1.5.4", size_bytes: 466_000_000, uses: ["Recordings you choose"] } : {}),
+}));
+
+const SIM_FOLDER = "Documents/Client contracts";
+const SIM_FILES = ["Lease agreement.docx", "Payment terms.pdf", "Budget 2026.xlsx"];
+
+/** One sample document; the same file again keeps the one copy, as the backend does. */
+function simAdd(path: string, collection: string): LiveKnowledgeDoc {
+  const parts = path.split("/");
+  const name = parts.at(-1) ?? path;
+  const origin = parts.slice(0, -1).join("/") || "Dropped in";
+  const same = state.knowledge.find((d) => d.name === name && d.origin === origin);
+  if (same) return same;
+  const problem = unreadableReason(name);
+  const doc: LiveKnowledgeDoc = {
+    id: newId(),
+    name,
+    kind: kindOf(name),
+    size_bytes: 40_000 + name.length * 1_000,
+    pages: problem ? null : 3,
+    collection,
+    origin,
+    added_at: now(),
+    status: problem ? "failed" : "ready",
+    problem,
+  };
+  state.knowledge.push(doc);
+  record("knowledge_added", { actor: "user", payload: { documents: problem ? 0 : 1, could_not_read: problem ? 1 : 0 } });
+  return doc;
 }
 
 const project = (id: string) => state.projects.find((p) => p.id === id) ?? fail("project_not_found");
@@ -237,6 +302,9 @@ export const simBridge: AiosBridge = {
       completed_at: null,
       last_restore_at: null,
       recovery_package_present: true,
+      backup_location: state.backupLocation,
+      last_backup_at: state.lastBackupAt,
+      last_backup_size: state.lastBackupSize,
     }),
     createStore: async () => {
       const key = Array.from({ length: 9 }, () => Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, "X")).join("-");
@@ -248,6 +316,28 @@ export const simBridge: AiosBridge = {
       return { default_project_id: SEED_DEFAULT_PROJECT_ID };
     },
     chooseBackupFolder: async () => ({ path: "E:\\AIOS backups\\AIOS backup 2026-11-08", has_recovery_package: true, has_database: true }),
+    chooseBackupLocation: async () => "E:\\AIOS backups",
+    setBackupLocation: async (folder) => {
+      state.backupLocation = folder;
+      return simBridge.setup.status();
+    },
+    newRecoveryKey: async () => {
+      const key = Array.from({ length: 9 }, () => Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, "X")).join("-");
+      record("recovery_package_written", { actor: "app" });
+      record("recovery_key_issued", { actor: "user" });
+      return { recovery_key: key, package_id: newId(), issued_at: now() };
+    },
+    backup: async () => {
+      if (!state.backupLocation) fail("no_backup_location");
+      await wait(2200);
+      const at = now();
+      const size = 4_812_000 + state.messages.length * 1_400;
+      state.lastBackupAt = at;
+      state.lastBackupSize = size;
+      record("backup_created", { payload: { size_bytes: size, files: 3 } });
+      const stamp = `${at.slice(0, 10)} ${at.slice(11, 13)}${at.slice(14, 16)}`;
+      return { path: `${state.backupLocation}\\AIOS backup ${stamp}`, size_bytes: size, files: 3, conversations: state.conversations.length, at };
+    },
     restore: async (input) => {
       await wait(3600);
       if (input.recovery_key.replace(/-/g, "").length !== 36) fail("r_checksum");
@@ -367,6 +457,64 @@ export const simBridge: AiosBridge = {
       return { user: null, assistant: { ...last! } };
     },
     providers: async () => ({ local_ready: state.models.length > 0, company_enabled: false }),
+    // The preview answers in one go (see `send`), so nothing is ever being written to stop.
+    generation: async () => ({ generating: false, message_id: null, phase: null, provider: null, text: null }),
+    summary: async () => null,
+    stop: async () => fail("not_generating"),
+  },
+
+  skills: {
+    list: async () => ({ catalogue: SIM_SKILLS, installed: state.skills }),
+    install: async (id) => {
+      const entry = SIM_SKILLS.find((e) => e.id === id) ?? fail("skill_not_found");
+      if (entry.included) fail("skill_included");
+      if (entry.available === false) fail("skill_not_in_build");
+      if (state.skills.some((k) => k.id === id)) fail("skill_added");
+      const added = { id, installed_at: now(), enabled: true };
+      state.skills.push(added);
+      record("skill_installed", { actor: "user", payload: { skill_id: id, version: entry.version, own: false } });
+      return added;
+    },
+    setEnabled: async (id, enabled) => {
+      const k = state.skills.find((x) => x.id === id) ?? fail("skill_not_found");
+      k.enabled = enabled;
+      return k;
+    },
+    remove: async (id) => {
+      if (!state.skills.some((x) => x.id === id)) fail("skill_not_found");
+      state.skills = state.skills.filter((x) => x.id !== id);
+      record("skill_removed", { actor: "user", payload: { skill_id: id, own: false } });
+    },
+    // The browser preview cannot open files; a skill of your own needs the desktop app.
+    chooseFile: async () => null,
+    checkFile: async () => fail("invalid_path"),
+    installFile: async () => fail("invalid_path"),
+  },
+  knowledge: {
+    list: async () => [...state.knowledge].reverse(),
+    // A browser cannot open the system dialog for the backend, so the preview offers sample files.
+    chooseFiles: async () => SIM_FILES.map((f) => `${SIM_FOLDER}/${f}`),
+    chooseFolder: async () => SIM_FOLDER,
+    addFiles: async (paths, collection) => paths.map((p) => simAdd(p, collection ?? "Added one by one")),
+    previewFolder: async (folder) => ({
+      name: folder.split("/").at(-1) ?? folder,
+      path: folder,
+      files: SIM_FILES.map((f) => ({
+        name: f,
+        size_bytes: 40_000 + f.length * 1_000,
+        kind: kindOf(f),
+        problem: unreadableReason(f),
+        already: state.knowledge.some((d) => d.name === f && d.origin === folder),
+      })),
+    }),
+    addFolder: async (folder) => SIM_FILES.map((f) => simAdd(`${folder}/${f}`, folder.split("/").at(-1) ?? folder)),
+    retry: async (id) => state.knowledge.find((d) => d.id === id) ?? fail("document_not_found"),
+    remove: async (id) => {
+      const doc = state.knowledge.find((d) => d.id === id) ?? fail("document_not_found");
+      state.knowledge = state.knowledge.filter((d) => d !== doc);
+      record("knowledge_removed", { actor: "user", payload: { kind: doc.kind } });
+    },
+    pathOf: (file) => ("name" in file && typeof file.name === "string" ? file.name : ""),
   },
 
   search: {

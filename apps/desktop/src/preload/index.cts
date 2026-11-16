@@ -2,7 +2,7 @@
  * Preload: exposes window.aios and nothing else. No token, no Node, no raw ipcRenderer.
  * Every method name here must be registered in main/ipc/ (unknown names are rejected).
  */
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { AiosBridge } from "@aios/bridge-contract";
 
 // Results are validated with zod in main before they arrive here.
@@ -22,6 +22,10 @@ const bridge: AiosBridge = {
     createStore: () => invoke("setup.createStore"),
     complete: () => invoke("setup.complete"),
     chooseBackupFolder: () => invoke("setup.chooseBackupFolder"),
+    chooseBackupLocation: () => invoke("setup.chooseBackupLocation"),
+    setBackupLocation: (folder) => invoke("setup.setBackupLocation", folder),
+    backup: () => invoke("setup.backup"),
+    newRecoveryKey: () => invoke("setup.newRecoveryKey"),
     restore: (input) => invoke("setup.restore", input),
   },
   settings: {
@@ -49,12 +53,42 @@ const bridge: AiosBridge = {
     remove: (id) => invoke("conversations.remove", id),
     setProvider: (id, to, confirmed) => invoke("conversations.setProvider", id, to, confirmed),
     messages: (id) => invoke("conversations.messages", id),
-    send: (id, text) => invoke("conversations.send", id, text),
+    send: (id, text, knowledgeIds) => invoke("conversations.send", id, text, knowledgeIds),
     regenerate: (id) => invoke("conversations.regenerate", id),
+    generation: (id) => invoke("conversations.generation", id),
+    stop: (id) => invoke("conversations.stop", id),
+    summary: (id) => invoke("conversations.summary", id),
     providers: () => invoke("conversations.providers"),
   },
   search: {
     query: (q) => invoke("search.query", q),
+  },
+  skills: {
+    list: () => invoke("skills.list"),
+    install: (id) => invoke("skills.install", id),
+    setEnabled: (id, enabled) => invoke("skills.setEnabled", id, enabled),
+    remove: (id) => invoke("skills.remove", id),
+    chooseFile: () => invoke("skills.chooseFile"),
+    checkFile: (path) => invoke("skills.checkFile", path),
+    installFile: (path) => invoke("skills.installFile", path),
+  },
+  knowledge: {
+    list: () => invoke("knowledge.list"),
+    chooseFiles: () => invoke("knowledge.chooseFiles"),
+    chooseFolder: () => invoke("knowledge.chooseFolder"),
+    addFiles: (paths, collection) => invoke("knowledge.addFiles", paths, collection),
+    previewFolder: (folder) => invoke("knowledge.previewFolder", folder),
+    addFolder: (folder) => invoke("knowledge.addFolder", folder),
+    retry: (id) => invoke("knowledge.retry", id),
+    remove: (id) => invoke("knowledge.remove", id),
+    // A dropped file's place on disk; only the path string crosses to the backend, never the file.
+    pathOf: (file) => {
+      try {
+        return webUtils.getPathForFile(file as File);
+      } catch {
+        return "";
+      }
+    },
   },
   evidence: {
     list: (projectId) => invoke("evidence.list", projectId),

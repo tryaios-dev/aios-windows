@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from aios_backend.apps.setup.models import SINGLE_ROW, SetupState, StoreIdentity
 from db import outbox
 from db.base import utcnow
-from db.models import Project
+from db.models import Conversation, Project
 from db.sqlcipher import create_sqlcipher_engine
 
 record_event = outbox.record
@@ -51,6 +51,27 @@ def set_first_run_complete(session: Session, default_project_id: str | None) -> 
     if default_project_id is not None:
         row.default_project_id = default_project_id
     session.flush()
+
+
+def set_backup_location(session: Session, path: str | None) -> None:
+    state(session).backup_location = path
+    session.flush()
+
+
+def mark_key_issued(session: Session) -> None:
+    state(session).recovery_key_issued_at = utcnow()
+    session.flush()
+
+
+def mark_backed_up(session: Session, size_bytes: int) -> None:
+    row = state(session)
+    row.last_backup_at = utcnow()
+    row.last_backup_size = size_bytes
+    session.flush()
+
+
+def conversation_count(session: Session) -> int:
+    return session.scalar(select(func.count()).select_from(Conversation)) or 0
 
 
 def mark_restored(session: Session) -> None:

@@ -8,7 +8,7 @@
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
@@ -56,6 +56,9 @@ type Ui = {
   useStore: typeof import("../src/lib/store").useStore;
 };
 let ui: Ui;
+
+/** Changes reload in the background; give them time on a busy machine (CI runners included). */
+const eventually = (check: () => void) => vi.waitFor(check, { timeout: 5_000, interval: 50 });
 const store = () => ui.useStore.getState();
 const lastToast = () => store().toasts.at(-1);
 
@@ -166,12 +169,12 @@ describe("desktop app against the real backend", () => {
     expect(store().projects.some((p) => p.id === projectId)).toBe(true);
 
     ui.api.projects.rename(projectId, "Supplier answers");
-    await vi.waitFor(() => expect(store().projects.find((p) => p.id === projectId)?.name).toBe("Supplier answers"));
+    await eventually(() => expect(store().projects.find((p) => p.id === projectId)?.name).toBe("Supplier answers"));
 
     ui.api.projects.archive(projectId, true);
-    await vi.waitFor(() => expect(store().projects.find((p) => p.id === projectId)?.archived).toBe(true));
+    await eventually(() => expect(store().projects.find((p) => p.id === projectId)?.archived).toBe(true));
     ui.api.projects.archive(projectId, false);
-    await vi.waitFor(() => expect(store().projects.find((p) => p.id === projectId)?.archived).toBe(false));
+    await eventually(() => expect(store().projects.find((p) => p.id === projectId)?.archived).toBe(false));
 
     const lowered = await ui.api.projects.reclassify(projectId, "public");
     expect(lowered?.reviewedCopy).toBe(true);
@@ -182,7 +185,7 @@ describe("desktop app against the real backend", () => {
   it("projects: Company AI is refused while the provider flag is off", async () => {
     const before = store().toasts.length;
     ui.api.projects.setCompanyAi(projectId, true, true);
-    await vi.waitFor(() => expect(store().toasts.length).toBeGreaterThan(before));
+    await eventually(() => expect(store().toasts.length).toBeGreaterThan(before));
     expect(lastToast()?.description).toMatch(/company server is not available/);
   });
 
@@ -199,12 +202,12 @@ describe("desktop app against the real backend", () => {
     expect(store().events.some((e) => e.event_type === "request" && e.conversation_id === conversationId)).toBe(true);
 
     ui.api.conversations.rename(conversationId, "Price list");
-    await vi.waitFor(() =>
+    await eventually(() =>
       expect(store().conversations.find((c) => c.id === conversationId)?.title).toBe("Price list"),
     );
 
     ui.api.conversations.regenerate(conversationId);
-    await vi.waitFor(() => expect(ui.api.conversations.messages(conversationId)[1]?.previous_versions).toHaveLength(1));
+    await eventually(() => expect(ui.api.conversations.messages(conversationId)[1]?.previous_versions).toHaveLength(1));
   });
 
   it("chat: a message too large for the model is refused and recorded", async () => {
@@ -256,34 +259,107 @@ describe("desktop app against the real backend", () => {
     writeFileSync(fake, "GGUF fake");
     io.nextOpen.push(fake);
     await ui.api.models.importOffline("minicpm5-2b-q4_k_m-openbmb-gguf");
-    await vi.waitFor(() => expect(lastToast()?.title).toBe("AI model not installed"));
+    await eventually(() => expect(lastToast()?.title).toBe("AI model not installed"));
     expect(lastToast()?.description).toMatch(/size is different/);
     expect(store().installedModels).toEqual([]);
 
     ui.api.models.download("minicpm5-2b-q4_k_m-openbmb-gguf");
-    await vi.waitFor(() => expect(lastToast()?.description).toMatch(/isn't available in this build yet/));
+    await eventually(() => expect(lastToast()?.description).toMatch(/isn't available in this build yet/));
   });
 
-  it("areas the backend does not have yet start empty and say so, changing nothing", async () => {
+  it("my secure knowledge: files and a folder from the dialogs are copied in, read and used in a question", async () => {
     const { useExtras } = await import("../src/lib/extras");
-    expect(useExtras.getState().knowledge).toEqual([]);
-    expect(useExtras.getState().installedSkills).toEqual([]);
-    ui.api.knowledge.add();
-    expect(lastToast()?.title).toBe("My secure knowledge is not in this build yet");
-    expect(useExtras.getState().knowledge).toEqual([]);
-    const backup = await ui.api.backup.run();
-    expect(backup.ok).toBe(false);
-    expect(await ui.api.recoveryKey.createNew()).toBeNull();
+    const docs = () => useExtras.getState().knowledge;
+    expect(docs()).toEqual([]);
+    const folder = path.join(data, "Client contracts");
+    mkdirSync(folder);
+    writeFileSync(path.join(folder, "notes.txt"), "The rent review is in March.");
+    writeFileSync(path.join(folder, "photo.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+
+    io.nextOpen.push(path.join(folder, "notes.txt"));
+    await ui.api.knowledge.addFiles();
+    expect(docs().map((d) => [d.name, d.status, d.collection])).toEqual([["notes.txt", "ready", "Added one by one"]]);
+
+    io.nextOpen.push(folder);
+    const preview = await ui.api.knowledge.chooseFolder();
+    expect(preview?.files.find((f) => f.name === "notes.txt")?.already).toBe(true); // shown before anything is added
+    expect(preview?.files.find((f) => f.name === "photo.png")?.problem).toMatch(/picture/);
+    await ui.api.knowledge.addFolder(preview!);
+    const picture = docs().find((d) => d.name === "photo.png");
+    expect(picture).toMatchObject({ status: "failed", collection: "Client contracts" });
+    expect(picture?.problem).toMatch(/picture/);
+    expect(docs().filter((d) => d.name === "notes.txt")).toHaveLength(1); // the same file keeps one copy
+    expect(store().events.filter((e) => e.event_type === "knowledge_added")).toHaveLength(2);
+
+    const notes = docs().find((d) => d.name === "notes.txt")!;
+    expect(await ui.api.conversations.send(conversationId, "When is the rent review?", [notes.id])).toEqual({ ok: true });
+
+    await ui.api.knowledge.remove(picture!.id);
+    expect(docs().some((d) => d.id === picture!.id)).toBe(false);
+    expect(existsSync(path.join(folder, "photo.png"))).toBe(true); // the original is never touched
+  });
+
+  it("skills: add a listed skill, switch it off, add one from a file, remove", async () => {
+    const { useExtras } = await import("../src/lib/extras");
+    const x = () => useExtras.getState();
+    expect(x().skillCatalogue.filter((s) => s.included).map((s) => s.id)).toEqual(["write", "read-documents"]);
+    expect(x().installedSkills).toEqual([]);
+
+    await ui.api.skills.install("minutes");
+    expect(x().installedSkills.map((s) => [s.id, s.enabled])).toEqual([["minutes", true]]);
+    await ui.api.skills.setEnabled("minutes", false);
+    expect(x().installedSkills[0]?.enabled).toBe(false);
+
+    const file = path.join(data, "invoice-reader.aios-skill");
+    writeFileSync(file, JSON.stringify({ name: "Invoice reader", line: "Pull totals out of invoices.", category: "Documents", instruction: "List the totals." }));
+    io.nextOpen.push(file);
+    const chosen = await ui.api.skills.chooseFile();
+    expect(chosen).toBe(file);
+    const check = await ui.api.skills.checkFile(file);
+    expect(check?.entry).toMatchObject({ name: "Invoice reader", publisher: "Added by you", own: true });
+    expect(x().installedSkills).toHaveLength(1); // the check adds nothing
+    await ui.api.skills.installFile(file);
+    expect(x().skillCatalogue.some((s) => s.id === "own-invoice-reader" && s.own)).toBe(true);
+
+    await ui.api.skills.remove("minutes");
+    expect(x().installedSkills.map((s) => s.id)).toEqual(["own-invoice-reader"]);
+    expect(store().events.filter((e) => e.event_type === "skill_installed")).toHaveLength(2);
+  });
+
+  it("a new recovery key: shown once, nine groups, recorded without the key (D4)", async () => {
+    const key = await ui.api.recoveryKey.createNew();
+    expect(key).toMatch(/^([0-9A-Z]{4}-){8}[0-9A-Z]{4}$/);
+    expect(store().settings.recovery_key_issued_at).not.toBeNull();
+    expect(JSON.stringify(store().events)).not.toContain(key!.replace(/-/g, ""));
+  });
+
+  it("backup: the folder chosen in the dialog gets a backup that restore accepts (D3)", async () => {
+    expect(await ui.api.backup.run()).toEqual({ ok: false, error: "Choose where backups go first." });
+    const usb = path.join(data, "usb");
+    mkdirSync(usb);
+    io.nextOpen.push(usb);
+    await ui.api.backup.chooseLocation();
+    expect(store().settings.backup_location).toBe(usb);
+
+    const done = await ui.api.backup.run();
+    expect(done).toMatchObject({ ok: true });
+    if (!done.ok) return;
+    expect(path.dirname(done.result.path)).toBe(usb);
+    for (const name of ["chats.db", "recovery.pkg"]) expect(existsSync(path.join(done.result.path, name))).toBe(true);
+    expect(store().settings.last_backup_at).not.toBeNull();
+    expect(store().settings.last_backup_size).toBe(done.result.size_bytes);
+    // Shown in Activity as the design's "Backed up your AIOS" (an export of kind backup).
+    expect(store().events.some((e) => e.event_type === "export" && e.payload?.kind === "backup")).toBe(true);
   });
 
   it("deleting a conversation and a project removes them everywhere", async () => {
     ui.api.conversations.remove(conversationId);
-    await vi.waitFor(() => expect(store().conversations.some((c) => c.id === conversationId)).toBe(false));
+    await eventually(() => expect(store().conversations.some((c) => c.id === conversationId)).toBe(false));
     expect(ui.api.conversations.messages(conversationId)).toEqual([]);
 
     ui.api.projects.remove(projectId);
-    await vi.waitFor(() => expect(store().projects.some((p) => p.id === projectId)).toBe(false));
-    await vi.waitFor(() =>
+    await eventually(() => expect(store().projects.some((p) => p.id === projectId)).toBe(false));
+    await eventually(() =>
       expect(store().events.map((e) => e.event_type)).toEqual(
         expect.arrayContaining(["conversation_deleted", "project_deleted"]),
       ),

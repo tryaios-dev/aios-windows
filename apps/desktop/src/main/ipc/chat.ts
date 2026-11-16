@@ -2,13 +2,16 @@ import { z } from "zod";
 import {
   Conversation,
   ConversationPatch,
+  ConversationSummary,
   EvidenceEvent,
   EvidenceExport,
   EvidenceExportInput,
   EvidenceStatus,
   EvidenceStream,
   Exchange,
+  GenerationState,
   Id,
+  KnowledgeIds,
   Message,
   Provider,
   ProvidersStatus,
@@ -43,11 +46,19 @@ export const chatHandlers: Record<string, Handler> = {
     ),
   "conversations.messages": async (b, id) =>
     z.array(Message).parse(await b.client.request("GET", `${conv(id)}/messages`)),
-  "conversations.send": async (b, id, text) =>
+  "conversations.send": async (b, id, text, knowledgeIds) =>
     Exchange.parse(
-      await b.client.request("POST", `${conv(id)}/messages`, { text: z.string().min(1).max(200_000).parse(text) }),
+      await b.client.request("POST", `${conv(id)}/messages`, {
+        text: z.string().min(1).max(200_000).parse(text),
+        knowledge_ids: KnowledgeIds.parse(knowledgeIds) ?? [],
+      }),
     ),
   "conversations.regenerate": async (b, id) => Exchange.parse(await b.client.request("POST", `${conv(id)}/regenerate`)),
+  "conversations.generation": async (b, id) =>
+    GenerationState.parse(await b.client.request("GET", `${conv(id)}/generation`)),
+  "conversations.stop": async (b, id) => Message.parse(await b.client.request("POST", `${conv(id)}/stop`)),
+  "conversations.summary": async (b, id) =>
+    ConversationSummary.nullable().parse(await b.client.request("GET", `${conv(id)}/summary`)),
   "conversations.providers": async (b) => ProvidersStatus.parse(await b.client.request("GET", "/providers/status")),
 };
 

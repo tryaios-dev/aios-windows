@@ -20,6 +20,9 @@ class Generation:
     message_id: str
     provider: str
     phase: str = "preparing"  # loading_engine | preparing | streaming
+    # The answer so far, for the desktop app's live view (GET .../generation). Memory only:
+    # never stored or logged here; the finished answer is stored by chat as usual.
+    text: str = ""
     cancel: threading.Event = field(default_factory=threading.Event)
     finished: threading.Event = field(default_factory=threading.Event)
     result: Any = None  # the final message, set by chat when the answer is stored

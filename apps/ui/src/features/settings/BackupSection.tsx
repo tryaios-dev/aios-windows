@@ -315,10 +315,10 @@ export function BackupSection() {
 
 /* ---------------- Pieces ---------------- */
 
-/** The backup folder. Backup has no backend yet (proposed: POST /backup), so choosing one says so. */
+/** The backup folder, chosen in the system folder dialog. */
 function DestinationSelect({ id, value, className }: { id: string; value: string | null; className?: string }) {
   return (
-    <Button id={id} className={className} onClick={() => api.backup.setLocation(value)}>
+    <Button id={id} className={className} onClick={() => void api.backup.chooseLocation()}>
       {value ?? 'Choose a folder'}
     </Button>
   )

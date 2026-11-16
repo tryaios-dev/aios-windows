@@ -13,6 +13,7 @@ from starlette.exceptions import HTTPException
 from aios_backend.apps.chat.answers import AnswerSource
 from aios_backend.apps.chat.router import router as chat_router
 from aios_backend.apps.evidence.router import router as evidence_router
+from aios_backend.apps.knowledge.router import router as knowledge_router
 from aios_backend.apps.models.downloads import Downloads
 from aios_backend.apps.models.engine import LocalEngine
 from aios_backend.apps.models.mirror import ModelMirror
@@ -22,6 +23,7 @@ from aios_backend.apps.search.router import router as search_router
 from aios_backend.apps.settings import service as settings_service
 from aios_backend.apps.settings.router import router as settings_router
 from aios_backend.apps.setup.router import router as setup_router
+from aios_backend.apps.skills.router import router as skills_router
 from aios_backend.apps.spike.router import router as spike_router  # SPIKE-D04
 from aios_backend.components import Components, ComponentState
 from aios_backend.config import Settings
@@ -194,6 +196,8 @@ def create_app(
         evidence_router,
         settings_router,
         models_router,
+        knowledge_router,
+        skills_router,
     ):
         app.include_router(router)
     app.include_router(spike_router)  # SPIKE-D04: temporary, removed by G-01

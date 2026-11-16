@@ -4,7 +4,10 @@ from fastapi import APIRouter, Request, status
 
 from aios_backend.apps.setup import service
 from aios_backend.apps.setup.schemas import (
+    BackupLocationIn,
+    BackupOut,
     Completed,
+    RecoveryKeyOut,
     Restored,
     RestoreIn,
     SetupStatus,
@@ -35,6 +38,30 @@ def create_store(
 @router.post("/setup/complete", summary="Finish first run and create the default project")
 def complete(session: DbSession) -> Completed:
     return service.complete(session)
+
+
+@router.post(
+    "/recovery-key",
+    summary="Create a new recovery key: the keys are wrapped again; the key is returned once",
+)
+def new_recovery_key(
+    request: Request, session: DbSession, db: Db, settings: AppSettings
+) -> RecoveryKeyOut:
+    return service.new_recovery_key(session, db, settings, request.app.state.writer)
+
+
+@router.put("/backup/location", summary="Choose the folder backups go to (null: set up later)")
+def set_backup_location(
+    body: BackupLocationIn, session: DbSession, settings: AppSettings
+) -> SetupStatus:
+    return service.set_backup_location(session, settings, body.path)
+
+
+@router.post(
+    "/backup", summary="Back up now: a new folder in the chosen location that restore accepts"
+)
+def backup(request: Request, session: DbSession, db: Db, settings: AppSettings) -> BackupOut:
+    return service.backup(session, db, settings, request.app.state.writer)
 
 
 @router.post("/restore", summary="Restore a backup with its recovery key (all or nothing)")
