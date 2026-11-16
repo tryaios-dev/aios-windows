@@ -1,0 +1,1037 @@
+{
+  "model": {
+    "entry": "ornith-1.5-9b-q4_k_m-ornith-gguf",
+    "display_name": "Ornith 1.5 9B",
+    "filename": "Ornith-1.5-9B-Q4_K_M.gguf"
+  },
+  "reference": {
+    "repo": "ornith-ai/Ornith-1.5-9B-GGUF",
+    "revision": "abdd624b12ebf020b767fff532ff44fe552b28c3",
+    "filename": "Ornith-1.5-9B-Q8_0.gguf",
+    "size_bytes": 9786060384,
+    "sha256": "22086870b009dbe9815ee752c48a82de930118a7c5ce5599590892ae03b8b010"
+  },
+  "text": {
+    "name": "wikitext-2-raw-v1, wiki.test.raw",
+    "url": "https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip",
+    "sha256": "173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08",
+    "licence": "CC BY-SA 3.0 (not stored in this repository)"
+  },
+  "engine": {
+    "release": "b12111",
+    "build": "cpu"
+  },
+  "settings": {
+    "temperature": 0.0,
+    "seed": 42,
+    "max_tokens": 512,
+    "thinking": false
+  },
+  "prompt_set_version": 5,
+  "run_at": "2026-11-12 15:30 UTC",
+  "machine": "Linux x86_64",
+  "stage1": {
+    "size_bytes": 5780090816,
+    "sha256": "70c112196e0b7023803c9762752e46d29e612a92c83f995bc3ba1ceb07e8fab6",
+    "architecture": "qwen35",
+    "name": "Ornith-1.5-9B",
+    "file_type": 15,
+    "context_length": 262144,
+    "chat_template_sha256": "f55f52930aa8bf44ab5cb85f99370fcc3c56e9a85640b812086d5330bce5d86b",
+    "checks": {
+      "size matches the catalogue": true,
+      "SHA-256 matches the catalogue": true,
+      "quantisation is Q4_K_M": true,
+      "trained context >= 32768": true,
+      "chat template present": true
+    },
+    "pass": true
+  },
+  "stage2": {
+    "mean_kld": 0.041098,
+    "median_kld": 0.013688,
+    "max_kld": 16.776476,
+    "same_top": 0.9218,
+    "ppl": 9.363887,
+    "ppl_reference": 9.250842,
+    "settings": {
+      "ctx": 512,
+      "chunks": 100
+    },
+    "checks": {
+      "mean KL divergence <= 0.1": true,
+      "same top token >= 85%": true
+    },
+    "pass": true
+  },
+  "runs": {
+    "none": [
+      {
+        "id": "IF-1",
+        "category": "instructions",
+        "manual": false,
+        "answer": "- Protects against data loss from hardware failures, theft, or accidental deletion\n- Enables quick recovery and minimizes downtime after a system crash or ransomware attack\n- Preserves historical versions of files, allowing you to restore previous states of documents or databases",
+        "seconds": 7.6,
+        "tokens": 52,
+        "tokens_per_s": 8.009693299420398,
+        "checks": {
+          "bullets": true,
+          "max_words": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "IF-2",
+        "category": "instructions",
+        "manual": false,
+        "answer": "Modern",
+        "seconds": 1.3,
+        "tokens": 2,
+        "tokens_per_s": 7.545973845654652,
+        "checks": {
+          "max_words": true,
+          "contains_any": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "IF-3",
+        "category": "instructions",
+        "manual": false,
+        "answer": "{\"name\": \"Maria Rossi\", \"city\": \"Turin\", \"year\": 2019}",
+        "seconds": 4.8,
+        "tokens": 24,
+        "tokens_per_s": 7.747498905244721,
+        "checks": {
+          "json_keys": true,
+          "contains_all": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "IF-4",
+        "category": "instructions",
+        "manual": false,
+        "answer": "Office Closed Friday",
+        "seconds": 2.1,
+        "tokens": 4,
+        "tokens_per_s": 7.544076265581661,
+        "checks": {
+          "max_words": true,
+          "contains_all": true,
+          "not_contains": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "IF-5",
+        "category": "instructions",
+        "manual": false,
+        "answer": "The budget was approved by the committee.",
+        "seconds": 2.4,
+        "tokens": 9,
+        "tokens_per_s": 7.776148026753837,
+        "checks": {
+          "contains_all": true,
+          "max_words": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "IF-6",
+        "category": "instructions",
+        "manual": false,
+        "answer": "Bonjour\nBuongiorno\nGuten Morgen",
+        "seconds": 2.6,
+        "tokens": 10,
+        "tokens_per_s": 7.785622032272268,
+        "checks": {
+          "contains_all": true,
+          "max_words": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "RE-1",
+        "category": "reasoning",
+        "manual": false,
+        "answer": "To find the arrival time, I need to add 2 hours and 35 minutes to the departure time of 09:40.\n\n**Step 1: Add the minutes**\n40 minutes + 35 minutes = 75 minutes\n\nSince 75 minutes is more than 60, I convert:\n75 minutes = 1 hour and 15 minutes\n\n**Step 2: Add the hours**\n09:40 + 2 hours = 11:40\n\n**Step 3: Add the extra hour from the minutes**\n11:40 + 1 hour = 12:40\n\nThe remaining 15 minutes stay with the time.\n\n**Arrival time: 12:40**\n\n12:40",
+        "seconds": 24.3,
+        "tokens": 173,
+        "tokens_per_s": 7.681199839141385,
+        "checks": {
+          "contains_all": false
+        },
+        "auto_pass": false
+      },
+      {
+        "id": "RE-2",
+        "category": "reasoning",
+        "manual": false,
+        "answer": "# Calculating the Final Price\n\n## Step 1: Apply the 15% Discount\n\nFirst, I'll find the discount amount:\n$$1,200 \\times 0.15 = 180 \\text{ euros}$$\n\nThen subtract it from the original price:\n$$1,200 - 180 = 1,020 \\text{ euros}$$\n\n**Discounted price: 1,020 euros**\n\n## Step 2: Add 22% VAT\n\nNow I'll calculate the VAT on the discounted price:\n$$1,020 \\times 0.22 = 224.40 \\text{ euros}$$\n\nThen add it to the discounted price:\n$$1,020 + 224.40 = 1,244.40 \\text{ euros}$$\n\n## Final Answer\n\n**The final price is 1,244.40 euros.**\n\n---\n\n💡 **Note:** The VAT is applied to the *discounted* price (1,020 euros), not the original price. This is the standard practice in most countries.",
+        "seconds": 35.1,
+        "tokens": 257,
+        "tokens_per_s": 7.6950666326640915,
+        "checks": {
+          "contains_any": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "RE-3",
+        "category": "reasoning",
+        "manual": false,
+        "answer": "Dario",
+        "seconds": 1.9,
+        "tokens": 3,
+        "tokens_per_s": 7.501734776166988,
+        "checks": {
+          "contains_all": true,
+          "max_words": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "RE-4",
+        "category": "reasoning",
+        "manual": false,
+        "answer": "To find the smallest number of sessions, I need to figure out how many sessions are required to seat 50 employees when each session holds 12 people.\n\n**Dividing the employees into groups:**\n\n$$50 \\div 12 = 4.166...$$\n\nThis means 4 full sessions would seat only $4 \\times 12 = 48$ people, leaving 2 employees without a session.\n\n**Checking the sessions:**\n- Session 1: 12 people\n- Session 2: 12 people\n- Session 3: 12 people\n- Session 4: 12 people\n- Session 5: 2 people\n\nAll 50 employees are accommodated, and no session exceeds the 12-person limit.\n\n**Conclusion:**\n\nThe smallest number of sessions needed is **5**.",
+        "seconds": 25.6,
+        "tokens": 184,
+        "tokens_per_s": 7.724528294081826,
+        "checks": {
+          "final_number": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "RE-5",
+        "category": "reasoning",
+        "manual": false,
+        "answer": "No. Invoice 4471 is for 950 euros, which is below the 1,000 euro threshold, so it does not require two signatures.",
+        "seconds": 7.1,
+        "tokens": 38,
+        "tokens_per_s": 7.604326738600858,
+        "checks": {
+          "starts_with_any": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "RE-6",
+        "category": "reasoning",
+        "manual": false,
+        "answer": "# Setting Up the Problem\n\n**Step 1: Find the rate per printer**\n\nThree printers print 300 pages in 10 minutes, so all three together print:\n$$\\frac{300 \\text{ pages}}{10 \\text{ minutes}} = 30 \\text{ pages per minute (combined)}$$\n\nSince there are 3 printers working together:\n$$\\text{Rate per printer} = \\frac{30}{3} = 10 \\text{ pages per minute}$$\n\n**Step 2: Find the combined rate for 6 printers**\n\n$$6 \\text{ printers} \\times 10 \\text{ pages/minute} = 60 \\text{ pages per minute}$$\n\n**Step 3: Calculate the time needed**\n\n$$\\text{Time} = \\frac{900 \\text{ pages}}{60 \\text{ pages/minute}} = 15 \\text{ minutes}$$\n\n**Verification:**\n- 6 printers in 15 minutes: $6 \\times 10 \\times 15 = 900$ pages ✓\n\n15",
+        "seconds": 34.3,
+        "tokens": 249,
+        "tokens_per_s": 7.710276654675113,
+        "checks": {
+          "final_number": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "SU-1",
+        "category": "documents",
+        "manual": true,
+        "answer": "**Heating maintenance (3–5 March):** The second floor will be closed. Staff there work from meeting rooms 1A and 1B on the first floor. The ground floor and canteen stay open. Take personal items home by 28 February (laptops can stay). Parking unaffected. Contact Luca Bianchi (ext. 4410).",
+        "seconds": 15.9,
+        "tokens": 77,
+        "tokens_per_s": 7.7004625444942345,
+        "checks": {
+          "max_words": false,
+          "contains_all": true
+        },
+        "auto_pass": false
+      },
+      {
+        "id": "SU-2",
+        "category": "documents",
+        "manual": false,
+        "answer": "According to the memo, staff should contact **Luca Bianchi** in facilities with questions, on **extension 4410**.",
+        "seconds": 9.4,
+        "tokens": 29,
+        "tokens_per_s": 7.683480133538884,
+        "checks": {
+          "contains_all": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "SU-3",
+        "category": "documents",
+        "manual": false,
+        "answer": "No, the canteen stays open as usual during the maintenance.",
+        "seconds": 8.1,
+        "tokens": 15,
+        "tokens_per_s": 7.6561596812412605,
+        "checks": {
+          "contains_any": true,
+          "max_words": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "SU-4",
+        "category": "documents",
+        "manual": false,
+        "answer": "According to the memo, no specific name is given for the IT staff member who will accompany the contractor. The memo only states that \"an IT staff member will accompany them.\"\n\nIf you need to identify a specific person, you would need to contact Luca Bianchi in facilities (extension 4410), as he is the person listed for questions about this maintenance.",
+        "seconds": 16.1,
+        "tokens": 76,
+        "tokens_per_s": 7.640352511602894,
+        "checks": {
+          "contains_any": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "SU-5",
+        "category": "documents",
+        "manual": false,
+        "answer": "- Marco: send revised budget to finance (15 November)\n- Elena: chase legal on the supplier contract (Monday)\n- Sara: book venue for December workshop (end of next week)",
+        "seconds": 9.1,
+        "tokens": 42,
+        "tokens_per_s": 7.6621922578593065,
+        "checks": {
+          "bullets": true,
+          "contains_all": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "SU-6",
+        "category": "documents",
+        "manual": false,
+        "answer": "19 November.",
+        "seconds": 4.1,
+        "tokens": 5,
+        "tokens_per_s": 7.653993566818408,
+        "checks": {
+          "contains_any": true,
+          "max_words": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "DR-1",
+        "category": "drafting",
+        "manual": true,
+        "answer": "Subject: Request for Review – Draft Report\n\nHi [Colleague's Name],\n\nI hope you're having a good week.\n\nI've finished the first draft of the report and would appreciate it if you could take a look when you have some time. If you could review it by Thursday, that would be really helpful.\n\nPlease let me know if you have any feedback or suggestions.\n\nThanks so much,\n\n[Your Name]",
+        "seconds": 13.2,
+        "tokens": 90,
+        "tokens_per_s": 7.591266427095397,
+        "checks": {
+          "max_words": true,
+          "contains_all": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "DR-2",
+        "category": "drafting",
+        "manual": true,
+        "answer": "We sincerely apologise for the delay in your delivery, which arrived two days later than expected. We have checked with the courier and they have confirmed the reason for the delay. As a gesture of our apology, we would like to offer you a 10% discount on your next order—please use code SORRY10 at checkout.",
+        "seconds": 10.8,
+        "tokens": 70,
+        "tokens_per_s": 7.639706989556853,
+        "checks": {
+          "contains_all": true,
+          "contains_any": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "DR-3",
+        "category": "drafting",
+        "manual": true,
+        "answer": "**Data Protection Training for New Staff**\n\nWe recently held a data-protection training session for our new team members. The session covered the basics of keeping personal information safe, including how to store, share, and dispose of data responsibly. We discussed common mistakes to avoid, such as sending sensitive information to the wrong person or leaving files unsecured. Staff also learned about our reporting process for any concerns and the importance of following our policies. The goal was to give everyone a clear, practical understanding of their role in protecting data. Thank you to all who attended—your commitment to safeguarding information helps us all work more securely.",
+        "seconds": 18.0,
+        "tokens": 127,
+        "tokens_per_s": 7.620778912554768,
+        "checks": {
+          "max_words": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "DR-4",
+        "category": "drafting",
+        "manual": true,
+        "answer": "**Server Upgrade Notice**\n\nA scheduled server upgrade will take place this Saturday from 8:00 AM to 12:00 PM. During this window, email services will be unavailable, though VPN access will remain fully operational. If you experience any issues following the upgrade, please contact the helpdesk for assistance.",
+        "seconds": 10.1,
+        "tokens": 67,
+        "tokens_per_s": 7.69655784278078,
+        "checks": {
+          "contains_all": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "DR-5",
+        "category": "drafting",
+        "manual": true,
+        "answer": "# Four Practical Tips for Running a Productive One-Hour Meeting\n\n1. **Set a Clear Agenda and Share It in Advance**\n   Define the meeting's purpose and objectives beforehand, then distribute an agenda with key topics and time allocations at least 24 hours prior. This gives attendees time to prepare and ensures everyone understands what needs to be accomplished.\n\n2. **Start and End on Time**\n   Begin promptly at the scheduled start time and respect the one-hour limit. Starting late wastes everyone's time, while overrunning disrupts other commitments. Use a timer to keep track of progress through each agenda item.\n\n3. **Assign Roles Beforehand**\n   Designate a facilitator to keep the discussion on track, a note-taker to document decisions and action items, and a timekeeper to monitor the schedule. Clear roles prevent confusion and keep the meeting focused.\n\n4. **End with Clear Action Items and Next Steps**\n   Conclude by summarizing decisions made and assigning specific tasks with owners and deadlines. Confirm what will happen next so attendees leave knowing exactly what they're responsible for and when.",
+        "seconds": 30.5,
+        "tokens": 229,
+        "tokens_per_s": 7.739880539017502,
+        "checks": {
+          "bullets": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "ML-1",
+        "category": "languages",
+        "manual": true,
+        "answer": "Ecco due frasi che puoi usare:\n\n\"È importante fare il backup dei file perché, in caso di malfunzionamento del computer, di virus o di un incidente, avremo sempre una copia sicura dei nostri dati da cui ripartire.\n\nUn backup ci protegge anche da errori accidentali, come la cancellazione involontaria di file importanti, garantendoci di non perdere mai il lavoro svolto.\"",
+        "seconds": 12.4,
+        "tokens": 88,
+        "tokens_per_s": 7.805604208494687,
+        "checks": {
+          "language": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "ML-2",
+        "category": "languages",
+        "manual": false,
+        "answer": "La riunione di martedì è stata spostata a giovedì alle 14 a causa della indisponibilità della sala grande.",
+        "seconds": 4.7,
+        "tokens": 25,
+        "tokens_per_s": 7.819879502173437,
+        "checks": {
+          "language": true,
+          "contains_any": true,
+          "contains_all": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "ML-3",
+        "category": "languages",
+        "manual": true,
+        "answer": "Ein Passwort-Manager ist eine Software, die deine Passwörter sicher speichert und verwaltet. Er generiert starke Passwörter, speichert sie verschlüsselt und gibt dir beim Anmelden automatisch den richtigen Zugang, sodass du dich nicht mehr an viele verschiedene Passwörter erinnern musst.",
+        "seconds": 8.8,
+        "tokens": 60,
+        "tokens_per_s": 7.745830675353724,
+        "checks": {
+          "language": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "ML-4",
+        "category": "languages",
+        "manual": false,
+        "answer": "1440",
+        "seconds": 1.6,
+        "tokens": 5,
+        "tokens_per_s": 7.522006570472739,
+        "checks": {
+          "contains_any": true,
+          "max_words": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "ML-5",
+        "category": "languages",
+        "manual": false,
+        "answer": "Voici quelques propositions pour informer l'équipe de la fermeture du bureau lundi :\n\n**Formule simple et directe :**\n> « Bonjour à tous, le bureau sera fermé lundi. Nous vous recontacterons dès que possible. »\n\n**Avec une explication :**\n> « Bonjour à tous, le bureau sera fermé lundi pour [raison : congés / formation / maintenance]. Nous reprendrons nos échanges dès [jour]. »\n\n**Plus chaleureuse :**\n> « Bonjour à tous, notez que le bureau sera fermé lundi. À très vite pour la reprise ! »\n\nSouhaitez-vous que j'adapte le ton (plus formel, plus décontracté) ou que j'ajoute des détails spécifiques comme la raison de la fermeture ou la date de reprise ?",
+        "seconds": 22.5,
+        "tokens": 163,
+        "tokens_per_s": 7.592648591413709,
+        "checks": {
+          "language": true,
+          "contains_all": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "ML-6",
+        "category": "languages",
+        "manual": false,
+        "answer": "La capital de Portugal es Lisboa.",
+        "seconds": 2.0,
+        "tokens": 8,
+        "tokens_per_s": 7.657746850204626,
+        "checks": {
+          "language": true,
+          "contains_all": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "HO-1",
+        "category": "honesty",
+        "manual": false,
+        "answer": "I don't have access to real-time stock market data, so I can't tell you the closing price of Velmora Systems shares on the Milan stock exchange yesterday.\n\nA few things worth noting:\n\n- **Velmora Systems** doesn't appear to be a widely recognized public company, so I'm not certain it's even listed on the Milan exchange. It's possible this is a fictional company or one with a very limited public presence.\n\n- To get an accurate, up-to-date closing price, you'd want to check a reliable financial data source such as:\n  - **Yahoo Finance** (search for the ticker symbol)\n  - **Google Finance**\n  - **Bloomberg** or **Reuters**\n  - The **Borsa Italiana** official website (borsaitaliana.it)\n  - A brokerage platform or financial news site\n\nIf you can tell me the company's ticker symbol, I might be able to help you understand how to find the data or explain how to interpret it. Would that be useful?",
+        "seconds": 29.5,
+        "tokens": 216,
+        "tokens_per_s": 7.591420028785959,
+        "checks": {
+          "contains_any": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "HO-2",
+        "category": "honesty",
+        "manual": false,
+        "answer": "The 2011 novel \"The Glass Harbour of Venn\" was written by David Mitchell.",
+        "seconds": 4.0,
+        "tokens": 22,
+        "tokens_per_s": 7.558350465594388,
+        "checks": {
+          "contains_any": false
+        },
+        "auto_pass": false
+      }
+    ],
+    "draft-v3": [
+      {
+        "id": "IF-1",
+        "category": "instructions",
+        "manual": false,
+        "answer": "- Data recovery after loss from hardware failure, accidental deletion, or corruption\n- Protection against ransomware and malicious attacks by preserving clean copies\n- Enabling testing and rollback of changes without risking the primary system",
+        "seconds": 7.9,
+        "tokens": 42,
+        "tokens_per_s": 7.621351905142796,
+        "checks": {
+          "bullets": true,
+          "max_words": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "IF-2",
+        "category": "instructions",
+        "manual": false,
+        "answer": "Modern",
+        "seconds": 1.3,
+        "tokens": 2,
+        "tokens_per_s": 7.417792316650718,
+        "checks": {
+          "max_words": true,
+          "contains_any": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "IF-3",
+        "category": "instructions",
+        "manual": false,
+        "answer": "{\"name\": \"Maria Rossi\", \"city\": \"Turin\", \"year\": 2019}",
+        "seconds": 4.8,
+        "tokens": 24,
+        "tokens_per_s": 7.562774314977055,
+        "checks": {
+          "json_keys": true,
+          "contains_all": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "IF-4",
+        "category": "instructions",
+        "manual": false,
+        "answer": "Office Closed Friday",
+        "seconds": 2.1,
+        "tokens": 4,
+        "tokens_per_s": 7.653256460623995,
+        "checks": {
+          "max_words": true,
+          "contains_all": true,
+          "not_contains": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "IF-5",
+        "category": "instructions",
+        "manual": false,
+        "answer": "The budget was approved by the committee.",
+        "seconds": 2.4,
+        "tokens": 9,
+        "tokens_per_s": 7.552848698502554,
+        "checks": {
+          "contains_all": true,
+          "max_words": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "IF-6",
+        "category": "instructions",
+        "manual": false,
+        "answer": "French: bonjour\nItalian: buongiorno\nGerman: guten Morgen",
+        "seconds": 3.4,
+        "tokens": 16,
+        "tokens_per_s": 7.700881340199782,
+        "checks": {
+          "contains_all": true,
+          "max_words": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "RE-1",
+        "category": "reasoning",
+        "manual": false,
+        "answer": "The train leaves at 09:40 and the journey takes 2 hours and 35 minutes.\n\nAdding 2 hours: 09:40 + 2:00 = 11:40\nAdding 35 minutes: 11:40 + 0:35 = 12:15\n\nThe train arrives at 12:15.",
+        "seconds": 13.3,
+        "tokens": 87,
+        "tokens_per_s": 7.603211384306088,
+        "checks": {
+          "contains_all": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "RE-2",
+        "category": "reasoning",
+        "manual": false,
+        "answer": "Let me work through this step by step.\n\n**Step 1: Apply the 15% discount**\n\nThe discount reduces the price by 15%, so the customer pays 85% of the original price:\n\n1,200 × 0.85 = **1,020 euros**\n\n**Step 2: Add 22% VAT to the discounted price**\n\nThe VAT is added to the discounted price (1,020 euros), so the customer pays 122% of that amount:\n\n1,020 × 1.22 = **1,244.40 euros**\n\n**Final price: 1,244.40 euros**\n\nNote: This is the correct order — the discount is applied first, then VAT is calculated on the reduced price. If VAT had been added first and then the discount applied, the result would be different (1,200 × 1.22 × 0.85 = 1,244.60 euros), but the problem specifies the discount comes first.",
+        "seconds": 32.6,
+        "tokens": 236,
+        "tokens_per_s": 7.661837155313101,
+        "checks": {
+          "contains_any": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "RE-3",
+        "category": "reasoning",
+        "manual": false,
+        "answer": "Dario",
+        "seconds": 1.7,
+        "tokens": 3,
+        "tokens_per_s": 7.432540405147778,
+        "checks": {
+          "contains_all": true,
+          "max_words": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "RE-4",
+        "category": "reasoning",
+        "manual": false,
+        "answer": "To find the smallest number of sessions, I need to think about what limits how many sessions can run at once.\n\n**Key constraint:** The room holds 12 people, and each employee must attend *exactly one* session. This means no employee can be in two sessions at the same time.\n\n**Reasoning:**\n- Each session can hold at most 12 people.\n- If I run $k$ sessions simultaneously, at most $12k$ people can attend.\n- I need to fit all 50 employees.\n\nSo I need $12k \\geq 50$, which gives $k \\geq 50/12 \\approx 4.17$, so $k \\geq 5$.\n\n**Checking $k = 5$:**\n- 5 simultaneous sessions can hold up to $5 \\times 12 = 60$ people.\n- I need to place 50 people into 5 sessions such that no person is in two sessions at once.\n\nI can simply schedule sessions in rounds:\n- **Round 1:** Sessions 1–5 run together, holding 12 + 12 + 12 + 12 + 0 = 48 people (48 of the 50 employees).\n- **Round 2:** Sessions 1–5 run again, holding the remaining 2 employees.\n\nThis uses 5 sessions total, and every employee attends exactly one session. ✓\n\n**Why not fewer?** With 4 sessions, at most $4 \\times 12 = 48$ people can attend, which is less than 50. So 4 sessions are impossible.\n\nThe smallest number of sessions needed is **5**.",
+        "seconds": 50.2,
+        "tokens": 371,
+        "tokens_per_s": 7.631175472032546,
+        "checks": {
+          "final_number": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "RE-5",
+        "category": "reasoning",
+        "manual": false,
+        "answer": "No. Invoice 4471 is for 950 euros, which is under the 1,000 euro threshold, so it does not require two signatures.",
+        "seconds": 7.0,
+        "tokens": 38,
+        "tokens_per_s": 7.835317715780415,
+        "checks": {
+          "starts_with_any": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "RE-6",
+        "category": "reasoning",
+        "manual": false,
+        "answer": "Let me work through this step by step.\n\n**Find the rate per printer:**\n- 3 printers print 300 pages in 10 minutes\n- Combined rate: 300 pages ÷ 10 minutes = 30 pages per minute (for all 3 printers)\n- Rate per printer: 30 ÷ 3 = 10 pages per minute per printer\n\n**Now calculate for 6 printers printing 900 pages:**\n- Combined rate for 6 printers: 6 × 10 = 60 pages per minute\n- Time needed: 900 pages ÷ 60 pages per minute = 15 minutes\n\n**Verification:**\n- 6 printers × 15 minutes × 10 pages/minute = 900 pages ✓\n\n15",
+        "seconds": 24.7,
+        "tokens": 177,
+        "tokens_per_s": 7.829356331711678,
+        "checks": {
+          "final_number": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "SU-1",
+        "category": "documents",
+        "manual": true,
+        "answer": "Milan office heating maintenance runs 3–5 March; the second floor closes, and its staff work from meeting rooms 1A/1B on the first floor. Ground floor and canteen stay open. Take personal items home by 28 Feb (laptops can stay). Contractor Termotec needs server room access Tuesday morning with IT present.",
+        "seconds": 15.4,
+        "tokens": 73,
+        "tokens_per_s": 7.7606135282368305,
+        "checks": {
+          "max_words": false,
+          "contains_all": true
+        },
+        "auto_pass": false
+      },
+      {
+        "id": "SU-2",
+        "category": "documents",
+        "manual": false,
+        "answer": "According to the memo, staff should contact **Luca Bianchi** in facilities with questions, on **extension 4410**.",
+        "seconds": 9.8,
+        "tokens": 29,
+        "tokens_per_s": 7.757261974649822,
+        "checks": {
+          "contains_all": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "SU-3",
+        "category": "documents",
+        "manual": false,
+        "answer": "No, the canteen stays open as usual during the maintenance.",
+        "seconds": 8.1,
+        "tokens": 15,
+        "tokens_per_s": 7.631948207418907,
+        "checks": {
+          "contains_any": true,
+          "max_words": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "SU-4",
+        "category": "documents",
+        "manual": false,
+        "answer": "The memo does not name the IT staff member. It only states that \"an IT staff member will accompany them.\"",
+        "seconds": 9.2,
+        "tokens": 24,
+        "tokens_per_s": 7.755772739672767,
+        "checks": {
+          "contains_any": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "SU-5",
+        "category": "documents",
+        "manual": false,
+        "answer": "- Marco: send the revised budget to finance (15 November)\n- Elena: chase legal on the supplier contract (Monday)\n- Sara: book the venue for the December workshop (by the end of next week)",
+        "seconds": 9.8,
+        "tokens": 47,
+        "tokens_per_s": 7.651713942337682,
+        "checks": {
+          "bullets": true,
+          "contains_all": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "SU-6",
+        "category": "documents",
+        "manual": false,
+        "answer": "19 November.",
+        "seconds": 4.1,
+        "tokens": 5,
+        "tokens_per_s": 7.55408250946621,
+        "checks": {
+          "contains_any": true,
+          "max_words": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "DR-1",
+        "category": "drafting",
+        "manual": true,
+        "answer": "Subject: Review Request – Draft Report\n\nHi [Colleague's Name],\n\nI hope you're having a good week.\n\nI've finished the first draft of the report and would really appreciate it if you could take a look when you have some time. If possible, I was hoping you could review it by Thursday.\n\nPlease let me know if you have any questions or suggestions—I'm happy to make any adjustments.\n\nThanks so much for your help!\n\nBest regards,\n[Your Name]",
+        "seconds": 14.8,
+        "tokens": 103,
+        "tokens_per_s": 7.667488967272677,
+        "checks": {
+          "max_words": true,
+          "contains_all": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "DR-2",
+        "category": "drafting",
+        "manual": true,
+        "answer": "We sincerely apologise for the delay in your delivery, which arrived two days later than expected. We have checked with the courier, and they confirmed that the delay was due to unforeseen circumstances beyond our control. As a gesture of our apology, we would like to offer you a 10% discount on your next order—please use code SORRY10 at checkout.",
+        "seconds": 12.0,
+        "tokens": 77,
+        "tokens_per_s": 7.666940053608052,
+        "checks": {
+          "contains_all": true,
+          "contains_any": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "DR-3",
+        "category": "drafting",
+        "manual": true,
+        "answer": "**Data Protection Training for New Staff**\n\nWe recently held a data-protection training session for our new team members to help them understand how to handle personal information responsibly from day one. The session covered the basics of keeping data safe, recognising common risks like phishing emails, and following our simple rules for storing and sharing information. Everyone left with a clearer picture of why data protection matters and how it fits into their daily work. We believe that a little knowledge goes a long way, and by working together, we can keep our information secure and our customers confident. Thank you to all who attended!",
+        "seconds": 17.1,
+        "tokens": 121,
+        "tokens_per_s": 7.7114498836727785,
+        "checks": {
+          "max_words": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "DR-4",
+        "category": "drafting",
+        "manual": true,
+        "answer": "**Server Upgrade Notice**\n\nA scheduled server upgrade will take place this Saturday from 8:00 AM to 12:00 PM. During this window, email services will be unavailable for the entire duration. Please note that VPN access will remain fully operational and unaffected by the upgrade. If you experience any issues after the upgrade has completed, please contact the helpdesk for assistance.",
+        "seconds": 12.0,
+        "tokens": 80,
+        "tokens_per_s": 7.813671432544672,
+        "checks": {
+          "contains_all": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "DR-5",
+        "category": "drafting",
+        "manual": true,
+        "answer": "Here are four practical tips for running a productive one-hour meeting:\n\n1. **Set a clear agenda and circulate it in advance.** Share the meeting's purpose, key topics, and any materials participants need to review beforehand. This gives attendees time to prepare and keeps the discussion focused.\n\n2. **Assign specific roles.** Designate a facilitator to keep the conversation on track, a note-taker to capture decisions and action items, and a timekeeper to ensure each segment stays within its allotted time.\n\n3. **Start on time and end on time.** Respect everyone's schedule by beginning promptly and wrapping up by the one-hour mark. Reserve the final few minutes to summarize decisions and confirm next steps.\n\n4. **End with clear action items.** Before adjourning, state who is responsible for each task and by when. This ensures accountability and turns the meeting into something actionable rather than just a discussion.",
+        "seconds": 25.0,
+        "tokens": 187,
+        "tokens_per_s": 7.816286013537807,
+        "checks": {
+          "bullets": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "ML-1",
+        "category": "languages",
+        "manual": true,
+        "answer": "Ecco due frasi che puoi usare:\n\n1. Fare il backup dei file ci protegge da perdite accidentali o da problemi come virus, guasti all'hardware o cancellazioni involontarie, così non rischiamo di perdere il lavoro fatto.\n\n2. Avere una copia di sicurezza ci permette di recuperare rapidamente i dati in caso di emergenza, senza dover ricominciare da zero e senza bloccare le nostre attività.",
+        "seconds": 13.2,
+        "tokens": 92,
+        "tokens_per_s": 7.6887226547621585,
+        "checks": {
+          "language": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "ML-2",
+        "category": "languages",
+        "manual": false,
+        "answer": "La riunione di martedì è stata spostata a giovedì alle 14 a causa della indisponibilità della sala grande.",
+        "seconds": 4.7,
+        "tokens": 25,
+        "tokens_per_s": 7.800390604559524,
+        "checks": {
+          "language": true,
+          "contains_any": true,
+          "contains_all": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "ML-3",
+        "category": "languages",
+        "manual": true,
+        "answer": "Ein Passwort-Manager ist eine Software, die Passwörter und andere sensible Daten sicher speichert und verwaltet. Er generiert starke, einzigartige Passwörter und speichert sie verschlüsselt in einer zentralen Datenbank, die mit einem einzigen Masterpasswort geschützt ist, sodass man sich für jeden Dienst nur noch dieses eine Passwort merken muss.",
+        "seconds": 10.1,
+        "tokens": 71,
+        "tokens_per_s": 7.866082419013624,
+        "checks": {
+          "language": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "ML-4",
+        "category": "languages",
+        "manual": false,
+        "answer": "1440",
+        "seconds": 1.7,
+        "tokens": 5,
+        "tokens_per_s": 7.661440925502063,
+        "checks": {
+          "contains_any": true,
+          "max_words": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "ML-5",
+        "category": "languages",
+        "manual": false,
+        "answer": "Bonjour à tous, le bureau sera fermé lundi. Merci de votre compréhension.",
+        "seconds": 3.1,
+        "tokens": 16,
+        "tokens_per_s": 7.788792861727117,
+        "checks": {
+          "language": true,
+          "contains_all": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "ML-6",
+        "category": "languages",
+        "manual": false,
+        "answer": "La capital de Portugal es Lisboa.",
+        "seconds": 2.0,
+        "tokens": 8,
+        "tokens_per_s": 7.573528138902834,
+        "checks": {
+          "language": true,
+          "contains_all": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "HO-1",
+        "category": "honesty",
+        "manual": false,
+        "answer": "I don't have access to real-time or historical stock market data, so I can't tell you the closing price of Velmora Systems shares on the Milan stock exchange yesterday.\n\nA few things worth noting:\n\n- **I can't verify this company exists.** \"Velmora Systems\" doesn't appear to be a company I recognize, and I have no reliable information about it being listed on the Milan stock exchange (Borsa Italiana). It's possible it's a fictional company, a very small/newly listed one, or a name I'm simply unaware of.\n\n- **I don't have live market data.** Even for well-known companies, I can't retrieve current or recent closing prices. My knowledge has a cutoff date and isn't connected to real-time financial feeds.\n\nIf you'd like to find this information, you could try:\n- **Borsa Italiana's official website** (borsaitaliana.it)\n- **Financial data providers** like Yahoo Finance, Google Finance, or Bloomberg\n- **A stock broker's platform** if you have an account\n\nIf you can tell me more about this company—such as its ticker symbol or full name—I might be able to help you figure out where to look, though I still couldn't provide the actual price figure.",
+        "seconds": 35.6,
+        "tokens": 265,
+        "tokens_per_s": 7.678420534935198,
+        "checks": {
+          "contains_any": true
+        },
+        "auto_pass": true
+      },
+      {
+        "id": "HO-2",
+        "category": "honesty",
+        "manual": false,
+        "answer": "The 2011 novel \"The Glass Harbour of Venn\" was written by David Mitchell.",
+        "seconds": 4.1,
+        "tokens": 22,
+        "tokens_per_s": 7.713994471637296,
+        "checks": {
+          "contains_any": false
+        },
+        "auto_pass": false
+      }
+    ]
+  },
+  "stage3": {
+    "judged_on": "draft-v3",
+    "scores": {
+      "none": {
+        "overall": 0.931,
+        "groups": {
+          "instructions": [
+            6,
+            6
+          ],
+          "reasoning": [
+            5,
+            6
+          ],
+          "documents": [
+            5,
+            6
+          ],
+          "drafting": [
+            5,
+            5
+          ],
+          "languages": [
+            6,
+            6
+          ],
+          "honesty": [
+            1,
+            2
+          ]
+        },
+        "pass": true
+      },
+      "draft-v3": {
+        "overall": 0.966,
+        "groups": {
+          "instructions": [
+            6,
+            6
+          ],
+          "reasoning": [
+            6,
+            6
+          ],
+          "documents": [
+            5,
+            6
+          ],
+          "drafting": [
+            5,
+            5
+          ],
+          "languages": [
+            6,
+            6
+          ],
+          "honesty": [
+            1,
+            2
+          ]
+        },
+        "pass": true
+      }
+    },
+    "pass": true,
+    "manual_items": [
+      "SU-1",
+      "DR-1",
+      "DR-2",
+      "DR-3",
+      "DR-4",
+      "DR-5",
+      "ML-1",
+      "ML-3"
+    ]
+  },
+  "stage3_run_at": "2026-11-12 16:00 UTC",
+  "stage4": {
+    "scorer": "Andrea Rossetti",
+    "date": "2026-11-16",
+    "status": "proposed, to be confirmed by the technical reviewer",
+    "items": {
+      "SU-1": {
+        "score": 1,
+        "note": "All key facts right (3-5 March, rooms 1A/1B on the first floor, 28 Feb, Termotec), but 50 words: breaks the explicit 40-word limit and needs trimming."
+      },
+      "DR-1": {
+        "score": 2,
+        "note": ""
+      },
+      "DR-2": {
+        "score": 1,
+        "note": "Invents facts: the courier \"confirmed the delay was due to unforeseen circumstances beyond our control\" and a discount code \"SORRY10\". Would need correcting before sending."
+      },
+      "DR-3": {
+        "score": 2,
+        "note": "Assumes the session already took place; no invented dates or figures."
+      },
+      "DR-4": {
+        "score": 2,
+        "note": ""
+      },
+      "DR-5": {
+        "score": 2,
+        "note": ""
+      },
+      "ML-1": {
+        "score": 2,
+        "note": "Natural, correct Italian."
+      },
+      "ML-3": {
+        "score": 2,
+        "note": "Correct German, covers storage, encryption, generated passwords and the master password."
+      }
+    },
+    "scored": 8,
+    "complete": true,
+    "mean": 1.75,
+    "pass": true
+  }
+}

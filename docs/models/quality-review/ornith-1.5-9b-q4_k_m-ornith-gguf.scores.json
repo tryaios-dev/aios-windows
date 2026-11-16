@@ -1,0 +1,15 @@
+{
+  "scorer": "Andrea Rossetti",
+  "date": "2026-11-16",
+  "status": "proposed, to be confirmed by the technical reviewer",
+  "items": {
+    "SU-1": {"score": 1, "note": "All key facts right (3-5 March, rooms 1A/1B on the first floor, 28 Feb, Termotec), but 50 words: breaks the explicit 40-word limit and needs trimming."},
+    "DR-1": {"score": 2, "note": ""},
+    "DR-2": {"score": 1, "note": "Invents facts: the courier \"confirmed the delay was due to unforeseen circumstances beyond our control\" and a discount code \"SORRY10\". Would need correcting before sending."},
+    "DR-3": {"score": 2, "note": "Assumes the session already took place; no invented dates or figures."},
+    "DR-4": {"score": 2, "note": ""},
+    "DR-5": {"score": 2, "note": ""},
+    "ML-1": {"score": 2, "note": "Natural, correct Italian."},
+    "ML-3": {"score": 2, "note": "Correct German, covers storage, encryption, generated passwords and the master password."}
+  }
+}

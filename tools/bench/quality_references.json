@@ -1,0 +1,25 @@
+{
+  "notes": "Reference file for each third-party catalogue entry: the same publisher's Q8_0 file at the same pinned revision (near-lossless). Stage 2 of docs/models/quality-review.md measures how far the shipped file's predictions are from it.",
+  "text": {
+    "name": "wikitext-2-raw-v1, wiki.test.raw",
+    "url": "https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip",
+    "sha256": "173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08",
+    "licence": "CC BY-SA 3.0 (not stored in this repository)"
+  },
+  "references": {
+    "minicpm5-2b-q4_k_m-openbmb-gguf": {
+      "repo": "openbmb/MiniCPM5-2B-GGUF",
+      "revision": "2079a22f3beaa4e306449978533478fe0522f4b3",
+      "filename": "MiniCPM5-2B-Q8_0.gguf",
+      "size_bytes": 2679710688,
+      "sha256": "c5415f8989bf88a8288f1b55a3cc371af53c07b0faa220a63bd7a990cfaba078"
+    },
+    "ornith-1.5-9b-q4_k_m-ornith-gguf": {
+      "repo": "ornith-ai/Ornith-1.5-9B-GGUF",
+      "revision": "abdd624b12ebf020b767fff532ff44fe552b28c3",
+      "filename": "Ornith-1.5-9B-Q8_0.gguf",
+      "size_bytes": 9786060384,
+      "sha256": "22086870b009dbe9815ee752c48a82de930118a7c5ce5599590892ae03b8b010"
+    }
+  }
+}
