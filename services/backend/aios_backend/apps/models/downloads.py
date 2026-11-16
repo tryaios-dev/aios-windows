@@ -5,6 +5,11 @@ every byte has arrived, ``install`` (given by the service) checks size and SHA-2
 catalogue and installs the file, exactly like an offline import. No database access here: each
 change of status is passed to ``Job.report`` (given by the service), which saves it in
 ``model_downloads`` so a download is still listed after a restart.
+
+A dropped connection (a pulled cable, Wi-Fi gone, the mirror timing out) does not fail the
+download: the worker waits and asks again from the partial file's size, and only gives up after
+``RetryPolicy.give_up_after`` seconds without a single new byte (D-07). A wrong file (size or
+digest) is never retried. The user can still pause or cancel while it waits.
 """
 
 import threading
@@ -23,6 +28,19 @@ from db.base import utcnow
 
 JOIN_SECONDS = 10.0
 ACTIVE = ("queued", "downloading", "verifying")
+POLL_SECONDS = 0.05  # how often a waiting worker looks at pause and cancel
+
+
+@dataclass(frozen=True)
+class RetryPolicy:
+    """How a download behaves when the connection drops. The download manager (I-03) owns the
+    final values; these keep a pulled cable from failing a multi-gigabyte download."""
+
+    delays: tuple[float, ...] = (2.0, 5.0, 10.0, 20.0, 30.0)  # seconds; the last one repeats
+    give_up_after: float = 600.0  # seconds without receiving a byte
+
+    def delay(self, attempt: int) -> float:
+        return self.delays[min(attempt, len(self.delays) - 1)]
 
 
 @dataclass
@@ -50,10 +68,11 @@ class Job:
 
 
 class Downloads:
-    def __init__(self) -> None:
+    def __init__(self, retry: RetryPolicy | None = None) -> None:
         self._lock = threading.Lock()
         self._jobs: dict[str, Job] = {}
         self.loaded = False  # jobs saved before this start have been taken back
+        self.retry = retry or RetryPolicy()
 
     def get(self, entry_id: str) -> Job | None:
         with self._lock:
@@ -110,39 +129,24 @@ class Downloads:
 
     def _run(self, job: Job, mirror: ModelMirror, install: Callable[[Path], None]) -> None:
         job.thread = threading.Thread(
-            target=_work, args=(job, mirror, install), name="aios-download", daemon=True
+            target=_work,
+            args=(job, mirror, install, self.retry),
+            name="aios-download",
+            daemon=True,
         )
         job.thread.start()
 
 
-def _work(job: Job, mirror: ModelMirror, install: Callable[[Path], None]) -> None:
+def _work(
+    job: Job, mirror: ModelMirror, install: Callable[[Path], None], retry: RetryPolicy
+) -> None:
     job.part.parent.mkdir(parents=True, exist_ok=True)
-    offset = job.part.stat().st_size if job.part.exists() else 0
-    job.received_bytes = offset
+    job.received_bytes = job.part.stat().st_size if job.part.exists() else 0
     job.status = "downloading"
     job.tell()
-    began, fetched = time.monotonic(), 0
     try:
-        with open(job.part, "ab") as out:
-            for chunk in mirror.fetch(job.entry_id, job.url, offset):
-                if job.cancel.is_set():
-                    return
-                if job.pause.is_set():
-                    job.status, job.speed_bps = "paused", 0
-                    job.tell()
-                    return
-                out.write(chunk)
-                fetched += len(chunk)
-                job.received_bytes += len(chunk)
-                job.speed_bps = int(fetched / max(time.monotonic() - began, 1e-3))
-                if job.received_bytes > job.total_bytes:
-                    raise AppError("size_mismatch", 422)
-        if job.cancel.is_set():
-            return
-        if job.pause.is_set() and job.received_bytes < job.total_bytes:
-            job.status, job.speed_bps = "paused", 0
-            job.tell()
-            return
+        if not _fetch_all(job, mirror, retry):
+            return  # paused or cancelled
         if job.received_bytes != job.total_bytes:
             raise AppError("download_incomplete", 502)
         job.status, job.speed_bps = "verifying", 0
@@ -158,6 +162,77 @@ def _work(job: Job, mirror: ModelMirror, install: Callable[[Path], None]) -> Non
     except Exception:
         job.status, job.error, job.speed_bps = "failed", "mirror_unreachable", 0
         job.tell()
+
+
+def _fetch_all(job: Job, mirror: ModelMirror, retry: RetryPolicy) -> bool:
+    """Fetch until every byte is there. False if paused or cancelled on the way. A network
+    error is retried until ``retry.give_up_after`` seconds pass without progress; then the
+    last error is raised."""
+    if job.received_bytes >= job.total_bytes:
+        return True  # complete already (stopped while verifying): check it, do not ask for more
+    attempt = 0
+    last_progress = time.monotonic()
+    while True:
+        before = job.received_bytes
+        try:
+            return _fetch_once(job, mirror)
+        except AppError:
+            raise
+        except Exception:
+            if job.received_bytes > before:
+                attempt, last_progress = 0, time.monotonic()
+            if time.monotonic() - last_progress >= retry.give_up_after:
+                raise
+            job.speed_bps = 0
+            if not _wait(job, retry.delay(attempt)):
+                return False
+            attempt += 1
+
+
+def _fetch_once(job: Job, mirror: ModelMirror) -> bool:
+    """One request from the partial file's size to the end. False if paused or cancelled."""
+    began, fetched = time.monotonic(), 0
+    with open(job.part, "ab") as out:
+        for chunk in mirror.fetch(job.entry_id, job.url, job.received_bytes):
+            if _stopping(job):
+                return False
+            out.write(chunk)
+            out.flush()
+            fetched += len(chunk)
+            job.received_bytes += len(chunk)
+            job.speed_bps = int(fetched / max(time.monotonic() - began, 1e-3))
+            if job.received_bytes > job.total_bytes:
+                raise AppError("size_mismatch", 422)
+    if job.cancel.is_set():
+        return False
+    if job.pause.is_set() and job.received_bytes < job.total_bytes:
+        _paused(job)
+        return False
+    return True
+
+
+def _wait(job: Job, seconds: float) -> bool:
+    """Sleep before the next attempt, but stop at once on pause or cancel. False if stopped."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if _stopping(job):
+            return False
+        time.sleep(min(POLL_SECONDS, max(deadline - time.monotonic(), 0)))
+    return not _stopping(job)
+
+
+def _stopping(job: Job) -> bool:
+    if job.cancel.is_set():
+        return True
+    if job.pause.is_set():
+        _paused(job)
+        return True
+    return False
+
+
+def _paused(job: Job) -> None:
+    job.status, job.speed_bps = "paused", 0
+    job.tell()
 
 
 def get_downloads(request: Request) -> Downloads:
