@@ -5,8 +5,10 @@ and reads its READY line. The token never appears in argv or the environment; th
 are the data folder (a path) and, from source, the development profile. The writer is assigned to
 the backend's kill-on-close job, so it dies with the backend however the backend ends.
 
-If a writer left behind by a crashed backend still holds evidence.db, the new one exits with
-code 3; ``start`` then ends the leftover and tries once more (D-07, ``leftover``).
+Before starting, ``start`` reads the writer's record (D-07, ``leftover``): a writer in use by a
+running backend means ``writer_locked`` at once; one left behind by a crashed backend is ended
+first. If the new writer still finds the file held (exit code 3), the leftover check runs once
+more and the start is tried again.
 """
 
 import json
@@ -77,12 +79,15 @@ def command(settings: Settings) -> tuple[list[str], dict[str, str] | None]:
 
 
 def start(settings: Settings, job: ChildJob) -> WriterProcess:
+    folder = settings.chats_db.parent
+    if leftover.in_use(folder):
+        log_event(log, "writer_start_failed", error_code="writer_locked")
+        raise WriterStartError("writer_locked")
+    leftover.end_leftover_writer(folder)
     try:
         return _start_once(settings, job)
     except WriterStartError as exc:
-        if str(exc) != "writer_locked" or not leftover.end_leftover_writer(
-            settings.chats_db.parent
-        ):
+        if str(exc) != "writer_locked" or not leftover.end_leftover_writer(folder):
             raise
     return _start_once(settings, job)
 

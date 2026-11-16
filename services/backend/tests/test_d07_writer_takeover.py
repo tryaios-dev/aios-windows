@@ -113,6 +113,20 @@ def stand_in(settings: Settings) -> Iterator[tuple[subprocess.Popen[bytes], int]
             pass
 
 
+def _crash(backend: subprocess.Popen[bytes], writer: psutil.Process) -> None:
+    """Hard-kill the stand-in backend and everything it started except the writer. From source
+    on Windows the venv's python.exe is a launcher that runs the interpreter as its child, so
+    there are launchers between the backend and the writer; they go too, as the installed app
+    has none."""
+    for p in [psutil.Process(backend.pid), *psutil.Process(backend.pid).children(recursive=True)]:
+        if p.pid != writer.pid:
+            try:
+                p.kill()
+            except psutil.NoSuchProcess:
+                pass
+    backend.wait(10)
+
+
 @pytest.fixture
 def no_grace(monkeypatch: pytest.MonkeyPatch) -> None:
     """End the leftover at once, while it is surely still running."""
@@ -134,8 +148,7 @@ def test_d07_a_leftover_writer_is_ended_and_a_new_one_takes_over(
 ) -> None:
     backend, _ = stand_in
     old = _holder(settings)
-    backend.kill()  # the backend crashes; its writer is still running
-    backend.wait(10)
+    _crash(backend, old)  # its writer is still running
     assert old.is_running()
 
     child = writer_process.start(settings, ChildJob())
@@ -155,8 +168,7 @@ def test_d07_the_restart_waits_for_a_writer_already_on_its_way_out(
     """With the grace time a leftover writer that notices its backend is gone ends itself."""
     backend, _ = stand_in
     old = _holder(settings)
-    backend.kill()
-    backend.wait(10)
+    _crash(backend, old)
 
     child = writer_process.start(settings, ChildJob())
     try:

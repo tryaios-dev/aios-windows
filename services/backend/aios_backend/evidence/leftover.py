@@ -3,8 +3,9 @@
 The Job Object (IPC-50) normally ends the writer with the backend, and the writer also exits
 once it sees its parent is gone (within a second, signing a checkpoint on the way out). This
 covers what slips through: a restart inside that second, a writer that hangs, or no job (CI,
-development). A second writer exits with code 3 while the old one holds the file, so on that
-code the backend asks here whether the holder is a leftover, and if so ends it and starts again.
+development). The backend asks here before it starts a writer: a writer still in use means
+``writer_locked`` at once, a leftover is ended first. (A second writer started against a held
+file is not relied on: on Windows it can block for a long time instead of exiting with code 3.)
 
 A leftover is the process named in the writer's record (pid and start time both match) whose
 starter is gone. A writer whose starter still runs belongs to a live backend and is never
@@ -38,13 +39,27 @@ def _live(pid: int, created: float | None) -> psutil.Process | None:
     return None
 
 
-def end_leftover_writer(folder: Path, timeout: float = 10.0) -> bool:
-    """End the writer recorded in ``folder`` if its starter is gone. True if one was ended."""
+def _holder(folder: Path) -> tuple[psutil.Process | None, bool]:
+    """(the running writer recorded in ``folder``, whether its starter still runs)."""
     holder = pidfile.read(folder / pidfile.WRITER_PID_FILE)
     if holder is None:
-        return False
+        return None, False
     proc = _live(holder.pid, holder.created)
-    if proc is None or _live(holder.parent_pid, holder.parent_created) is not None:
+    if proc is None:
+        return None, False
+    return proc, _live(holder.parent_pid, holder.parent_created) is not None
+
+
+def in_use(folder: Path) -> bool:
+    """A writer holds ``folder``'s evidence.db for a backend that still runs."""
+    proc, starter_alive = _holder(folder)
+    return proc is not None and starter_alive
+
+
+def end_leftover_writer(folder: Path, timeout: float = 10.0) -> bool:
+    """End the writer recorded in ``folder`` if its starter is gone. True if one was ended."""
+    proc, starter_alive = _holder(folder)
+    if proc is None or starter_alive:
         return False
     _, alive = psutil.wait_procs([proc], timeout=GRACE_S)
     killed = bool(alive)
