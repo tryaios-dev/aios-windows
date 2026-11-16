@@ -1,6 +1,54 @@
 {
   "components": {
     "schemas": {
+      "AddFilesIn": {
+        "description": "Files chosen in the system file dialog (or dropped on the page), each an absolute path.",
+        "properties": {
+          "collection": {
+            "anyOf": [
+              {
+                "maxLength": 260,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection"
+          },
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Paths",
+            "type": "array"
+          }
+        },
+        "required": [
+          "paths"
+        ],
+        "title": "AddFilesIn",
+        "type": "object"
+      },
+      "AddFolderIn": {
+        "description": "A folder chosen in the system folder dialog: its files are added as one collection.",
+        "properties": {
+          "path": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "AddFolderIn",
+        "type": "object"
+      },
       "AllowlistEntry": {
         "properties": {
           "enabled": {
@@ -41,6 +89,61 @@
           "enabled"
         ],
         "title": "AllowlistEntry",
+        "type": "object"
+      },
+      "BackupLocationIn": {
+        "description": "The folder backups go to, chosen in the system folder dialog. ``null``: set up later.",
+        "properties": {
+          "path": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          }
+        },
+        "title": "BackupLocationIn",
+        "type": "object"
+      },
+      "BackupOut": {
+        "description": "One backup: a new folder inside the chosen location that restore accepts as it is.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "conversations": {
+            "title": "Conversations",
+            "type": "integer"
+          },
+          "files": {
+            "title": "Files",
+            "type": "integer"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "path",
+          "size_bytes",
+          "files",
+          "conversations",
+          "at"
+        ],
+        "title": "BackupOut",
         "type": "object"
       },
       "BenchmarkOut": {
@@ -810,6 +913,24 @@
         "title": "DeviationApproval",
         "type": "object"
       },
+      "DocTextOut": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text"
+        ],
+        "title": "DocTextOut",
+        "type": "object"
+      },
       "DownloadStart": {
         "properties": {
           "entry_id": {
@@ -882,6 +1003,19 @@
           "started_at"
         ],
         "title": "DownloadState",
+        "type": "object"
+      },
+      "EnabledIn": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "EnabledIn",
         "type": "object"
       },
       "EngineStatus": {
@@ -1564,6 +1698,73 @@
         "title": "FallbackOut",
         "type": "object"
       },
+      "FolderFileOut": {
+        "properties": {
+          "already": {
+            "title": "Already",
+            "type": "boolean"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "size_bytes",
+          "kind",
+          "problem",
+          "already"
+        ],
+        "title": "FolderFileOut",
+        "type": "object"
+      },
+      "FolderPreviewOut": {
+        "description": "What adding a folder would copy. Shown before anything is added; nothing is read yet.",
+        "properties": {
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/FolderFileOut"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "files"
+        ],
+        "title": "FolderPreviewOut",
+        "type": "object"
+      },
       "GenerationOut": {
         "description": "Whether this conversation is answering right now (list dot, Stop button).",
         "properties": {
@@ -1612,6 +1813,17 @@
               }
             ],
             "title": "Provider"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
           }
         },
         "required": [
@@ -2006,6 +2218,107 @@
           "source"
         ],
         "title": "InstalledModelOut",
+        "type": "object"
+      },
+      "InstalledSkillOut": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "installed_at": {
+            "format": "date-time",
+            "title": "Installed At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "installed_at",
+          "enabled"
+        ],
+        "title": "InstalledSkillOut",
+        "type": "object"
+      },
+      "KnowledgeDocOut": {
+        "properties": {
+          "added_at": {
+            "format": "date-time",
+            "title": "Added At",
+            "type": "string"
+          },
+          "collection": {
+            "title": "Collection",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "origin": {
+            "title": "Origin",
+            "type": "string"
+          },
+          "pages": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pages"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "size_bytes",
+          "pages",
+          "collection",
+          "origin",
+          "added_at",
+          "status",
+          "problem"
+        ],
+        "title": "KnowledgeDocOut",
         "type": "object"
       },
       "Licence": {
@@ -2529,6 +2842,31 @@
         "title": "ReclassifyOut",
         "type": "object"
       },
+      "RecoveryKeyOut": {
+        "description": "A new recovery key for this installation. ``recovery_key`` is in this reply exactly once.",
+        "properties": {
+          "issued_at": {
+            "format": "date-time",
+            "title": "Issued At",
+            "type": "string"
+          },
+          "package_id": {
+            "title": "Package Id",
+            "type": "string"
+          },
+          "recovery_key": {
+            "title": "Recovery Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "recovery_key",
+          "package_id",
+          "issued_at"
+        ],
+        "title": "RecoveryKeyOut",
+        "type": "object"
+      },
       "RestoreIn": {
         "description": "``backup_path``: the backed-up data folder holding ``chats.db`` and ``recovery.pkg``.",
         "properties": {
@@ -2626,6 +2964,14 @@
       },
       "SendIn": {
         "properties": {
+          "knowledge_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Knowledge Ids",
+            "type": "array"
+          },
           "text": {
             "maxLength": 200000,
             "minLength": 1,
@@ -2789,6 +3135,17 @@
       "SetupStatus": {
         "description": "Where first run stands. The UI opens setup until ``first_run_complete`` is true.",
         "properties": {
+          "backup_location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backup Location"
+          },
           "completed_at": {
             "anyOf": [
               {
@@ -2816,6 +3173,29 @@
             "title": "First Run Complete",
             "type": "boolean"
           },
+          "last_backup_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Backup At"
+          },
+          "last_backup_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Backup Size"
+          },
           "last_restore_at": {
             "anyOf": [
               {
@@ -2838,6 +3218,18 @@
               }
             ],
             "title": "Package Id"
+          },
+          "recovery_key_issued_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recovery Key Issued At"
           },
           "recovery_package_present": {
             "title": "Recovery Package Present",
@@ -2884,6 +3276,156 @@
         "title": "SetupStatus",
         "type": "object"
       },
+      "SkillEntryOut": {
+        "properties": {
+          "available": {
+            "default": true,
+            "title": "Available",
+            "type": "boolean"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "example": {
+            "title": "Example",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "included": {
+            "default": false,
+            "title": "Included",
+            "type": "boolean"
+          },
+          "licence": {
+            "title": "Licence",
+            "type": "string"
+          },
+          "line": {
+            "title": "Line",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "open_source": {
+            "title": "Open Source",
+            "type": "boolean"
+          },
+          "own": {
+            "default": false,
+            "title": "Own",
+            "type": "boolean"
+          },
+          "publisher": {
+            "title": "Publisher",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "uses": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Uses",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "line",
+          "detail",
+          "category",
+          "publisher",
+          "licence",
+          "open_source",
+          "size_bytes",
+          "version",
+          "uses",
+          "example"
+        ],
+        "title": "SkillEntryOut",
+        "type": "object"
+      },
+      "SkillFileCheck": {
+        "description": "What a skill file holds, shown before it is added. The check adds nothing.",
+        "properties": {
+          "already_added": {
+            "title": "Already Added",
+            "type": "boolean"
+          },
+          "entry": {
+            "$ref": "#/components/schemas/SkillEntryOut"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entry",
+          "file_name",
+          "already_added"
+        ],
+        "title": "SkillFileCheck",
+        "type": "object"
+      },
+      "SkillFileIn": {
+        "description": "A ``.aios-skill`` file chosen in the system file dialog.",
+        "properties": {
+          "path": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "SkillFileIn",
+        "type": "object"
+      },
+      "SkillsOut": {
+        "description": "What can be added (and what was added from a file), and what the AI has now.",
+        "properties": {
+          "catalogue": {
+            "items": {
+              "$ref": "#/components/schemas/SkillEntryOut"
+            },
+            "title": "Catalogue",
+            "type": "array"
+          },
+          "installed": {
+            "items": {
+              "$ref": "#/components/schemas/InstalledSkillOut"
+            },
+            "title": "Installed",
+            "type": "array"
+          }
+        },
+        "required": [
+          "catalogue",
+          "installed"
+        ],
+        "title": "SkillsOut",
+        "type": "object"
+      },
       "StoreCreated": {
         "description": "``recovery_key`` is in this response exactly once and stored nowhere by AIOS.",
         "properties": {
@@ -2911,6 +3453,75 @@
           "signing_key_id"
         ],
         "title": "StoreCreated",
+        "type": "object"
+      },
+      "SummaryOut": {
+        "description": "The summary of the earlier part of a long conversation (M-07), shown above the messages.",
+        "properties": {
+          "classification_effective": {
+            "enum": [
+              "restricted",
+              "internal",
+              "public"
+            ],
+            "title": "Classification Effective",
+            "type": "string"
+          },
+          "classification_source": {
+            "enum": [
+              "project",
+              "import",
+              "review"
+            ],
+            "title": "Classification Source",
+            "type": "string"
+          },
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "covers_until_message_id": {
+            "title": "Covers Until Message Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "provider": {
+            "enum": [
+              "local",
+              "company"
+            ],
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "conversation_id",
+          "covers_until_message_id",
+          "content",
+          "classification_effective",
+          "classification_source",
+          "model_id",
+          "provider",
+          "created_at"
+        ],
+        "title": "SummaryOut",
         "type": "object"
       },
       "SupportBundleIn": {
@@ -3210,6 +3821,68 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/backup": {
+      "post": {
+        "operationId": "backup_backup_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Back up now: a new folder in the chosen location that restore accepts",
+        "tags": [
+          "setup"
+        ]
+      }
+    },
+    "/backup/location": {
+      "put": {
+        "operationId": "set_backup_location_backup_location_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BackupLocationIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Choose the folder backups go to (null: set up later)",
+        "tags": [
+          "setup"
+        ]
+      }
+    },
     "/conversations/{conversation_id}": {
       "delete": {
         "operationId": "delete_conversation_conversations__conversation_id__delete",
@@ -3747,6 +4420,56 @@
         ]
       }
     },
+    "/conversations/{conversation_id}/summary": {
+      "get": {
+        "operationId": "conversation_summary_conversations__conversation_id__summary_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SummaryOut"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Conversation Summary Conversations  Conversation Id  Summary Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "The summary of the earlier part of a long conversation; null while it fits (M-07)",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
     "/engine/fallback/acknowledge": {
       "post": {
         "operationId": "acknowledge_fallback_engine_fallback_acknowledge_post",
@@ -4171,6 +4894,279 @@
         "summary": "Backend, database, engine and evidence writer status",
         "tags": [
           "system"
+        ]
+      }
+    },
+    "/knowledge": {
+      "get": {
+        "operationId": "list_docs_knowledge_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/KnowledgeDocOut"
+                  },
+                  "title": "Response List Docs Knowledge Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Documents in My secure knowledge, newest first",
+        "tags": [
+          "knowledge"
+        ]
+      },
+      "post": {
+        "operationId": "add_files_knowledge_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddFilesIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/KnowledgeDocOut"
+                  },
+                  "title": "Response Add Files Knowledge Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Copy files in and read them; originals are never changed",
+        "tags": [
+          "knowledge"
+        ]
+      }
+    },
+    "/knowledge/folder": {
+      "post": {
+        "operationId": "add_folder_knowledge_folder_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddFolderIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/KnowledgeDocOut"
+                  },
+                  "title": "Response Add Folder Knowledge Folder Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Copy the files of a folder in, as one collection",
+        "tags": [
+          "knowledge"
+        ]
+      }
+    },
+    "/knowledge/folder/preview": {
+      "post": {
+        "operationId": "preview_folder_knowledge_folder_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddFolderIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FolderPreviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "What adding a folder would copy; adds nothing",
+        "tags": [
+          "knowledge"
+        ]
+      }
+    },
+    "/knowledge/{doc_id}": {
+      "delete": {
+        "operationId": "remove_knowledge__doc_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "doc_id",
+            "required": true,
+            "schema": {
+              "title": "Doc Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove the encrypted copy; the original file is not touched",
+        "tags": [
+          "knowledge"
+        ]
+      }
+    },
+    "/knowledge/{doc_id}/retry": {
+      "post": {
+        "operationId": "retry_knowledge__doc_id__retry_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "doc_id",
+            "required": true,
+            "schema": {
+              "title": "Doc Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeDocOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read a document again from its encrypted copy",
+        "tags": [
+          "knowledge"
+        ]
+      }
+    },
+    "/knowledge/{doc_id}/text": {
+      "get": {
+        "operationId": "doc_text_knowledge__doc_id__text_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "doc_id",
+            "required": true,
+            "schema": {
+              "title": "Doc Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocTextOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "The text AIOS read from a document",
+        "tags": [
+          "knowledge"
         ]
       }
     },
@@ -5273,6 +6269,27 @@
         ]
       }
     },
+    "/recovery-key": {
+      "post": {
+        "operationId": "new_recovery_key_recovery_key_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryKeyOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Create a new recovery key: the keys are wrapped again; the key is returned once",
+        "tags": [
+          "setup"
+        ]
+      }
+    },
     "/restore": {
       "post": {
         "operationId": "restore_restore_post",
@@ -5582,6 +6599,236 @@
         "summary": "Create the store: signing key, recovery key (returned once), recovery.pkg",
         "tags": [
           "setup"
+        ]
+      }
+    },
+    "/skills": {
+      "get": {
+        "operationId": "list_skills_skills_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "The skills AIOS lists, and the ones the AI has",
+        "tags": [
+          "skills"
+        ]
+      }
+    },
+    "/skills/file": {
+      "post": {
+        "operationId": "install_file_skills_file_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkillFileIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstalledSkillOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add the skill in a .aios-skill file",
+        "tags": [
+          "skills"
+        ]
+      }
+    },
+    "/skills/file/check": {
+      "post": {
+        "operationId": "check_file_skills_file_check_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkillFileIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillFileCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "What a .aios-skill file holds; adds nothing",
+        "tags": [
+          "skills"
+        ]
+      }
+    },
+    "/skills/{skill_id}": {
+      "delete": {
+        "operationId": "remove_skills__skill_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "skill_id",
+            "required": true,
+            "schema": {
+              "title": "Skill Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove an added skill; conversations and documents are not touched",
+        "tags": [
+          "skills"
+        ]
+      },
+      "post": {
+        "operationId": "install_skills__skill_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "skill_id",
+            "required": true,
+            "schema": {
+              "title": "Skill Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstalledSkillOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add a listed skill; it is on straight away",
+        "tags": [
+          "skills"
+        ]
+      }
+    },
+    "/skills/{skill_id}/enabled": {
+      "put": {
+        "operationId": "set_enabled_skills__skill_id__enabled_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "skill_id",
+            "required": true,
+            "schema": {
+              "title": "Skill Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnabledIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstalledSkillOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Turn an added skill on or off",
+        "tags": [
+          "skills"
         ]
       }
     },

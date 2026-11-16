@@ -14,15 +14,20 @@ from tests.conftest import LAUNCH_TOKEN
 
 from aios_backend.__main__ import EXIT_BAD_HANDSHAKE, serve
 from aios_backend.config import Settings
+from aios_backend.gateway.app import GATEWAY_PURPOSE
+from aios_common.handshake import derive
 from db.session import Database
 
 
 def test_ready_is_announced_only_once_requests_are_served(settings: Settings, db: Database) -> None:
     ports: list[int] = []
+    gateway: list[int] = []
     announced = threading.Event()
 
-    def on_ready(port: int) -> None:  # called where READY would be printed
+    def on_ready(port: int, gateway_port: int | None = None) -> None:  # where READY is printed
         ports.append(port)
+        if gateway_port is not None:
+            gateway.append(gateway_port)
         announced.set()
 
     loop = asyncio.new_event_loop()
@@ -45,6 +50,15 @@ def test_ready_is_announced_only_once_requests_are_served(settings: Settings, db
             timeout=5,
         )
         assert resp.status_code == 200
+        # G-01: the gateway runs on its own loopback port and takes only its derived token.
+        assert gateway and gateway[0] not in (0, ports[0])
+        url = f"http://127.0.0.1:{gateway[0]}/v1/chat/completions"
+        body = {"model": "none", "messages": [{"role": "user", "content": "hi"}]}
+        launch = {"Authorization": f"Bearer {LAUNCH_TOKEN}"}
+        assert httpx.post(url, json=body, headers=launch, timeout=5).status_code == 401
+        derived = {"Authorization": f"Bearer {derive(GATEWAY_PURPOSE)}"}
+        missing = httpx.post(url, json=body, headers=derived, timeout=5)
+        assert missing.status_code == 404 and missing.json() == {"error": "model_not_found"}
     finally:
         for task in asyncio.all_tasks(loop):
             loop.call_soon_threadsafe(task.cancel)
@@ -120,7 +134,7 @@ def test_ipc_51_backend_exits_when_its_parent_is_gone(settings: Settings, db: Da
 
     async def main() -> None:
         task = asyncio.create_task(
-            serve(settings, db, 0, lambda port: ready.set(), parent=psutil.Process(parent.pid))
+            serve(settings, db, 0, lambda *_: ready.set(), parent=psutil.Process(parent.pid))
         )
         while not ready.is_set():
             await asyncio.sleep(0.01)

@@ -18,6 +18,11 @@ dependencies = [
     "sqlcipher3-binary==0.6.0; sys_platform == 'linux'",
     "aios-common",
     "truststore>=0.10",
+    # My secure knowledge: reading the text of the documents a person adds (pure Python, offline).
+    "pypdf>=5.1",
+    "python-docx>=1.1",
+    "openpyxl>=3.1",
+    "python-pptx>=1.0",
 ]
 
 [project.optional-dependencies]

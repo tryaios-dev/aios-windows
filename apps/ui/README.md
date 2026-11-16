@@ -81,7 +81,7 @@ features/                One folder per area (below)
 | `settings` | `#/settings/:section` | Switches, update check, connections, hardware, speed test, health, diagnostic file, licences |
 | `knowledge`, `skills`, `resources`, `voice` | `#/knowledge`, `#/skills`, `#/resources` | **No backend yet.** Start empty and say "not in this build yet"; nothing is simulated |
 
-Backup and a new recovery key (Settings › Backup and recovery) have no backend yet either.
+Backup (Settings › Backup and recovery, and setup step 4) is live: `PUT /backup/location` and `POST /backup` write a folder that restore accepts. A new recovery key has no backend yet.
 
 ### Data
 

@@ -4,13 +4,13 @@
  * loads the backend's answers into the store the screens read. The renderer never holds a port or
  * a token (SR-08).
  *
- * Not in the backend yet, so refused with a plain message and nothing changed: backup, a new
- * recovery key, My secure knowledge, skills and resources.
+ * Not in the backend yet, so refused with a plain message and nothing changed: resources.
  */
-import { errorCode } from '@aios/bridge-contract'
+import { errorCode, type FolderPreview, type SkillFileCheck } from '@aios/bridge-contract'
 import { bridge } from '@/bridge'
 import {
   applySettings,
+  applyStatus,
   change,
   loadMessages,
   messageFor,
@@ -20,22 +20,30 @@ import {
   refreshDownloads,
   refreshEvents,
   refreshHealthQuietly,
+  refreshKnowledge,
   refreshModels,
   refreshProjects,
+  refreshSkills,
   refreshSettings,
   refreshStatus,
   refreshWorkspace,
   reportFailure,
   toConversation,
+  toKnowledgeDoc,
   toProject,
+  watchAnswer,
 } from '@/bridge/live'
 import { useStore } from './store'
+import { useExtras } from './extras'
+import { kindOf } from '@/data/knowledge'
 import type {
+  BackupResult,
   Classification,
   Conversation,
   EvidenceExportResult,
   ExportResult,
   ImportResult,
+  KnowledgeDoc,
   Project,
   ProviderType,
   SearchHit,
@@ -92,6 +100,52 @@ async function checkCatalogue(): Promise<{ ok: true } | { ok: false; error: stri
     return { ok: false, error }
   } finally {
     await refreshSettings().catch(() => undefined)
+  }
+}
+
+/** The last part of a path, whichever separator it uses. */
+const nameOf = (path: string) => path.split(/[\\/]/).filter(Boolean).at(-1) ?? path
+
+const PLACEHOLDER = 'adding:'
+/** One brief moment as "being read", so the page can sum up the addition once it has ended. */
+const SETTLE_MS = 60
+
+/**
+ * Add documents: they show as being copied while the backend copies and reads them, then the
+ * library is reloaded. `names`: the files on their way in, when known (a folder is listed after).
+ */
+async function addKnowledge(names: string[], call: () => Promise<Parameters<typeof toKnowledgeDoc>[0][]>, collection?: string): Promise<void> {
+  const at = new Date().toISOString()
+  const before = new Set(useExtras.getState().knowledge.map((d) => d.id))
+  const waiting = names.map((name, i) => ({
+    id: `${PLACEHOLDER}${at}:${i}`,
+    name,
+    kind: kindOf(name),
+    size_bytes: 0,
+    collection: collection ?? 'Added one by one',
+    origin: '',
+    added_at: at,
+    status: 'copying' as const,
+  }))
+  const without = (list: KnowledgeDoc[]) => list.filter((d) => !d.id.startsWith(PLACEHOLDER))
+  if (waiting.length) useExtras.setState((x) => ({ knowledge: [...waiting, ...x.knowledge] }))
+  try {
+    const docs = (await call()).map(toKnowledgeDoc)
+    const fresh = docs.filter((d) => !before.has(d.id))
+    if (!fresh.length) {
+      useExtras.setState((x) => ({ knowledge: without(x.knowledge) }))
+      s().toast({ kind: 'info', title: 'Already in your secure knowledge', description: 'AIOS keeps one copy of each file.' })
+      return
+    }
+    const ids = new Set(fresh.map((d) => d.id))
+    const rest = (list: KnowledgeDoc[]) => without(list).filter((d) => !ids.has(d.id))
+    useExtras.setState((x) => ({ knowledge: [...fresh.map((d) => ({ ...d, status: 'reading' as const })), ...rest(x.knowledge)] }))
+    await new Promise((resolve) => window.setTimeout(resolve, SETTLE_MS))
+    useExtras.setState((x) => ({ knowledge: [...fresh, ...rest(x.knowledge)] }))
+    await Promise.all([refreshKnowledge(), refreshEvents()])
+  } catch (err) {
+    useExtras.setState((x) => ({ knowledge: without(x.knowledge) }))
+    throw err
   }
 }
 
@@ -193,13 +247,17 @@ export const api = {
     load: (id: string) => void loadMessages(id).catch((err: unknown) => reportFailure(err, 'Messages not loaded')),
     messages: (id: string) => s().messages.filter((m) => m.conversation_id === id),
     /** POST /conversations/{id}/messages */
-    send: async (id: string, text: string): Promise<SendResult> => {
+    send: async (id: string, text: string, knowledgeIds: string[] = []): Promise<SendResult> => {
+      // The words appear as they are written; the stored messages replace them when it ends.
+      const endLive = watchAnswer(id, text)
       try {
-        await bridge().conversations.send(id, text)
+        await bridge().conversations.send(id, text, knowledgeIds)
+        endLive()
         // refreshHealth: a graphics-card-to-processor fallback during this answer shows its notice now (D-06).
         await Promise.all([loadMessages(id), afterConversation(id)(), refreshHealthQuietly()])
         return { ok: true }
       } catch (err) {
+        endLive()
         await Promise.all([loadMessages(id), refreshEvents()]).catch(() => undefined) // a refusal is recorded
         const code = errorCode(err)
         if (code === 'message_too_large') return { ok: false, reason: 'too_large', detail: messageFor(err) }
@@ -209,17 +267,28 @@ export const api = {
         return { ok: false, reason: 'error', detail: messageFor(err) }
       }
     },
-    /** POST /conversations/{id}/stop: answers are not streamed to the window yet, so there is nothing to stop. */
-    stop: () => undefined,
-    regenerate: (id: string) =>
+    /** POST /conversations/{id}/stop for the answer being written now; the words so far are kept. */
+    stop: () => {
+      const answering = s().generation?.conversation_id
+      if (!answering) return
+      void bridge()
+        .conversations.stop(answering)
+        .catch((err: unknown) => {
+          if (errorCode(err) !== 'not_generating') reportFailure(err, 'Not stopped')
+        })
+    },
+    regenerate: (id: string) => {
+      const endLive = watchAnswer(id, null)
       void change(
         'Not asked again',
         () => bridge().conversations.regenerate(id),
         async () => {
+          endLive()
           await loadMessages(id)
           await Promise.all([refreshEvents(), refreshHealthQuietly()])
         },
-      ),
+      ).finally(endLive)
+    },
     /** The backend does not offer local continuation of an interrupted answer through the bridge yet. */
     offerContinueLocally: (_id: string, _partialMessageId: string) => undefined,
   },
@@ -327,20 +396,49 @@ export const api = {
     dismissUpdateNotice: () => s().dismissUpdateNotice(),
   },
 
-  /** Backup (decision D3). Proposed endpoints: POST /backup, backup_location in settings. Not in the backend yet. */
+  /** Backup (decision D3): PUT /backup/location, POST /backup. */
   backup: {
-    setLocation: (_path: string | null) => notInThisBuild('Backup'),
-    run: async () => {
-      notInThisBuild('Backup')
-      return { ok: false as const, error: 'Backup is not in this build yet.' }
+    /** The system folder dialog, then the folder is saved as where backups go. */
+    chooseLocation: async (): Promise<void> => {
+      try {
+        const folder = await bridge().setup.chooseBackupLocation()
+        if (folder) applyStatus(await bridge().setup.setBackupLocation(folder))
+      } catch (err) {
+        reportFailure(err, 'Backup folder not saved')
+      }
+    },
+    /** "Set up later": no backup folder (PUT /backup/location with null). */
+    setUpLater: async (): Promise<void> => {
+      try {
+        applyStatus(await bridge().setup.setBackupLocation(null))
+      } catch (err) {
+        reportFailure(err, 'Backup folder not saved')
+      }
+    },
+    /** Back up now: a new folder in the chosen location that restore accepts as it is. */
+    run: async (): Promise<{ ok: true; result: BackupResult } | { ok: false; error: string }> => {
+      try {
+        const done = await bridge().setup.backup()
+        await Promise.all([refreshStatus(), refreshEvents()])
+        return { ok: true, result: { path: done.path, size_bytes: done.size_bytes, at: done.at, conversations: done.conversations } }
+      } catch (err) {
+        await refreshStatus().catch(() => undefined)
+        return { ok: false, error: messageFor(err) }
+      }
     },
   },
 
-  /** Recovery key (decision D4). Proposed: POST /recovery-key. Not in the backend yet. */
+  /** Recovery key (decision D4): POST /recovery-key. The key is shown once and kept nowhere. */
   recoveryKey: {
     createNew: async (): Promise<string | null> => {
-      notInThisBuild('A new recovery key')
-      return null
+      try {
+        const created = await bridge().setup.newRecoveryKey()
+        await Promise.all([refreshStatus(), refreshEvents()])
+        return created.recovery_key
+      } catch (err) {
+        reportFailure(err, 'No new recovery key')
+        return null
+      }
     },
   },
 
@@ -361,11 +459,107 @@ export const api = {
   /** The system folder dialog for the backup to restore from. Null when cancelled. */
   chooseBackupFolder: async (): Promise<string | null> => (await bridge().setup.chooseBackupFolder())?.path ?? null,
 
-  /** My secure knowledge. Proposed endpoints (not in MVP 9.3): GET /knowledge, POST /knowledge, DELETE /knowledge/{id}. Not in the backend yet. */
+  /** Add skills to my AI: GET /skills, POST /skills/{id}, PUT /skills/{id}/enabled, DELETE /skills/{id}, POST /skills/file. */
+  skills: {
+    install: (id: string) => change('Skill not added', () => bridge().skills.install(id), () => Promise.all([refreshSkills(), refreshEvents()])),
+    setEnabled: (id: string, enabled: boolean) => {
+      // The switch moves at once; the backend's answer follows.
+      useExtras.setState((x) => ({ installedSkills: x.installedSkills.map((k) => (k.id === id ? { ...k, enabled } : k)) }))
+      return change('Skill not changed', () => bridge().skills.setEnabled(id, enabled), refreshSkills)
+    },
+    remove: (id: string) => change('Skill not removed', () => bridge().skills.remove(id), () => Promise.all([refreshSkills(), refreshEvents()])),
+    /** The system file dialog; null when cancelled. */
+    chooseFile: async (): Promise<string | null> => {
+      try {
+        return await bridge().skills.chooseFile()
+      } catch (err) {
+        reportFailure(err, 'Skill file not chosen')
+        return null
+      }
+    },
+    /** What the file holds, read by the backend. Nothing is added yet. */
+    checkFile: async (path: string): Promise<SkillFileCheck | null> => {
+      try {
+        return await bridge().skills.checkFile(path)
+      } catch (err) {
+        reportFailure(err, 'Skill file not read')
+        return null
+      }
+    },
+    installFile: (path: string) => change('Skill not added', () => bridge().skills.installFile(path), () => Promise.all([refreshSkills(), refreshEvents()])),
+  },
+
+  /**
+   * My secure knowledge: GET /knowledge, POST /knowledge, POST /knowledge/folder,
+   * POST /knowledge/{id}/retry, DELETE /knowledge/{id}. Files are copied into the encrypted store;
+   * the originals are never moved or changed.
+   */
   knowledge: {
-    add: () => notInThisBuild('My secure knowledge'),
-    remove: (_id: string) => notInThisBuild('My secure knowledge'),
-    retry: (_id: string) => notInThisBuild('My secure knowledge'),
+    /** The system file dialog, then the chosen files are copied in and read. */
+    addFiles: async (): Promise<void> => {
+      try {
+        const paths = await bridge().knowledge.chooseFiles()
+        if (paths?.length) await addKnowledge(paths.map((p) => nameOf(p)), () => bridge().knowledge.addFiles(paths))
+      } catch (err) {
+        reportFailure(err, 'Files not added')
+      }
+    },
+    /** The system folder dialog, then what adding it would copy. Nothing is added yet. */
+    chooseFolder: async (): Promise<FolderPreview | null> => {
+      try {
+        const folder = await bridge().knowledge.chooseFolder()
+        return folder ? await bridge().knowledge.previewFolder(folder) : null
+      } catch (err) {
+        reportFailure(err, 'Folder not read')
+        return null
+      }
+    },
+    /** Everything in the folder comes in as one collection. */
+    addFolder: async (preview: FolderPreview): Promise<void> => {
+      const fresh = preview.files.filter((f) => !f.already).map((f) => f.name)
+      try {
+        await addKnowledge(fresh, () => bridge().knowledge.addFolder(preview.path), preview.name)
+      } catch (err) {
+        reportFailure(err, 'Folder not added')
+      }
+    },
+    /** Files and folders dropped on the page: loose files together, each folder as its own collection. */
+    addDropped: async (batches: { collection: string; path?: string; files: { name: string; path?: string }[] }[]): Promise<void> => {
+      const known = batches.flatMap((b) => (b.path ? [] : b.files.filter((f) => f.path)))
+      if (!known.length && !batches.some((b) => b.path)) {
+        s().toast({ kind: 'info', title: 'Nothing to add', description: 'AIOS could not find those files on this computer.' })
+        return
+      }
+      try {
+        if (known.length) {
+          const paths = known.map((f) => f.path!)
+          await addKnowledge(known.map((f) => f.name), () => bridge().knowledge.addFiles(paths))
+        }
+        for (const batch of batches) if (batch.path) await addKnowledge([], () => bridge().knowledge.addFolder(batch.path!), batch.collection)
+      } catch (err) {
+        reportFailure(err, 'Not added')
+      }
+    },
+    /** Where a dropped file is on this computer (desktop app); "" when it is not known. */
+    pathOf: (file: File): string => {
+      try {
+        return bridge().knowledge.pathOf(file)
+      } catch {
+        return ''
+      }
+    },
+    remove: (id: string) => change('Document not removed', () => bridge().knowledge.remove(id), () => Promise.all([refreshKnowledge(), refreshEvents()])),
+    retry: async (id: string): Promise<void> => {
+      // Shown as being read while AIOS reads the encrypted copy again.
+      useExtras.setState((x) => ({ knowledge: x.knowledge.map((d) => (d.id === id ? { ...d, status: 'reading' as const, problem: undefined } : d)) }))
+      try {
+        const doc = toKnowledgeDoc(await bridge().knowledge.retry(id))
+        useExtras.setState((x) => ({ knowledge: x.knowledge.map((d) => (d.id === id ? doc : d)) }))
+      } catch (err) {
+        await refreshKnowledge().catch(() => undefined)
+        reportFailure(err, 'Not read again')
+      }
+    },
   },
 
   /** GET /setup/status, POST /setup/store, POST /setup/complete */

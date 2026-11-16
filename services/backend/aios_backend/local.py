@@ -111,6 +111,11 @@ class LocalModels:
             raise NoModel
         if not messages or messages[0].get("role") != "system":
             messages = [{"role": "system", "content": SYSTEM_PROMPT}, *messages]
+        elif not messages[0]["content"].startswith(SYSTEM_PROMPT):
+            # A note from chat (the summary of earlier messages, M-07) goes after the AIOS prompt.
+            note = messages[0]["content"]
+            merged = f"{SYSTEM_PROMPT}\n\n{note}"
+            messages = [{"role": "system", "content": merged}, *messages[1:]]
         for attempt in (1, 2):
             engine = self._call(self._manager.acquire(model.path))
             sent = False

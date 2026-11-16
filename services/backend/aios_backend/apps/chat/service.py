@@ -28,12 +28,13 @@ from aios_backend.apps.chat.schemas import (
     MessageOut,
     ProviderMoveOut,
     ProvidersStatus,
+    SummaryOut,
 )
 from aios_backend.config import Settings
 from aios_backend.errors import AppError, not_found
 from aios_backend.runtime import STOP_WAIT_SECONDS, Busy, Generation, Generations
 from aios_common.canonical import b64url, jcs, tagged_hash
-from db.models import Conversation, Message, ProviderMove
+from db.models import Conversation, Message, ProviderMove, Summary
 from db.session import Database
 
 MAX_ANSWER_TOKENS = 1500
@@ -290,6 +291,7 @@ def _produce(
                 return "".join(parts), "stopped"
             generation.phase = "streaming"
             parts.append(chunk)
+            generation.text += chunk
             if on_chunk is not None:
                 on_chunk(chunk)
         return "".join(parts), "stopped" if generation.cancel.is_set() else "complete"
@@ -375,12 +377,152 @@ def _generate(
         generations.end(generation, result)
 
 
+def _usable(history: list[Message]) -> list[Message]:
+    return [m for m in history if m.content and m.status in ("complete", "partial", "stopped")]
+
+
 def _context(history: list[Message]) -> list[dict[str, str]]:
-    return [
-        {"role": m.role, "content": m.content}
-        for m in history
-        if m.content and m.status in ("complete", "partial", "stopped")
+    return [{"role": m.role, "content": m.content} for m in _usable(history)]
+
+
+# ------------------------------------------------------------------ long conversations (M-07)
+SUMMARY_INSTRUCTION = (
+    "Summarise the conversation below so the assistant can carry on helping without it. Keep "
+    "names, figures, dates, decisions and open questions. Plain sentences, at most 200 words."
+)
+SUMMARY_NOTE = "Summary of the earlier part of this conversation:\n"
+
+
+def _summary_note(summary: Summary | None) -> list[dict[str, str]]:
+    return [{"role": "system", "content": SUMMARY_NOTE + summary.content}] if summary else []
+
+
+def _tokens(messages: list[Message]) -> int:
+    return sum(estimate_tokens(m.content) for m in messages)
+
+
+def _fit_history(
+    session: Session,
+    answers: AnswerSource,
+    info: ModelInfo,
+    conv: Conversation,
+    history: list[Message],
+    reserve: int = 0,
+) -> list[dict[str, str]]:
+    """The context for a request, rebuilt each time (M-07): the latest summary, then the newest
+    messages that fit. When the history no longer fits, the earlier part is summarised first.
+
+    ``reserve``: tokens kept free for what follows (the question being sent now). The newest
+    message is always kept, so a regenerated answer still sees the question it answers.
+    """
+    budget = max(context_budget(info.context_length) - reserve, 0)
+    usable = _usable(history)
+    summary = repo.latest_summary(session, conv.id)
+    after = usable
+    if summary is not None:
+        ids = [m.id for m in usable]
+        if summary.covers_until_message_id in ids:
+            after = usable[ids.index(summary.covers_until_message_id) + 1 :]
+    note = estimate_tokens(SUMMARY_NOTE + summary.content) if summary else 0
+    if note + _tokens(after) <= budget:
+        return _summary_note(summary) + _context(after)
+
+    keep: list[Message] = []
+    used = 0
+    for m in reversed(after):  # newest first, into half of the budget
+        cost = estimate_tokens(m.content)
+        if keep and used + cost > budget // 2:
+            break
+        keep.insert(0, m)
+        used += cost
+    older = after[: len(after) - len(keep)]
+    if older:
+        summary = _summarise(session, answers, info, conv, summary, older) or summary
+    return _summary_note(summary) + _context(keep)
+
+
+def _summarise(
+    session: Session,
+    answers: AnswerSource,
+    info: ModelInfo,
+    conv: Conversation,
+    previous: Summary | None,
+    older: list[Message],
+) -> Summary | None:
+    """Summarise ``older`` (after the previous summary) with the same model, through the router
+    and the gateway like any answer. Stored, and recorded as a content-free inference event.
+    Returns None when the model gave nothing; the request then goes on with the newest messages.
+    """
+    lines = [f"Earlier summary: {previous.content}"] if previous else []
+    lines += [f"{'User' if m.role == 'user' else 'Assistant'}: {m.content}" for m in older]
+    room = context_budget(info.context_length) - estimate_tokens(SUMMARY_INSTRUCTION)
+    transcript = "\n\n".join(lines)
+    if estimate_tokens(transcript) > room:  # keep the most recent part that fits
+        transcript = transcript[-int(room * 3.5) :]
+    messages = [
+        {"role": "system", "content": SUMMARY_INSTRUCTION},
+        {"role": "user", "content": transcript},
     ]
+    try:
+        text = "".join(answers.answer(conv.current_provider, info.model_id, messages)).strip()
+    except Exception:
+        return None
+    if not text:
+        return None
+    summary = Summary(
+        id=_new_id(),
+        conversation_id=conv.id,
+        covers_until_message_id=older[-1].id,
+        content=text,
+        classification_effective=conv.classification_effective,
+        classification_source=conv.classification_source,
+        model_id=info.model_id,
+        provider=conv.current_provider,
+    )
+    repo.add(session, summary)
+    _, input_commitment = _commitment(
+        INPUT_TAG, jcs({"model": info.model_id, "messages": messages})
+    )
+    _, output_commitment = _commitment(OUTPUT_TAG, text.encode("utf-8"))
+    repo.record_event(
+        session,
+        "inference_completed",
+        project_id=conv.project_id,
+        conversation_id=conv.id,
+        body={
+            "conversation_id": conv.id,
+            "message_id": summary.id,
+            "provider": conv.current_provider,
+            "model_id": info.model_id,
+            "input_commitment": input_commitment,
+            "output_commitment": output_commitment,
+            "tokens_in": sum(estimate_tokens(m["content"]) for m in messages),
+            "tokens_out": estimate_tokens(text),
+            "status": "ok",
+            "regenerate": False,
+            "purpose": "summary",
+        },
+    )
+    session.flush()
+    return summary
+
+
+def summary_of(session: Session, conversation_id: str) -> SummaryOut | None:
+    _conversation(session, conversation_id)
+    row = repo.latest_summary(session, conversation_id)
+    if row is None:
+        return None
+    return SummaryOut(
+        id=row.id,
+        conversation_id=row.conversation_id,
+        covers_until_message_id=row.covers_until_message_id,
+        content=row.content,
+        classification_effective=row.classification_effective,
+        classification_source=row.classification_source,
+        model_id=row.model_id,
+        provider=row.provider,
+        created_at=row.created_at,
+    )
 
 
 def _check_size(session: Session, conv: Conversation, info: ModelInfo, text: str) -> None:
@@ -401,11 +543,65 @@ def _check_size(session: Session, conv: Conversation, info: ModelInfo, text: str
         raise AppError("message_too_large", 413)
 
 
+KNOWLEDGE_NOTE = (
+    "The person chose these documents from My secure knowledge for this question. Answer from "
+    "them when they are relevant and say which document you used.\n"
+)
+KNOWLEDGE_SHARE = 2  # documents take at most 1/2 of the context budget
+
+
+SKILLS_NOTE = "Skills the person has turned on. Follow each one when it applies:\n"
+
+
+def _skills_note(session: Session) -> str | None:
+    """The instructions of the skills that are on (Add skills to my AI)."""
+    instructions = [i for i in repo.enabled_skill_instructions(session) if i.strip()]
+    return SKILLS_NOTE + "\n".join(f"- {i.strip()}" for i in instructions) if instructions else None
+
+
+def _knowledge_note(
+    session: Session, info: ModelInfo, knowledge_ids: list[str] | None
+) -> str | None:
+    """The chosen documents' text as one note, cut to fit; unknown ids are refused."""
+    ids = list(dict.fromkeys(knowledge_ids or []))
+    if not ids:
+        return None
+    docs = repo.knowledge_docs(session, ids)
+    if len(docs) != len(ids):
+        raise not_found("document")
+    ready = [d for d in docs if d.status == "ready" and d.text.strip()]
+    if not ready:
+        return None
+    room = context_budget(info.context_length) // KNOWLEDGE_SHARE - estimate_tokens(KNOWLEDGE_NOTE)
+    each = max(room // len(ready), 0) * 3  # about 3 characters a token
+    parts = []
+    for doc in ready:
+        body = doc.text.strip()
+        if len(body) > each:
+            body = body[:each].rstrip() + "\n[The rest of this document did not fit.]"
+        parts.append(f"--- {doc.name} ---\n{body}")
+    return KNOWLEDGE_NOTE + "\n\n".join(parts)
+
+
 def _new_exchange(
-    session: Session, conv: Conversation, info: ModelInfo, text: str
+    session: Session,
+    answers: AnswerSource,
+    conv: Conversation,
+    info: ModelInfo,
+    text: str,
+    knowledge_ids: list[str] | None = None,
 ) -> tuple[Message, Message, list[dict[str, str]]]:
     """Add the user's message and an empty answer; returns them with the context to send."""
+    notes = [n for n in (_skills_note(session), _knowledge_note(session, info, knowledge_ids)) if n]
+    extra = "\n\n".join(notes)
+    reserve = estimate_tokens(text) + (estimate_tokens(extra) if extra else 0)
     history = list(repo.messages(session, conv.id))
+    earlier = _fit_history(session, answers, info, conv, history, reserve=reserve)
+    if extra:
+        if earlier and earlier[0]["role"] == "system":  # one note: skills, documents, summary
+            earlier[0] = {"role": "system", "content": f"{extra}\n\n{earlier[0]['content']}"}
+        else:
+            earlier.insert(0, {"role": "system", "content": extra})
     position = repo.next_position(session, conv.id)
     common = _message_common(conv, info)
     user = Message(
@@ -417,7 +613,7 @@ def _new_exchange(
     repo.add(session, user, assistant)
     if not history and conv.title == NEW_TITLE:
         conv.title = truncate(text, 48)
-    return user, assistant, [*_context(history), {"role": "user", "content": text}]
+    return user, assistant, [*earlier, {"role": "user", "content": text}]
 
 
 def _message_common(conv: Conversation, info: ModelInfo) -> dict[str, str]:
@@ -444,6 +640,7 @@ def send(
     generations: Generations,
     conversation_id: str,
     text: str,
+    knowledge_ids: list[str] | None = None,
 ) -> Exchange:
     conv = _conversation(session, conversation_id)
     clean = _clean(text)
@@ -452,18 +649,16 @@ def send(
     _check_size(session, conv, info, clean)
     if generations.busy():
         raise AppError("busy", 409)
-    user, assistant, context = _new_exchange(session, conv, info, clean)
+    user, assistant, context = _new_exchange(session, answers, conv, info, clean, knowledge_ids)
     assistant_out = _generate(session, answers, generations, info, conv, assistant, context, False)
     return Exchange(user=message_out(session, [user])[0], assistant=assistant_out)
 
 
-def _regenerate_target(
-    session: Session, conv: Conversation
-) -> tuple[Message, list[dict[str, str]]]:
+def _regenerate_target(session: Session, conv: Conversation) -> tuple[Message, list[Message]]:
     history = list(repo.messages(session, conv.id))
     if len(history) < 2 or history[-1].role != "assistant" or history[-2].role != "user":
         raise AppError("nothing_to_regenerate", 409)
-    return history[-1], _context(history[:-1])
+    return history[-1], history[:-1]
 
 
 def _keep_previous_version(last: Message) -> None:
@@ -481,11 +676,12 @@ def regenerate(
 ) -> Exchange:
     """Answer the last question again; the old answer is kept in ``previous_versions`` (A-03)."""
     conv = _conversation(session, conversation_id)
-    last, context = _regenerate_target(session, conv)
+    last, earlier = _regenerate_target(session, conv)
     info = _ready_model(settings, answers, conv)
     assert answers is not None
     if generations.busy():
         raise AppError("busy", 409)
+    context = _fit_history(session, answers, info, conv, earlier)
     _keep_previous_version(last)
     assistant_out = _generate(session, answers, generations, info, conv, last, context, True)
     return Exchange(user=None, assistant=assistant_out)
@@ -565,6 +761,7 @@ def stream_send(
     generations: Generations,
     conversation_id: str,
     text: str,
+    knowledge_ids: list[str] | None = None,
 ) -> Iterator[str]:
     """Checks run before the stream starts, so they still answer with an HTTP error."""
     with db.session() as session:
@@ -575,7 +772,7 @@ def stream_send(
         _check_size(session, conv, info, clean)
         if generations.busy():
             raise AppError("busy", 409)
-        user, assistant, context = _new_exchange(session, conv, info, clean)
+        user, assistant, context = _new_exchange(session, answers, conv, info, clean, knowledge_ids)
         assistant.status = "partial"  # what is left if the process stops mid-answer
         generation = _begin(generations, conv, assistant.id)
         try:
@@ -613,11 +810,12 @@ def stream_regenerate(
 ) -> Iterator[str]:
     with db.session() as session:
         conv = _conversation(session, conversation_id)
-        last, context = _regenerate_target(session, conv)
+        last, earlier = _regenerate_target(session, conv)
         info = _ready_model(settings, answers, conv)
         assert answers is not None
         if generations.busy():
             raise AppError("busy", 409)
+        context = _fit_history(session, answers, info, conv, earlier)
         generation = _begin(generations, conv, last.id)
         try:
             _keep_previous_version(last)
@@ -667,6 +865,7 @@ def generation_state(
         message_id=current.message_id,
         phase=current.phase,
         provider=current.provider,
+        text=current.text,
     )
 
 
@@ -744,7 +943,14 @@ def continue_locally(
         },
     )
     assistant_out = _generate(
-        session, answers, generations, info, conv, assistant, _context(history), False
+        session,
+        answers,
+        generations,
+        info,
+        conv,
+        assistant,
+        _fit_history(session, answers, info, conv, history),
+        False,
     )
     return ContinueOut(
         conversation=conversation_out(session, [conv])[0], user=None, assistant=assistant_out

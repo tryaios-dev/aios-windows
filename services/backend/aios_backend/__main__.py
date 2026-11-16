@@ -6,7 +6,8 @@
 3. Back up chats.db and run migrations; restore the backup if one fails.
 4. Bind 127.0.0.1 (port 0 = the OS picks one) and serve the API.
 5. Start evidence-writer.exe (IPC-40) and the pump that sends it the queued evidence.
-   Print one READY line with the bound port once the server accepts requests.
+   Start the local AI gateway on its own loopback port (G-01, IPC-02); chat reaches the model
+   only through it. Print one READY line with both ports once the servers accept requests.
 6. Exit when the parent (Electron main) is gone, so a crashed app cannot leave the backend
    running (IPC-51). The engine dies with the backend through the Job Object (IPC-50).
 """
@@ -23,7 +24,9 @@ import uvicorn
 
 from aios_backend.apps.chat.answers import AnswerSource
 from aios_backend.config import Profile, Settings, load
+from aios_backend.gateway.app import create_gateway_app
 from aios_backend.main import configure_logging, create_app
+from aios_backend.providers import ProviderRouter
 from aios_common.handshake import HandshakeError, read_handshake
 from aios_common.logging import get_logger, log_event
 from db import migrate
@@ -46,8 +49,12 @@ def bind_loopback(port: int) -> socket.socket:
     return sock
 
 
-def print_ready(port: int) -> None:
-    sys.stdout.write("READY " + json.dumps({"api_port": port}) + "\n")
+def print_ready(port: int, gateway_port: int | None = None) -> None:
+    """The READY line (Process and IPC v1, section 4); ``gateway_port`` once the gateway runs."""
+    payload: dict[str, int] = {"api_port": port}
+    if gateway_port is not None:
+        payload["gateway_port"] = gateway_port
+    sys.stdout.write("READY " + json.dumps(payload) + "\n")
     sys.stdout.flush()
 
 
@@ -65,7 +72,7 @@ async def serve(
     settings: Settings,
     db: Database,
     port: int,
-    on_ready: Callable[[int], None] = print_ready,
+    on_ready: Callable[..., None] = print_ready,
     parent: psutil.Process | None = None,
     answers: AnswerSource | None = None,
     start_writer: bool = True,
@@ -74,13 +81,9 @@ async def serve(
     """``local``: the installed model answers and models download from their origin. The
     end-to-end tests turn it off, so they never touch the network or need a model."""
     sock = bind_loopback(port)
+    app = create_app(settings, db, answers, start_writer=start_writer, local=local)
     server = uvicorn.Server(
-        uvicorn.Config(
-            create_app(settings, db, answers, start_writer=start_writer, local=local),
-            host="127.0.0.1",
-            log_config=None,
-            access_log=False,
-        )
+        uvicorn.Config(app, host="127.0.0.1", log_config=None, access_log=False)
     )
     task = asyncio.create_task(server.serve(sockets=[sock]))
     while not server.started:
@@ -88,10 +91,45 @@ async def serve(
             await task
             return
         await asyncio.sleep(0.01)
-    on_ready(sock.getsockname()[1])
+
+    # G-01: the local model answers through the gateway, its own loopback endpoint inside this
+    # process (IPC-02). Chat gets the provider router; only the router calls the gateway.
+    gateway: uvicorn.Server | None = None
+    gateway_task: asyncio.Task[None] | None = None
+    gateway_port: int | None = None
+    engine_side = app.state.answers
+    if local and answers is None and engine_side is not None:
+        gateway_sock = bind_loopback(0)
+        gateway_port = gateway_sock.getsockname()[1]
+        gateway = uvicorn.Server(
+            uvicorn.Config(
+                create_gateway_app(engine_side),
+                host="127.0.0.1",
+                log_config=None,
+                access_log=False,
+                lifespan="off",
+            )
+        )
+        gateway_task = asyncio.create_task(gateway.serve(sockets=[gateway_sock]))
+        while not gateway.started:
+            if gateway_task.done():  # the gateway could not start: no READY line
+                server.should_exit = True
+                await task
+                await gateway_task
+                return
+            await asyncio.sleep(0.01)
+        app.state.answers = ProviderRouter(engine_side, f"http://127.0.0.1:{gateway_port}")
+
+    if gateway_port is None:
+        on_ready(sock.getsockname()[1])
+    else:
+        on_ready(sock.getsockname()[1], gateway_port)
     if parent is not None:
         watcher = asyncio.create_task(watch_parent(parent, server))
     await task
+    if gateway is not None and gateway_task is not None:
+        gateway.should_exit = True
+        await gateway_task
     if parent is not None:
         watcher.cancel()
 

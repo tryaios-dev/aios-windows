@@ -7,6 +7,7 @@ import { cn } from '@/lib/cn'
 import { useCopy } from '@/components/ui/layout'
 import { ConfirmDialog } from '@/components/ui/overlays'
 import { inElectron, openExternal } from '@/bridge'
+import { ChartBlock, parseChart } from './Chart'
 
 /**
  * Answers are rendered as data (SR-06, M-20). react-markdown never emits raw
@@ -108,6 +109,9 @@ export function Markdown({ content, className }: { content: string; className?: 
           code: ({ className, children, ...props }) => {
             const match = /language-(\w+)/.exec(className ?? '')
             const text = String(children ?? '')
+            // Chart maker skill: a chart block AIOS can draw is shown as a chart; anything else stays text.
+            const chart = match?.[1] === 'chart' ? parseChart(text) : null
+            if (chart) return <ChartBlock spec={chart} />
             if (match || text.includes('\n')) return <CodeBlock code={text} language={match?.[1] ?? ''} />
             return (
               <code className="rounded-xs border border-line-soft bg-paper px-1 py-px font-mono text-xs text-ink" {...props}>

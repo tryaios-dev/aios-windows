@@ -2,14 +2,15 @@
 
 ``store_identity``: created once with the store; ids only, never a key (keys live in the OS
 keystore and the wrapped Recovery Package).
-``setup_state``: whether first run is done, and when the last restore happened.
+``setup_state``: whether first run is done, when the last restore happened, and where and when
+the last backup was made (decision D3).
 
 After changing a table: `uv run aios-backend makemigrations -m "..."` and review the file.
 """
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, Integer, String
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.base import ID, Base, Timestamps, UTCDateTime
@@ -37,3 +38,9 @@ class SetupState(Timestamps, Base):
     default_project_id: Mapped[str | None] = mapped_column(ID)
     last_restore_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     restore_count: Mapped[int] = mapped_column(Integer, default=0)
+    # The folder the person chose for backups (Settings > Backup and recovery); null until chosen.
+    backup_location: Mapped[str | None] = mapped_column(String(1024))
+    last_backup_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    last_backup_size: Mapped[int | None] = mapped_column(BigInteger)
+    # When the current recovery key was shown: at first run, and again for a new key (decision D4).
+    recovery_key_issued_at: Mapped[datetime | None] = mapped_column(UTCDateTime)

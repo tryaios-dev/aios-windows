@@ -116,6 +116,12 @@ export const SetupStatus = z.object({
   completed_at: z.string().nullable(),
   last_restore_at: z.string().nullable(),
   recovery_package_present: z.boolean(),
+  /** Backup (decision D3): the chosen folder, and when the last backup was made and its size. */
+  backup_location: z.string().nullable().optional(),
+  last_backup_at: z.string().nullable().optional(),
+  last_backup_size: z.number().int().nullable().optional(),
+  /** When the current recovery key was shown (first run, or a new key: decision D4). */
+  recovery_key_issued_at: z.string().nullable().optional(),
 });
 export type SetupStatus = z.infer<typeof SetupStatus>;
 
@@ -146,7 +152,90 @@ export const Restored = z.object({
 });
 export type Restored = z.infer<typeof Restored>;
 
+/** One document in My secure knowledge: an encrypted copy in chats.db; the original is never changed. */
+export const KnowledgeDoc = z.object({
+  id: z.string(),
+  name: z.string(),
+  kind: z.string(),
+  size_bytes: z.number().int(),
+  pages: z.number().int().nullable().optional(),
+  collection: z.string(),
+  origin: z.string(),
+  added_at: z.string(),
+  status: z.enum(["ready", "failed"]),
+  problem: z.string().nullable().optional(),
+});
+export type KnowledgeDoc = z.infer<typeof KnowledgeDoc>;
+
+/** What adding a folder would copy, shown before anything is added. */
+export const FolderPreview = z.object({
+  name: z.string(),
+  path: z.string(),
+  files: z.array(
+    z.object({
+      name: z.string(),
+      size_bytes: z.number().int(),
+      kind: z.string(),
+      problem: z.string().nullable(),
+      already: z.boolean(),
+    }),
+  ),
+});
+export type FolderPreview = z.infer<typeof FolderPreview>;
+
+/** Absolute paths of files to add (from the file dialog, or dropped on the page). */
+export const KnowledgePaths = z.array(z.string().min(1).max(1024)).min(1).max(500);
+/** The collection dropped loose files go into; folders are named after themselves. */
+export const KnowledgeCollection = z.string().min(1).max(260).optional();
+/** Documents chosen for one question. */
+export const KnowledgeIds = z.array(z.string().min(1).max(64)).max(50).optional();
+
+/** A skill: an instruction the AI on this computer follows while it is on. */
+export const SkillEntry = z.object({
+  id: z.string(),
+  name: z.string(),
+  line: z.string(),
+  detail: z.string(),
+  category: z.enum(["Writing", "Documents", "Numbers", "Voice", "Languages", "Images"]),
+  publisher: z.string(),
+  licence: z.string(),
+  open_source: z.boolean(),
+  size_bytes: z.number().int(),
+  version: z.string(),
+  uses: z.array(z.string()),
+  example: z.string(),
+  included: z.boolean().optional(),
+  own: z.boolean().optional(),
+  /** False: listed, but it cannot be added in this build yet. */
+  available: z.boolean().optional(),
+});
+export type SkillEntry = z.infer<typeof SkillEntry>;
+export const InstalledSkill = z.object({ id: z.string(), installed_at: z.string(), enabled: z.boolean() });
+export type InstalledSkill = z.infer<typeof InstalledSkill>;
+export const Skills = z.object({ catalogue: z.array(SkillEntry), installed: z.array(InstalledSkill) });
+export type Skills = z.infer<typeof Skills>;
+/** What a .aios-skill file holds, shown before it is added. */
+export const SkillFileCheck = z.object({ entry: SkillEntry, file_name: z.string(), already_added: z.boolean() });
+export type SkillFileCheck = z.infer<typeof SkillFileCheck>;
+
 /** A folder the user picked in the system dialog, with what main found in it. */
+/** Where backups go, chosen in the system folder dialog; null clears it ("Set up later"). */
+export const BackupLocation = z.string().min(1).max(1024).nullable();
+
+/** One backup (POST /backup): a new folder in the chosen location that restore accepts as it is. */
+export const BackupResult = z.object({
+  path: z.string(),
+  size_bytes: z.number().int(),
+  files: z.number().int(),
+  conversations: z.number().int(),
+  at: z.string(),
+});
+export type BackupResult = z.infer<typeof BackupResult>;
+
+/** A new recovery key (POST /recovery-key). `recovery_key` is in this reply exactly once. */
+export const NewRecoveryKey = z.object({ recovery_key: z.string(), package_id: z.string(), issued_at: z.string() });
+export type NewRecoveryKey = z.infer<typeof NewRecoveryKey>;
+
 export const BackupFolder = z.object({
   path: z.string(),
   has_recovery_package: z.boolean(),
@@ -298,6 +387,30 @@ export type Message = z.infer<typeof Message>;
 
 export const Exchange = z.object({ user: Message.nullable(), assistant: Message });
 export type Exchange = z.infer<typeof Exchange>;
+
+/** The summary of the earlier part of a long conversation (M-07). */
+export const ConversationSummary = z.object({
+  id: z.string(),
+  conversation_id: z.string(),
+  covers_until_message_id: z.string(),
+  content: z.string(),
+  classification_effective: Classification,
+  classification_source: ClassificationSource,
+  model_id: z.string(),
+  provider: Provider,
+  created_at: z.string(),
+});
+export type ConversationSummary = z.infer<typeof ConversationSummary>;
+
+/** Whether a conversation is answering right now, and the answer so far (live answers, Stop). */
+export const GenerationState = z.object({
+  generating: z.boolean(),
+  message_id: z.string().nullable(),
+  phase: z.enum(["loading_engine", "preparing", "streaming"]).nullable(),
+  provider: Provider.nullable(),
+  text: z.string().nullable().optional(),
+});
+export type GenerationState = z.infer<typeof GenerationState>;
 
 export const ProvidersStatus = z.object({ local_ready: z.boolean(), company_enabled: z.boolean() });
 export type ProvidersStatus = z.infer<typeof ProvidersStatus>;
@@ -498,6 +611,14 @@ export interface AiosBridge {
     complete(): Promise<Completed>;
     /** System folder dialog; null when cancelled. */
     chooseBackupFolder(): Promise<BackupFolder | null>;
+    /** System folder dialog for where backups go; null when cancelled. */
+    chooseBackupLocation(): Promise<string | null>;
+    /** PUT /backup/location: an existing folder, or null for "Set up later". */
+    setBackupLocation(path: string | null): Promise<SetupStatus>;
+    /** POST /backup: back up now to the chosen location. */
+    backup(): Promise<BackupResult>;
+    /** POST /recovery-key: the keys are wrapped again under a new recovery key, returned once. */
+    newRecoveryKey(): Promise<NewRecoveryKey>;
     restore(input: RestoreInput): Promise<Restored>;
   };
   settings: {
@@ -529,12 +650,50 @@ export interface AiosBridge {
     remove(id: string): Promise<void>;
     setProvider(id: string, to: Provider, confirmed: boolean): Promise<Conversation>;
     messages(id: string): Promise<Message[]>;
-    send(id: string, text: string): Promise<Exchange>;
+    /** `knowledgeIds`: documents from My secure knowledge whose text goes with the question. */
+    send(id: string, text: string, knowledgeIds?: string[]): Promise<Exchange>;
     regenerate(id: string): Promise<Exchange>;
+    /** GET /conversations/{id}/generation: answering now, its phase and the answer so far. */
+    generation(id: string): Promise<GenerationState>;
+    /** POST /conversations/{id}/stop: end the answer; the words so far are kept. */
+    stop(id: string): Promise<Message>;
+    /** GET /conversations/{id}/summary: the earlier part of a long conversation, or null. */
+    summary(id: string): Promise<ConversationSummary | null>;
     providers(): Promise<ProvidersStatus>;
   };
   search: {
     query(q: string): Promise<SearchHit[]>;
+  };
+  /** Add skills to my AI. */
+  skills: {
+    list(): Promise<Skills>;
+    install(id: string): Promise<InstalledSkill>;
+    setEnabled(id: string, enabled: boolean): Promise<InstalledSkill>;
+    remove(id: string): Promise<void>;
+    /** System open dialog for a .aios-skill file; null when cancelled. */
+    chooseFile(): Promise<string | null>;
+    /** What the file holds; adds nothing. */
+    checkFile(path: string): Promise<SkillFileCheck>;
+    installFile(path: string): Promise<InstalledSkill>;
+  };
+  /** My secure knowledge: documents copied into the encrypted store and read so the AI can use them. */
+  knowledge: {
+    list(): Promise<KnowledgeDoc[]>;
+    /** System open dialog (several files); null when cancelled. */
+    chooseFiles(): Promise<string[] | null>;
+    /** System folder dialog; null when cancelled. */
+    chooseFolder(): Promise<string | null>;
+    addFiles(paths: string[], collection?: string): Promise<KnowledgeDoc[]>;
+    /** What adding the folder would copy; adds nothing. */
+    previewFolder(path: string): Promise<FolderPreview>;
+    /** Every file in the folder and its subfolders, as one collection named after the folder. */
+    addFolder(path: string): Promise<KnowledgeDoc[]>;
+    /** Read the encrypted copy again. */
+    retry(id: string): Promise<KnowledgeDoc>;
+    /** Removes the copy only; the original file is never touched. */
+    remove(id: string): Promise<void>;
+    /** Where a file dropped on the page is on this computer ("" when it is not a file there). */
+    pathOf(file: object): string;
   };
   evidence: {
     list(projectId?: string): Promise<EvidenceEvent[]>;

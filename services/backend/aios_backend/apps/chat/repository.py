@@ -6,7 +6,16 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from db import lookups, outbox
-from db.models import Conversation, EvidenceOutbox, Message, Project, ProviderMove
+from db.models import (
+    Conversation,
+    EvidenceOutbox,
+    KnowledgeDoc,
+    Message,
+    Project,
+    ProviderMove,
+    Skill,
+    Summary,
+)
 
 record_event = outbox.record
 
@@ -34,6 +43,30 @@ def moves(session: Session, conversation_ids: Sequence[str]) -> Sequence[Provide
 def messages(session: Session, conversation_id: str) -> Sequence[Message]:
     stmt = select(Message).where(Message.conversation_id == conversation_id)
     return session.scalars(stmt.order_by(Message.position)).all()
+
+
+def knowledge_docs(session: Session, ids: Sequence[str]) -> list[KnowledgeDoc]:
+    """The chosen documents, in the order chosen; missing ids are left out."""
+    if not ids:
+        return []
+    found = {d.id: d for d in session.scalars(select(KnowledgeDoc).where(KnowledgeDoc.id.in_(ids)))}
+    return [found[i] for i in ids if i in found]
+
+
+def enabled_skill_instructions(session: Session) -> list[str]:
+    """What each skill that is on asks of the AI, oldest skill first."""
+    stmt = select(Skill.instruction).where(Skill.enabled.is_(True)).order_by(Skill.created_at)
+    return list(session.scalars(stmt))
+
+
+def latest_summary(session: Session, conversation_id: str) -> Summary | None:
+    """The newest summary of a conversation (M-07); None while it fits the model's context."""
+    return session.scalars(
+        select(Summary)
+        .where(Summary.conversation_id == conversation_id)
+        .order_by(Summary.created_at.desc())
+        .limit(1)
+    ).first()
 
 
 def next_position(session: Session, conversation_id: str) -> int:

@@ -4,11 +4,10 @@ import { Check, Copy, Printer } from 'lucide-react'
 import { ART } from '@/assets/icons'
 import { ArtTile } from '@/components/ui/art'
 import { api } from '@/lib/api'
-import { notInThisBuild } from '@/bridge/live'
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/cn'
 import { Button } from '@/components/ui/button'
-import { Field, Input } from '@/components/ui/fields'
+import { Field, Input, Select } from '@/components/ui/fields'
 import { Callout } from '@/components/ui/feedback'
 import { SectionLabel, useCopy } from '@/components/ui/layout'
 import { Disclosure, DrawnCheck, Plate, StepBody, StepFooter, StepHeading } from '../SetupFrame'
@@ -47,6 +46,9 @@ function lastFourMatches(typed: string, key: string | null): boolean {
  */
 export function ProtectStep({ note, reissue, onIssued, confirmed, newKeyNotice, draft, onDraft, onBack, onContinue }: { note?: string; /** Issue a new key even if one is already held. */ reissue: boolean; onIssued: (isNew: boolean) => void; /** The key on screen was already confirmed earlier in this visit. */ confirmed: boolean; newKeyNotice: boolean; draft: ProtectDraft; onDraft: (patch: Partial<ProtectDraft>) => void; onBack: () => void; onContinue: () => void }) {
   const key = useStore((s) => s.recoveryKey)
+  // Where backups go (PUT /backup/location), chosen in the system folder dialog.
+  const backupPlace = useStore((s) => s.settings.backup_location)
+  const hasBackup = useStore((s) => !!s.settings.last_backup_at)
   const issued = useRef(false)
   const { copied, copy } = useCopy()
 
@@ -69,8 +71,29 @@ export function ProtectStep({ note, reissue, onIssued, confirmed, newKeyNotice, 
   const typedClean = clean(draft.typed)
   const matches = lastFourMatches(draft.typed, key)
   const wrong = !matches && typedClean.length >= 4
-  // Printing and saving the key as a file are not in this build yet; Copy works.
-  const print = () => notInThisBuild('Printing the key')
+  // The system print dialog for this page, with the key on it. Nothing is saved to a file.
+  const print = () => window.print()
+
+  // AIOS never writes the recovery key to a file (secrets live only in the keystore and the
+  // wrapped Recovery Package, FR-30), so this choice explains that and offers Print or Copy.
+  const saveAsFile = () =>
+    useStore.getState().toast({
+      kind: 'info',
+      title: 'Saving the key as a file is not in this build',
+      description: 'AIOS does not write your recovery key to a file. Print it, or copy it into a password manager or a file on a USB drive yourself.',
+    })
+
+  const LATER = 'later'
+  const CHOOSE = 'choose'
+  const backupValue = backupPlace ?? (draft.backupChoice === LATER ? LATER : undefined)
+  const chooseBackup = (value: string) => {
+    if (value === CHOOSE) {
+      void api.backup.chooseLocation()
+    } else if (value === LATER) {
+      onDraft({ backupChoice: LATER })
+      void api.backup.setUpLater()
+    }
+  }
 
   return (
     <>
@@ -113,6 +136,14 @@ export function ProtectStep({ note, reissue, onIssued, confirmed, newKeyNotice, 
                       <Button leading={<Printer className="size-3.5" />} onClick={print}>
                         Print
                       </Button>
+                      <Select
+                        aria-label="Save as a file"
+                        value={undefined}
+                        onValueChange={saveAsFile}
+                        placeholder="Save as a file"
+                        className="h-8.5 w-auto min-w-[168px] flex-1 border-line bg-paper-raised text-sm font-medium data-[placeholder]:text-ink sm:flex-none"
+                        options={[{ value: 'file', label: 'Choose where to save it', description: 'A USB drive keeps it apart from this computer' }]}
+                      />
                       <span className="ml-auto hidden font-mono text-xs leading-4.5 tabular text-ink-50 sm:inline">{groups.length} groups of 4</span>
                     </div>
                   </div>
@@ -161,7 +192,25 @@ export function ProtectStep({ note, reissue, onIssued, confirmed, newKeyNotice, 
                     <p className="mt-1 max-w-[56ch] text-sm leading-5 text-ink-soft">Choose a folder or drive for your encrypted backup. It stays where you put it. A USB drive or a shared folder is safest, because it is not this computer.</p>
                   </div>
                 </div>
-                <p className="mt-4 px-1 text-sm leading-5 text-ink-soft">Backup comes in a later version of AIOS. Until then, your AIOS data stays only on this computer. Keep your recovery key safe all the same.</p>
+                <Select
+                  aria-label="Where backups go"
+                  value={backupValue}
+                  onValueChange={chooseBackup}
+                  placeholder="Choose a folder"
+                  className="mt-4 h-10"
+                  options={[
+                    ...(backupPlace ? [{ value: backupPlace, label: <span className="font-mono text-sm">{backupPlace}</span> }] : []),
+                    { value: CHOOSE, label: backupPlace ? 'Choose another folder…' : 'Choose a folder…' },
+                    { value: LATER, label: 'Set up later' },
+                  ]}
+                />
+                <p className="mt-3 px-1 text-sm leading-5 text-ink-soft" aria-live="polite">
+                  {backupPlace
+                    ? hasBackup
+                      ? 'Backups will go here, and stay there.'
+                      : 'Backups will go here, and stay there. No backup exists yet: make the first one from Settings › Backup and recovery once AIOS is open.'
+                    : 'If you skip this, your AIOS data stays only on this computer. You can turn on backup at any time in Settings › Backup and recovery.'}
+                </p>
               </section>
 
               <Disclosure label="What AIOS cannot protect you from">
