@@ -1,0 +1,15 @@
+{
+  "scorer": "Andrea Rossetti",
+  "date": "2026-11-16",
+  "status": "proposed, to be confirmed by the technical reviewer",
+  "items": {
+    "SU-1": {"score": 1, "note": "Missing the dates (3-5 March) and where to go (rooms 1A/1B, first floor). \"Access remains unchanged\" is wrong: the second floor is closed."},
+    "DR-1": {"score": 2, "note": ""},
+    "DR-2": {"score": 2, "note": ""},
+    "DR-3": {"score": 2, "note": ""},
+    "DR-4": {"score": 1, "note": "Saturday missing; past tense instead of future (\"email services were down\", \"the VPN remained operational\")."},
+    "DR-5": {"score": 2, "note": ""},
+    "ML-1": {"score": 1, "note": "\"Senza di esso, anche se un file si danneggia, potresti perdere tutto\" is illogical (should be without \"anche\"). Reads like a literal translation from English, some inconsistent grammar, but understandable overall."},
+    "ML-3": {"score": 1, "note": "First sentence is ungrammatical (\"die Sie ... speichern\" should be \"mit der Sie ... speichern können\"). Says passwords are always on a server; does not mention the master password."}
+  }
+}

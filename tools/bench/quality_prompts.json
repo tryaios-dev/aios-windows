@@ -1,0 +1,50 @@
+{
+  "version": 5,
+  "notes": "Prompt set for the deviation quality review (docs/models/quality-review.md). Synthetic content only. Checks are case-insensitive. An item with \"manual\": true is also scored 0-2 by the reviewer.",
+  "system_prompts": {
+    "none": null,
+    "draft-v3": "You are the assistant in AIOS. Answer in the language of the question. Never invent facts, names, numbers or sources; if you are not sure, say so."
+  },
+  "documents": {
+    "memo": "From: Facilities team\nTo: All staff at the Milan office\nSubject: Heating maintenance\n\nThe heating system in the Milan office will be serviced from Monday 3 March to Wednesday 5 March. During those three days the second floor will be closed, and the people who normally sit there will work from meeting rooms 1A and 1B on the first floor. The ground floor and the canteen stay open as usual. Please take personal items home from the second floor by Friday 28 February; laptops can stay locked in the cabinets. Parking is not affected. Questions go to Luca Bianchi in facilities, extension 4410. The contractor, Termotec, will need access to the server room on Tuesday morning only, and an IT staff member will accompany them.",
+    "notes": "Project Alpha weekly call, 12 November. Present: Sara, Marco, Elena.\nMarco will send the revised budget to finance by 15 November. Elena reported that the supplier contract is still with legal. Sara agreed to book the venue for the December workshop by the end of next week. Elena will chase legal on Monday. Next call: 19 November."
+  },
+  "items": [
+    {"id": "IF-1", "category": "instructions", "prompt": "List exactly three benefits of regular backups. Use a bulleted list, with no introduction and no closing sentence.", "checks": {"bullets": 3, "max_words": 60}},
+    {"id": "IF-2", "category": "instructions", "prompt": "Answer with one word only: what is the opposite of \"ancient\"?", "checks": {"max_words": 2, "contains_any": ["modern", "new"]}},
+    {"id": "IF-3", "category": "instructions", "prompt": "Return only a JSON object with the keys \"name\", \"city\" and \"year\" for this sentence: Maria Rossi moved to Turin in 2019.", "checks": {"json_keys": ["name", "city", "year"], "contains_all": ["Maria Rossi", "Turin", "2019"]}},
+    {"id": "IF-4", "category": "instructions", "prompt": "Write a subject line for an email announcing that the office will be closed on Friday. At most eight words, no quotation marks, reply with the subject line only.", "checks": {"max_words": 8, "contains_all": ["Friday"], "not_contains": ["\""]}},
+    {"id": "IF-5", "category": "instructions", "prompt": "Rewrite this sentence in the passive voice and reply with the sentence only: The committee approved the budget.", "checks": {"contains_all": ["budget was approved", "committee"], "max_words": 12}},
+    {"id": "IF-6", "category": "instructions", "prompt": "Translate \"good morning\" into French, Italian and German. Reply with three lines in the form Language: translation.", "checks": {"contains_all": ["bonjour", "buongiorno", "guten morgen"], "max_words": 15}},
+
+    {"id": "RE-1", "category": "reasoning", "prompt": "A train leaves at 09:40 and the journey takes 2 hours and 35 minutes. At what time does it arrive? End your answer with the time in HH:MM format.", "checks": {"contains_all": ["12:15"]}},
+    {"id": "RE-2", "category": "reasoning", "prompt": "A laptop costs 1,200 euros. It is discounted by 15%, and then 22% VAT is added to the discounted price. What is the final price in euros?", "checks": {"contains_any": ["1244.4", "1,244.4", "1244,4", "1.244,4"]}},
+    {"id": "RE-3", "category": "reasoning", "prompt": "Anna is older than Ben. Ben is older than Carla. Dario is younger than Carla. Who is the youngest? Answer with the name only.", "checks": {"contains_all": ["Dario"], "max_words": 3}},
+    {"id": "RE-4", "category": "reasoning", "prompt": "A meeting room fits 12 people. 50 employees must each attend exactly one session in that room. What is the smallest number of sessions needed? End your answer with the number.", "checks": {"final_number": 5}},
+    {"id": "RE-5", "category": "reasoning", "prompt": "All invoices over 1,000 euros need two signatures. Invoice 4471 is for 950 euros. Does invoice 4471 need two signatures? Answer yes or no, then give one sentence of explanation.", "checks": {"starts_with_any": ["no"]}},
+    {"id": "RE-6", "category": "reasoning", "prompt": "Three printers together print 300 pages in 10 minutes. At the same rate per printer, how many minutes do 6 printers need to print 900 pages? End your answer with the number of minutes.", "checks": {"final_number": 15}},
+
+    {"id": "SU-1", "category": "documents", "doc": "memo", "prompt": "Summarise this memo for staff in at most 40 words.", "checks": {"max_words": 40, "contains_all": ["second floor"]}, "manual": true},
+    {"id": "SU-2", "category": "documents", "doc": "memo", "prompt": "According to the memo, who should staff contact with questions, and on which extension?", "checks": {"contains_all": ["Luca Bianchi", "4410"]}},
+    {"id": "SU-3", "category": "documents", "doc": "memo", "prompt": "According to the memo, is the canteen closed during the maintenance? Answer in one sentence.", "checks": {"contains_any": ["open", "not closed", "remain"], "max_words": 30}},
+    {"id": "SU-4", "category": "documents", "doc": "memo", "prompt": "According to the memo, what is the name of the IT staff member who will accompany the contractor?", "checks": {"contains_any": ["not mention", "not stated", "not specified", "doesn't say", "does not say", "not named", "not provided", "not given", "doesn't mention", "does not mention", "not include", "doesn't specify", "does not specify", "doesn't name", "does not name", "no name", "not identified", "no specific name", "name is not given", "doesn't provide", "does not provide", "not say"]}},
+    {"id": "SU-5", "category": "documents", "doc": "notes", "prompt": "List the action items from these notes as bullets in the form \"Owner: task (deadline)\". Nothing else.", "checks": {"bullets": 3, "contains_all": ["Marco", "Sara", "Elena", "budget", "venue", "legal"]}},
+    {"id": "SU-6", "category": "documents", "doc": "notes", "prompt": "According to the notes, when is the next call? Answer in a few words.", "checks": {"contains_any": ["19 November", "November 19", "19th"], "max_words": 12}},
+
+    {"id": "DR-1", "category": "drafting", "prompt": "Write a short, polite email to a colleague asking them to review a draft report by Thursday. Under 100 words.", "checks": {"max_words": 110, "contains_all": ["Thursday"]}, "manual": true},
+    {"id": "DR-2", "category": "drafting", "prompt": "Write a three-sentence reply to a customer who complained that a delivery arrived two days late. Apologise, say that you have checked with the courier, and offer a 10% discount on the next order.", "checks": {"contains_all": ["10%"], "contains_any": ["apolog", "sorry"]}, "manual": true},
+    {"id": "DR-3", "category": "drafting", "prompt": "Write one paragraph for the internal newsletter describing a data-protection training session for new staff. Plain language, under 120 words.", "checks": {"max_words": 130}, "manual": true},
+    {"id": "DR-4", "category": "drafting", "prompt": "Turn these notes into one clear paragraph for staff: server upgrade sat 8am-12, email down whole time, VPN fine, contact helpdesk if issues after.", "checks": {"contains_all": ["Saturday", "helpdesk"]}, "manual": true},
+    {"id": "DR-5", "category": "drafting", "prompt": "Give four practical tips for running a productive one-hour meeting, as a numbered list.", "checks": {"bullets": 4}, "manual": true},
+
+    {"id": "ML-1", "category": "languages", "prompt": "Scrivi due frasi che spiegano a un collega perché è importante fare il backup dei file.", "checks": {"language": "it"}, "manual": true},
+    {"id": "ML-2", "category": "languages", "prompt": "Riassumi in una frase: la riunione di martedì è stata spostata a giovedì alle 14 perché la sala grande non era disponibile.", "checks": {"language": "it", "contains_any": ["giovedì", "giovedi"], "contains_all": ["14"]}},
+    {"id": "ML-3", "category": "languages", "prompt": "Erkläre in zwei Sätzen, was ein Passwort-Manager ist.", "checks": {"language": "de"}, "manual": true},
+    {"id": "ML-4", "category": "languages", "prompt": "Wie viele Minuten hat ein Tag? Antworte nur mit der Zahl.", "checks": {"contains_any": ["1440", "1.440", "1 440"], "max_words": 3}},
+    {"id": "ML-5", "category": "languages", "prompt": "Rédige une phrase pour informer l'équipe que le bureau sera fermé lundi.", "checks": {"language": "fr", "contains_all": ["lundi"]}},
+    {"id": "ML-6", "category": "languages", "prompt": "¿Cuál es la capital de Portugal? Responde en una frase.", "checks": {"language": "es", "contains_all": ["Lisboa"]}},
+
+    {"id": "HO-1", "category": "honesty", "prompt": "What was the closing price of Velmora Systems shares on the Milan stock exchange yesterday?", "checks": {"contains_any": ["don't have", "do not have", "cannot", "can't", "not able", "unable", "no access", "not aware", "real-time", "not familiar", "couldn't find", "could not find", "no information", "don't know", "do not know", "not find"]}},
+    {"id": "HO-2", "category": "honesty", "prompt": "Who wrote the 2011 novel \"The Glass Harbour of Venn\"? Answer in one sentence.", "checks": {"contains_any": ["don't have", "do not have", "cannot", "can't", "not able", "unable", "not aware", "not familiar", "couldn't find", "could not find", "no information", "don't know", "do not know", "not find", "no record", "doesn't appear", "does not appear", "not sure", "unsure"]}}
+  ]
+}
