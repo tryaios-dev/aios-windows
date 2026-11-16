@@ -222,7 +222,7 @@ tests close the rule; the rule is binding from the freeze regardless.
 | Rule | Test(s) | Status |
 | --- | --- | --- |
 | IPC-01 processes | `services/backend/tests/test_engine_manager.py` (the backend starts only llama-server from `engine_root/{cpu,vulkan}`); writer start-up tests (F-01) | engine side proven; pending F-01 |
-| IPC-02 gateway is a module | gateway endpoint tests (G-01); `aios_backend/gateway/` is reviewer-owned in `.github/CODEOWNERS` | pending G-01 |
+| IPC-02 gateway is a module | `services/backend/tests/test_gateway.py` (token, loopback, OpenAI-compatible answers, router path) and `test_startup.py` (own port in READY); `aios_backend/gateway/` is reviewer-owned in `.github/CODEOWNERS` | verified (G-01) |
 | IPC-03 only the writer opens evidence.db | `services/backend/tests/test_database.py::test_ac_14_backend_declares_exactly_one_database`, `services/backend/tests/test_layout_rules.py::test_ac_14_no_backend_code_names_evidence_db`; writer API tests (F-01) | partly; pending F-01 |
 | IPC-04 secrets only in the keystore | import-linter contract "Only aios_common.keystore imports keyring" (`pyproject.toml`); `services/backend/tests/test_database.py::test_first_start_creates_key_in_keystore` | proven |
 | IPC-10 launch token | `apps/desktop/tests/unit/token.test.ts` ("is 32 random bytes, stable for the process") | proven |

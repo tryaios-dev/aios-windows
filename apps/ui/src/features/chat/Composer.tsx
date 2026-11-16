@@ -173,7 +173,8 @@ export function Composer({ conversation, disabled }: { conversation: Conversatio
     if (!text.trim() || busy || otherBusy || disabled) return
     const names = isCompany ? [] : chosenDocs.map((d) => d.name)
     sending.current = names.length ? { text: text.trim(), names } : null
-    const result = await api.conversations.send(conversation.id, text)
+    // The chosen documents' text goes with the question; Company never gets them (they stay on this computer).
+    const result = await api.conversations.send(conversation.id, text, isCompany ? [] : chosenDocs.map((d) => d.id))
     if (result.ok) {
       setText('')
       setFromVoice(false)

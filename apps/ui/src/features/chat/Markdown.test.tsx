@@ -54,3 +54,19 @@ describe("ac-11 markdown renders model output inert", () => {
     expect(screen.getByText("Open this link in your browser?")).toBeTruthy();
   });
 });
+
+describe("chart maker skill", () => {
+  it("draws a chart block as a chart, with only the figures", () => {
+    const content = 'Here it is.\n\n```chart\n{"type":"bar","title":"Sales","labels":["Jan","Feb"],"series":[{"name":"Sales","values":[120,140]}]}\n```';
+    const { container } = render(<Markdown content={content} />);
+    expect(container.querySelector('svg[role="img"]')?.getAttribute("aria-label")).toBe("Sales");
+    expect(container.querySelectorAll("svg rect").length).toBeGreaterThan(2);
+    expect(screen.getByRole("button", { name: "Copy chart as a picture" })).toBeTruthy();
+  });
+
+  it("shows a chart block it cannot draw as text", () => {
+    const { container } = render(<Markdown content={'```chart\n{"type":"bar","labels":["A"],"series":[{"values":["x"]}]}\n```'} />);
+    expect(container.querySelector('svg[role="img"]')).toBeNull();
+    expect(container.textContent).toContain('"type":"bar"');
+  });
+});

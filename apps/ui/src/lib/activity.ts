@@ -7,6 +7,7 @@ import type { Conversation, EvidenceEvent, InstalledModel, Project } from './typ
 import { CATALOGUE } from '@/data/catalogue'
 import { formatBytes, pluralise } from './format'
 import { sizeWord } from './words'
+import { useExtras } from './extras'
 
 export type ActivityKind = 'questions' | 'knowledge' | 'models' | 'extending' | 'projects' | 'safety' | 'sharing' | 'system'
 
@@ -76,6 +77,13 @@ function labelWord(value: unknown): string {
  * Each sentence starts with who did it ("You", "AIOS") and is written so the two read as one:
  * "You" + "Asked a question. The AI answered". No sequence numbers, fingerprints or internal names here.
  */
+/** Evidence records a skill's id (no free text, SR-07); its name and publisher come from the list of skills. */
+function skillOf(p: Record<string, unknown>): { name: string; publisher?: string } | undefined {
+  if (typeof p.skill === 'string') return { name: p.skill, publisher: typeof p.publisher === 'string' ? p.publisher : undefined }
+  const entry = useExtras.getState().skillCatalogue.find((x) => x.id === p.skill_id)
+  return entry ? { name: entry.name, publisher: entry.publisher } : undefined
+}
+
 export function describeEvent(e: EvidenceEvent, l: ActivityLookups): ActivityLine {
   const who: ActivityLine['who'] = e.actor === 'user' ? 'You' : e.actor === 'operator' ? 'An operator' : 'AIOS'
   const project = l.projects.find((p) => p.id === e.project_id)?.name
@@ -131,8 +139,11 @@ export function describeEvent(e: EvidenceEvent, l: ActivityLookups): ActivityLin
       return { ...base, kind: 'safety', what: 'Restored your AIOS from a backup' }
     case 'continuation':
       return { ...base, kind: 'safety', who: 'AIOS', what: 'Carried on the activity record from where the backup ended' }
-    case 'recovery_key_issued':
-      return { ...base, kind: 'safety', who: p.reissued ? 'You' : 'AIOS', what: p.reissued ? 'Created a new recovery key. Older backups still need the older key' : 'Created your recovery key and showed it to you during setup' }
+    case 'recovery_key_issued': {
+      // A key the person asked for later (Settings) is theirs; the first one comes with setup.
+      const reissued = !!p.reissued || e.actor === 'user'
+      return { ...base, kind: 'safety', who: reissued ? 'You' : 'AIOS', what: reissued ? 'Created a new recovery key. Older backups still need the older key' : 'Created your recovery key and showed it to you during setup' }
+    }
     case 'recovery_package_written':
       return { ...base, kind: 'safety', who: 'AIOS', what: 'Saved the recovery file that lets your recovery key open a backup' }
     case 'store_created':
@@ -152,10 +163,14 @@ export function describeEvent(e: EvidenceEvent, l: ActivityLookups): ActivityLin
     }
     case 'knowledge_removed':
       return { ...base, kind: 'knowledge', what: 'Removed a document from your secure knowledge. The original was not touched', about: typeof p.collection === 'string' ? p.collection : undefined }
-    case 'skill_installed':
-      return { ...base, kind: 'extending', what: `Added the skill ${p.skill ? `\u201c${String(p.skill)}\u201d` : ''} to your AI. AIOS checked it first`.replace('  ', ' '), about: typeof p.publisher === 'string' ? p.publisher : undefined }
-    case 'skill_removed':
-      return { ...base, kind: 'extending', what: `Removed the skill ${p.skill ? `\u201c${String(p.skill)}\u201d` : ''} from your AI`.replace('  ', ' ') }
+    case 'skill_installed': {
+      const s = skillOf(p)
+      return { ...base, kind: 'extending', what: `Added the skill ${s ? `\u201c${s.name}\u201d` : ''} to your AI. AIOS checked it first`.replace('  ', ' '), about: s?.publisher }
+    }
+    case 'skill_removed': {
+      const s = skillOf(p)
+      return { ...base, kind: 'extending', what: `Removed the skill ${s ? `\u201c${s.name}\u201d` : ''} from your AI`.replace('  ', ' ') }
+    }
     case 'resource_linked':
       return { ...base, kind: 'extending', what: `Linked ${p.resource ? String(p.resource) : 'a resource'} to your AI. Nothing was sent`, about: typeof p.provider === 'string' ? p.provider : undefined }
     case 'resource_unlinked':
@@ -165,4 +180,28 @@ export function describeEvent(e: EvidenceEvent, l: ActivityLookups): ActivityLin
     default:
       return { ...base, kind: 'system', who: 'AIOS', what: 'Recorded something this version cannot describe in words' }
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Illustrations for a new installation                                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Four sentences for the "What you will see here" guide in Activity. They are made by
+ * `describeEvent` from stand-in events, so the wording is always the wording real entries get.
+ * Nothing here is recorded, and nothing here is ever put in the real list.
+ */
+export function exampleLines(): ActivityLine[] {
+  const light = CATALOGUE.find((m) => m.tier === 'small') ?? CATALOGUE[0]
+  const stand = (seq: number, event_type: EvidenceEvent['event_type'], rest: Partial<EvidenceEvent>): EvidenceEvent => ({ seq, format_version: 1, stream_id: 'example', epoch: 0, ts: '', event_type, actor: 'user', prev_hash: '', event_hash: '', ...rest }) as EvidenceEvent
+  const conversation = { id: 'example-conversation', title: 'Reply to the landlord', classification_source: 'project' } as Conversation
+  const lookups: ActivityLookups = { projects: [], conversations: [conversation], installed: [], firstQuestions: new Set([-1]) }
+  const events = [
+    stand(-1, 'request', { conversation_id: conversation.id, provider: 'local', payload: { status: 'complete' } }),
+    stand(-2, 'export', { payload: { kind: 'backup' } }),
+    // The list of AI models comes from the backend; before it has loaded there is no model to name.
+    ...(light ? [stand(-3, 'model_installed', { model_digest: light.artifact_digest })] : []),
+    stand(-4, 'refusal', { actor: 'app', provider: 'local' }),
+  ]
+  return events.map((e) => ({ ...describeEvent(e, lookups), about: undefined }))
 }

@@ -2,10 +2,12 @@ import { ipcMain } from "electron";
 import { Channels } from "@aios/bridge-contract";
 import type { BackendHandle } from "../backend/spawn.js";
 import { chatHandlers, evidenceHandlers, searchHandlers } from "./chat.js";
+import { knowledgeHandlers } from "./knowledge.js";
 import { modelsHandlers } from "./models.js";
 import { projectsHandlers } from "./projects.js";
 import { settingsHandlers } from "./settings.js";
 import { setupHandlers } from "./setup.js";
+import { skillsHandlers } from "./skills.js";
 import { spikeHandlers } from "./spike.js"; // SPIKE-D04
 import { systemHandlers } from "./system.js";
 
@@ -20,6 +22,8 @@ export const handlers: Record<string, Handler> = {
   ...chatHandlers,
   ...searchHandlers,
   ...evidenceHandlers,
+  ...knowledgeHandlers,
+  ...skillsHandlers,
   ...modelsHandlers,
   ...spikeHandlers, // SPIKE-D04: temporary
 };

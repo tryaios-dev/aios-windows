@@ -1,17 +1,111 @@
-import { Check, Copy } from 'lucide-react'
+import { useState } from 'react'
+import { AlertTriangle, Check, Copy } from 'lucide-react'
+import type { FolderPreview } from '@aios/bridge-contract'
 import type { KnowledgeDoc } from '@/lib/types'
-import { formatDate } from '@/lib/format'
+import { formatDate, pluralise } from '@/lib/format'
 import { Button, IconButton } from '@/components/ui/button'
+import { Badge } from '@/components/ui/chips'
+import { RadioCard, RadioGroup } from '@/components/ui/fields'
 import { useCopy } from '@/components/ui/layout'
 import { ConfirmDialog, Dialog, Tooltip } from '@/components/ui/overlays'
 import { FileTile } from './KnowledgeArt'
+import { Reveal } from '@/features/settings/shared'
 import { isPath, pagesWords, sizeWords } from './helpers'
+
+const total = (files: Array<{ size_bytes: number }>) => files.reduce((n, f) => n + f.size_bytes, 0)
 
 function PathText({ children }: { children: string }) {
   return <span className="break-all font-mono text-xs tracking-[0.02em] text-ink">{children}</span>
 }
 
 /* ---------------- Choose a folder ---------------- */
+
+/**
+ * After the system folder dialog, says what will be copied and where the originals stay, before
+ * anything is added (POST /knowledge/folder/preview). Nothing is copied until "Add".
+ */
+export function ChooseFolderDialog({ open, onOpenChange, preview, onAdd }: { open: boolean; onOpenChange: (open: boolean) => void; preview: FolderPreview | null; onAdd: (preview: FolderPreview) => void }) {
+  const [path, setPath] = useState(preview?.path ?? '')
+  if (!preview) return null
+  const fresh = preview.files.filter((f) => !f.already)
+  const chosen = path === preview.path
+  const already = preview.files.length - fresh.length
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Choose a folder"
+      description="AIOS copies what is in the folder. The folder itself is not moved or changed."
+      footer={
+        <>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button variant="primary" disabled={!chosen || !fresh.length} onClick={() => onAdd(preview)}>
+            {fresh.length ? `Add ${pluralise(fresh.length, 'file')}` : 'Add folder'}
+          </Button>
+        </>
+      }
+    >
+      <RadioGroup value={path} onValueChange={setPath} aria-label="Folders on this computer" className="flex flex-col gap-2">
+        <RadioCard
+          value={preview.path}
+          title={preview.name}
+          meta={<span className="tabular">{`${pluralise(preview.files.length, 'file')} · ${sizeWords(total(preview.files))}`}</span>}
+          description={<span className="break-all font-mono text-xs tracking-[0.02em] text-ink-50">{preview.path}</span>}
+        >
+          {!fresh.length && preview.files.length > 0 && (
+            <span className="mt-1.5">
+              <Badge tone="green" icon={<Check />}>
+                Already in your knowledge
+              </Badge>
+            </span>
+          )}
+        </RadioCard>
+      </RadioGroup>
+
+      <Reveal open={chosen} className="pt-4">
+        {chosen && (
+          <div className="overflow-hidden rounded-lg border border-line-soft bg-paper-raised" role="status">
+            {fresh.length ? (
+              <p className="px-4 py-3 text-sm leading-5 text-ink-soft">
+                <span className="font-medium tabular text-ink">
+                  {pluralise(fresh.length, 'file')}, {sizeWords(total(fresh))}
+                </span>{' '}
+                will be copied. {already > 0 && `${already === 1 ? 'One is' : `${already} are`} already in your knowledge. `}The originals stay in <PathText>{preview.path}</PathText>.
+              </p>
+            ) : (
+              <p className="px-4 py-3 text-sm leading-5 text-ink-soft">{preview.files.length ? 'Everything in this folder is already in your knowledge. Nothing would be copied twice.' : 'There are no files in this folder.'}</p>
+            )}
+            {fresh.length > 0 && (
+              <ul className="max-h-64 divide-y divide-line-soft overflow-y-auto border-t border-line-soft bg-white">
+                {fresh.map((file, i) => (
+                  <li key={`${file.name}-${i}`} className="px-4 py-2">
+                    <div className="flex items-baseline gap-3">
+                      <span className="min-w-0 flex-1 truncate text-sm leading-5 text-ink">{file.name}</span>
+                      <span className="shrink-0 text-xs leading-5 tabular text-ink-50">
+                        {file.kind} · {sizeWords(file.size_bytes)}
+                      </span>
+                    </div>
+                    {file.problem && (
+                      <p className="mt-0.5 flex items-start gap-1.5 text-xs leading-4.5 text-brass-text">
+                        <AlertTriangle className="mt-[3px] size-3 shrink-0" aria-hidden />
+                        <span>AIOS will not be able to read this one. {file.problem}</span>
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </Reveal>
+    </Dialog>
+  )
+}
+
+/* ---------------- Where the original is ---------------- */
 
 export function OriginalDialog({ doc, open, onOpenChange }: { doc: KnowledgeDoc; open: boolean; onOpenChange: (open: boolean) => void }) {
   const { copied, copy } = useCopy()

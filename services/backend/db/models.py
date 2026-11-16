@@ -9,7 +9,7 @@ Field names follow MVP 9.1 and the UI types in ``apps/ui/src/lib/types.ts``.
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import BigInteger, Boolean, ForeignKey, Index, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.base import ID, Base, Timestamps, UTCDateTime, utcnow
@@ -152,3 +152,51 @@ class EvidenceOutbox(Base):
     body: Mapped[str] = mapped_column(Text)  # JSON object, content-free
     seq: Mapped[int | None] = mapped_column(Integer, nullable=True)  # set by the writer
     acknowledged_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+
+
+class KnowledgeDoc(Timestamps, Base):
+    """A document in My secure knowledge: an encrypted copy (chats.db is SQLCipher) and its text.
+
+    Read by the knowledge app (add, list, remove) and by chat (a question asked with documents).
+    The original file is never moved or changed; ``origin`` is the folder it is still in.
+    """
+
+    __tablename__ = "knowledge_docs"
+
+    id: Mapped[str] = mapped_column(ID, primary_key=True)
+    name: Mapped[str] = mapped_column(String(260))
+    kind: Mapped[str] = mapped_column(String(32))
+    size_bytes: Mapped[int] = mapped_column(BigInteger)
+    pages: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    collection: Mapped[str] = mapped_column(String(260))
+    origin: Mapped[str] = mapped_column(String(1024))
+    status: Mapped[str] = mapped_column(String(16))  # ready | failed
+    problem: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    text: Mapped[str] = mapped_column(Text, default="")
+    data: Mapped[bytes] = mapped_column(LargeBinary)
+
+
+class Skill(Timestamps, Base):
+    """A skill added to the AI: one from the AIOS list or one from a ``.aios-skill`` file.
+
+    Read by the skills app (add, switch, remove) and by chat (an enabled skill's instruction goes
+    with every question). The instruction is kept here so chat never needs the skills app.
+    """
+
+    __tablename__ = "skills"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(120))
+    line: Mapped[str] = mapped_column(String(300))
+    detail: Mapped[str] = mapped_column(Text)
+    category: Mapped[str] = mapped_column(String(32))
+    publisher: Mapped[str] = mapped_column(String(120))
+    licence: Mapped[str] = mapped_column(String(64))
+    open_source: Mapped[bool] = mapped_column(Boolean, default=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger)
+    version: Mapped[str] = mapped_column(String(32))
+    uses: Mapped[str] = mapped_column(Text)  # a JSON list of plain sentences
+    example: Mapped[str] = mapped_column(String(500))
+    instruction: Mapped[str] = mapped_column(Text)
+    own: Mapped[bool] = mapped_column(Boolean, default=False)  # added from a file
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)

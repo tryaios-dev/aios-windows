@@ -354,3 +354,34 @@ def test_the_package_names_the_writers_file_in_its_backup_manifest(
     first_run(app_client)
     pkg = json.loads(settings.recovery_pkg.read_bytes())
     assert pkg["backup_manifest"]["required"] == ["chats.db", "evidence.db"]
+
+
+def test_ac_17_backup_now_makes_a_backup_the_restore_drill_accepts(
+    settings: Settings, tmp_path: Path
+) -> None:
+    """Settings > Back up now, while AIOS keeps running: the writer copies the evidence file, and a
+    clean device restores the folder and continues the chain under epoch 2 (decision D3, M-02)."""
+    a, a_db, a_store, a_writer = _device(settings, tmp_path / "a", MemoryKeys())
+    with a:
+        created = first_run(a)
+        a.post("/projects", json={"name": "Before backup", "classification": "internal"})
+        pump.drain(a_db, a_writer)
+        usb = tmp_path / "usb"
+        usb.mkdir()
+        assert a.put("/backup/location", json={"path": str(usb)}).status_code == 200
+        resp = a.post("/backup")
+        assert resp.status_code == 200, resp.text
+        folder = Path(resp.json()["path"])
+        assert {p.name for p in folder.iterdir()} >= {"chats.db", "recovery.pkg", "evidence.db"}
+
+        b, b_db, b_store, b_writer = _device(settings, tmp_path / "b", MemoryKeys())
+        with b:
+            resp = b.post(
+                "/restore",
+                json={"backup_path": str(folder), "recovery_key": created["recovery_key"]},
+            )
+            assert resp.status_code == 200, resp.text
+            assert resp.json()["epoch"] == 2
+            pump.drain(b_db, b_writer)
+            assert any(e["event_type"] == "continuation" for e in _events(b))
+            assert {p["name"] for p in b.get("/projects").json()} >= {"Before backup"}

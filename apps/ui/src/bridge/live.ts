@@ -5,8 +5,8 @@
  * and is called again after each change, so every screen shows what the backend holds. In a plain
  * browser (`pnpm dev:ui`) the same code runs against the simulated backend in `./sim` (sample data).
  *
- * Areas the backend does not have yet (My secure knowledge, skills, resources, backup, a new
- * recovery key, voice) start empty in the desktop app and say they are not in this build.
+ * Areas the backend does not have yet (resources, voice) start empty in the desktop app and say
+ * they are not in this build.
  */
 import {
   errorCode,
@@ -16,6 +16,7 @@ import {
   type Hardware as LiveHardware,
   type Health as LiveHealth,
   type InstalledModel as LiveModel,
+  type KnowledgeDoc as LiveKnowledgeDoc,
   type Message as LiveMessage,
   type Project as LiveProject,
   type Settings as LiveSettings,
@@ -31,12 +32,14 @@ import type {
   Hardware,
   Health,
   InstalledModel,
+  KnowledgeDoc,
   Message,
   Project,
 } from "@/lib/types";
 import { ZERO_HASH } from "@/lib/hash";
 import { useStore, type LiveFacts } from "@/lib/store";
 import { setCatalogue } from "@/data/catalogue";
+import { useExtras } from "@/lib/extras";
 import { bridge, inElectron } from "./index";
 
 export const isLive = inElectron;
@@ -48,6 +51,13 @@ const MESSAGES: Record<string, string> = {
   invalid_setting: "That setting cannot be empty.",
   update_check_off: "Update checks are switched off.",
   invalid_path: "That location can't be used. Choose another file or folder.",
+  skill_added: "That skill is already added. It is in your list.",
+  skill_not_in_build: "This skill needs the speech engine, which comes in a later version of AIOS.",
+  skill_included: "That skill comes with AIOS and is always there.",
+  not_a_skill_file: "That is not a skill file. A skill file ends .aios-skill.",
+  skill_file_invalid: "AIOS could not read that skill file. It needs a name, a line saying what it does and an instruction.",
+  too_many_files: "That folder has more than 500 files. Choose a smaller folder, or add the files you need.",
+  document_not_found: "A document you chose is no longer in My secure knowledge. Choose it again.",
   log_folder_missing: "There is no log folder yet, so there is nothing to put in a diagnostic file.",
   catalogue_check_off: "The check for new AI models is switched off.",
   catalogue_unreachable: "The list of AI models can't be reached. Check the connection and try again.",
@@ -83,6 +93,12 @@ const MESSAGES: Record<string, string> = {
   p_unlisted: "The file contains parts it does not list. Nothing was added.",
   p_missing: "The file is missing parts it lists. Nothing was added.",
   writer_unavailable: "Activity recording is paused, so the copy can't be made yet. Every action is kept and waits.",
+  no_backup_location: "Choose where backups go first.",
+  backup_location_unavailable:
+    "The backup folder can't be reached. Plug in the drive, or choose another folder. Nothing was changed.",
+  backup_failed: "The backup could not be written to that folder. Check there is space, then try again. Nothing was changed.",
+  backup_unreadable: "The copy did not pass its check, so it was not kept. Try again. Nothing was changed.",
+  backup_incomplete: "The backup was missing a file, so it was not kept. Try again. Nothing was changed.",
   size_mismatch: "That file is not the AI model you chose: its size is different.",
   digest_mismatch: "That file is not the genuine AI model: its fingerprint is different. It was not installed.",
   deviation_not_approved: "That AI model has not passed its review yet, so it can't be installed.",
@@ -148,6 +164,7 @@ export function toMessages(list: LiveMessage[], conversation?: Conversation): Me
 
 /** Backend event names that have an older name in the UI's event list. */
 const EVENT_ALIASES: Record<string, EventType> = {
+  backup_created: "export",
   inference_completed: "request",
   project_exported: "export",
   project_imported: "import",
@@ -155,6 +172,8 @@ const EVENT_ALIASES: Record<string, EventType> = {
 
 export function toEvent(e: LiveEvent, streamId: string): EvidenceEvent {
   const payload = { ...e.payload };
+  // A backup is shown as the design's "Backed up your AIOS" (an export of kind backup).
+  if (e.event_type === "backup_created") payload.kind = "backup";
   if (typeof payload.model_id === "string" && payload.entry_id === undefined) payload.entry_id = payload.model_id;
   const provider = payload.provider === "local" || payload.provider === "company" ? payload.provider : undefined;
   return {
@@ -198,7 +217,7 @@ let bundledCatalogue: string | null = null;
 
 /**
  * Backend settings into the store. Until the mirror has been checked, the version shown is the
- * bundled catalogue's. Backup and a new recovery key have no backend yet, so they read as never.
+ * bundled catalogue's. The backup and recovery key fields come from the setup status (`applyStatus`).
  */
 export function applySettings(s: LiveSettings): void {
   useStore.setState((st) => ({
@@ -207,10 +226,6 @@ export function applySettings(s: LiveSettings): void {
       ...s,
       catalogue_version: s.catalogue_version ?? bundledCatalogue ?? st.settings.catalogue_version,
       last_catalogue_check: s.last_catalogue_check,
-      backup_location: null,
-      last_backup_at: null,
-      last_backup_size: null,
-      recovery_key_issued_at: null,
     },
   }));
 }
@@ -272,11 +287,36 @@ export function applyStatus(status: SetupStatus): void {
       stream_id: status.stream_id ?? s.stream.stream_id,
       signer_key_id: status.signing_key_id ?? s.stream.signer_key_id,
     },
+    // Backup (decision D3): where backups go and the last one, as the backend records them.
+    settings: {
+      ...s.settings,
+      backup_location: status.backup_location ?? null,
+      last_backup_at: status.last_backup_at ?? null,
+      last_backup_size: status.last_backup_size ?? null,
+      recovery_key_issued_at: status.recovery_key_issued_at ?? null,
+    },
   }));
+}
+
+/** A document as the screens show it. */
+export function toKnowledgeDoc(d: LiveKnowledgeDoc): KnowledgeDoc {
+  return {
+    id: d.id,
+    name: d.name,
+    kind: d.kind,
+    size_bytes: d.size_bytes,
+    pages: d.pages ?? undefined,
+    collection: d.collection,
+    origin: d.origin,
+    added_at: d.added_at,
+    status: d.status,
+    problem: d.problem ?? undefined,
+  };
 }
 
 /** Before loading: forget what an earlier load put in the store, so nothing stale is shown. */
 export function clearLoaded(): void {
+  useExtras.setState({ knowledge: [], skillCatalogue: [], installedSkills: [], skillInstalls: {} });
   useStore.setState((s) => ({
     projects: [],
     conversations: [],
@@ -380,13 +420,36 @@ export async function refreshConversation(id: string): Promise<void> {
 /** Messages of one conversation, loaded when it is opened and after each send. */
 export async function loadMessages(conversationId: string): Promise<void> {
   const newest = ticket(`messages:${conversationId}`);
-  const list = await bridge().conversations.messages(conversationId);
+  const [list, summary] = await Promise.all([
+    bridge().conversations.messages(conversationId),
+    // The summary of the earlier messages of a long conversation (M-07); a failed read shows none.
+    bridge().conversations.summary(conversationId).catch(() => null),
+  ]);
   if (!newest()) return;
   const conversation = useStore.getState().conversations.find((c) => c.id === conversationId);
   const messages = toMessages(list, conversation);
   useStore.setState((s) => ({
     messages: [...s.messages.filter((m) => m.conversation_id !== conversationId), ...messages],
+    summaries: [...s.summaries.filter((x) => x.conversation_id !== conversationId), ...(summary ? [summary] : [])],
   }));
+}
+
+/** GET /knowledge: My secure knowledge. */
+export async function refreshKnowledge(): Promise<void> {
+  const current = ticket("knowledge");
+  const docs = (await bridge().knowledge.list()).map(toKnowledgeDoc);
+  if (current()) useExtras.setState({ knowledge: docs });
+}
+
+/** GET /skills: what can be added, and what the AI has. */
+export async function refreshSkills(): Promise<void> {
+  const current = ticket("skills");
+  const { catalogue, installed } = await bridge().skills.list();
+  if (!current()) return;
+  useExtras.setState({
+    skillCatalogue: catalogue.map((e) => ({ ...e, included: e.included ?? undefined, own: e.own ?? undefined, available: e.available ?? undefined })),
+    installedSkills: installed,
+  });
 }
 
 export async function refreshEvents(): Promise<void> {
@@ -533,7 +596,7 @@ export function stopWatchingDownloads(): void {
 /** Everything a set-up workspace shows. Messages load per conversation. */
 export async function refreshWorkspace(): Promise<void> {
   await refreshProjects();
-  await Promise.all([refreshConversations(), refreshEvents(), refreshModels()]);
+  await Promise.all([refreshConversations(), refreshEvents(), refreshModels(), refreshKnowledge(), refreshSkills()]);
   await refreshHealthQuietly(); // after the models: the loaded model is matched against them
   // Facts for Settings and Activity: a failed read never fails the workspace.
   await Promise.all([refreshSystem().catch(() => undefined), refreshStream().catch(() => undefined)]);
@@ -570,4 +633,82 @@ export async function hydrate(): Promise<void> {
   } catch (err) {
     reportFailure(err, "Could not reach the AIOS backend");
   }
+}
+
+/* ------------------------------------------------------------------ live answers */
+export const ANSWER_POLL_MS = 250;
+
+/**
+ * Show an answer while it is written (GET /conversations/{id}/generation reports the text so far).
+ * `question`: the words just sent, shown at once as the person's message. Returns a function that
+ * ends the live view; the stored messages are loaded after the call, replacing what was shown.
+ */
+export function watchAnswer(conversationId: string, question: string | null): () => void {
+  const conv = useStore.getState().conversations.find((c) => c.id === conversationId);
+  const tempId = `sending-${Date.now()}`;
+  if (question !== null && conv) {
+    const pending: Message = {
+      id: tempId,
+      conversation_id: conversationId,
+      role: "user",
+      content: question,
+      classification_effective: conv.classification_effective,
+      classification_source: conv.classification_source,
+      status: "complete",
+      provider: conv.current_provider,
+      model_id: conv.model_id,
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      created_at: new Date().toISOString(),
+    };
+    useStore.setState((s) => ({ messages: [...s.messages, pending] }));
+  }
+  let done = false;
+  const tick = async () => {
+    if (done) return;
+    try {
+      const g = await bridge().conversations.generation(conversationId);
+      if (done) return;
+      if (!g.generating || !g.message_id || !g.phase || !g.provider) return;
+      const messageId = g.message_id;
+      const phase = g.phase;
+      const provider = g.provider;
+      const text = g.text ?? "";
+      useStore.setState((s) => {
+        const existing = s.messages.find((m) => m.id === messageId);
+        const streaming: Message = existing
+          ? { ...existing, content: text || existing.content, status: "streaming" }
+          : {
+              id: messageId,
+              conversation_id: conversationId,
+              role: "assistant",
+              content: text,
+              classification_effective: conv?.classification_effective ?? "restricted",
+              classification_source: conv?.classification_source ?? "project",
+              status: "streaming",
+              provider,
+              model_id: conv?.model_id ?? null,
+              prompt_tokens: 0,
+              completion_tokens: 0,
+              created_at: new Date().toISOString(),
+            };
+        return {
+          generation: { conversation_id: conversationId, message_id: messageId, phase, provider },
+          messages: existing ? s.messages.map((m) => (m.id === messageId ? streaming : m)) : [...s.messages, streaming],
+        };
+      });
+    } catch {
+      // A missed poll only delays the words; the stored answer arrives when the call ends.
+    }
+  };
+  void tick();
+  const poll = setInterval(() => void tick(), ANSWER_POLL_MS);
+  return () => {
+    done = true;
+    clearInterval(poll);
+    useStore.setState((s) => ({
+      generation: s.generation?.conversation_id === conversationId ? null : s.generation,
+      messages: s.messages.filter((m) => m.id !== tempId),
+    }));
+  };
 }

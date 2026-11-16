@@ -116,7 +116,13 @@ def test_stop_without_a_generation(client: TestClient) -> None:
     resp = client.post(f"/conversations/{conv['id']}/stop")
     assert resp.status_code == 409 and resp.json() == {"error": "not_generating"}
     state = client.get(f"/conversations/{conv['id']}/generation").json()
-    assert state == {"generating": False, "message_id": None, "phase": None, "provider": None}
+    assert state == {
+        "generating": False,
+        "message_id": None,
+        "phase": None,
+        "provider": None,
+        "text": None,
+    }
 
 
 @pytest.mark.parametrize("path", ["messages", "messages/stream"])
@@ -244,3 +250,32 @@ def test_company_details_in_provider_status(
         assert company["base_url"] == "https://ai.example.internal/v1"
         assert company["model_name"] == "company-70b"
         assert "key" not in json.dumps(company).lower()
+
+
+def test_the_answer_so_far_can_be_read_while_it_is_written(
+    settings: Settings, db: Database
+) -> None:
+    """The desktop app shows the words as they arrive by reading the generation state (live answers)."""
+    with client_with(settings, db, SlowAnswers()) as c:
+        _, conv = setup_conversation(c)
+        sent: dict[str, Any] = {}
+        worker = threading.Thread(
+            target=lambda: sent.update(
+                r=c.post(f"/conversations/{conv['id']}/messages", json={"text": "long"})
+            )
+        )
+        worker.start()
+        deadline = time.monotonic() + 5
+        seen: list[str] = []
+        while len(seen) < 2:
+            state = c.get(f"/conversations/{conv['id']}/generation").json()
+            if state["phase"] == "streaming" and state["text"]:
+                if not seen or state["text"] != seen[-1]:
+                    seen.append(state["text"])
+            assert time.monotonic() < deadline
+            time.sleep(0.01)
+        assert seen[0].startswith("w0") and seen[1].startswith(seen[0])  # it grows
+        c.post(f"/conversations/{conv['id']}/stop")
+        worker.join(5)
+        final = c.get(f"/conversations/{conv['id']}/generation").json()
+        assert final["generating"] is False and final["text"] is None

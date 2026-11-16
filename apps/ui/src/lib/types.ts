@@ -426,6 +426,10 @@ export interface SkillEntry {
   example: string
   /** Comes with every AIOS; cannot be removed. */
   included?: boolean
+  /** Added from a .aios-skill file. */
+  own?: boolean
+  /** False: listed, but it cannot be added in this build yet. */
+  available?: boolean
 }
 
 export interface InstalledSkill {

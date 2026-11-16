@@ -6,12 +6,13 @@ import { cn } from '@/lib/cn'
 import { useExtras } from '@/lib/extras'
 import { truncate } from '@/lib/format'
 import { useStore } from '@/lib/store'
+import type { FolderPreview } from '@aios/bridge-contract'
 import type { KnowledgeDoc } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { PageBody, PageHeader } from '@/components/ui/layout'
 import { EmptyKnowledge } from './EmptyKnowledge'
 import { StoreDrawing } from './KnowledgeArt'
-import { OriginalDialog, RemoveDialog } from './KnowledgeDialogs'
+import { ChooseFolderDialog, OriginalDialog, RemoveDialog } from './KnowledgeDialogs'
 import { Library, type LibraryFilter } from './Library'
 import { stem, useAddingRun, usePageDrop, type DroppedBatch } from './helpers'
 
@@ -45,15 +46,15 @@ export function KnowledgeView() {
   const run = useAddingRun(knowledge, retried)
   const empty = knowledge.length === 0
 
-  // The backend has no knowledge store yet (proposed: POST /knowledge), so adding says so and changes nothing.
-  const addFiles = () => api.knowledge.add()
+  // The system dialogs, then the backend copies the files into the encrypted store and reads them.
+  const addFiles = () => void api.knowledge.addFiles()
 
   const addDropped = (batches: DroppedBatch[]) => {
     if (!batches.length) {
       useStore.getState().toast({ kind: 'info', title: 'Nothing to add', description: 'There were no files in what you dropped.' })
       return
     }
-    api.knowledge.add()
+    void api.knowledge.addDropped(batches)
   }
 
   const dragging = usePageDrop(addDropped)
@@ -67,14 +68,14 @@ export function KnowledgeView() {
 
   const retry = (doc: KnowledgeDoc) => {
     setRetried((prev) => new Set(prev).add(doc.id))
-    api.knowledge.retry(doc.id)
+    void api.knowledge.retry(doc.id)
   }
 
   /** Close the row, then remove the document. The original file is never involved. */
   const remove = (doc: KnowledgeDoc) => {
     setLeaving((prev) => new Set(prev).add(doc.id))
     window.setTimeout(() => {
-      api.knowledge.remove(doc.id)
+      void api.knowledge.remove(doc.id)
       setLeaving((prev) => {
         const next = new Set(prev)
         next.delete(doc.id)
@@ -83,7 +84,16 @@ export function KnowledgeView() {
     }, ROW_CLOSES_MS)
   }
 
-  const openFolders = () => api.knowledge.add()
+  // The system folder dialog, then the design's preview of what will be copied, then "Add".
+  const [folder, setFolder] = useState<{ preview: FolderPreview | null; open: boolean; run: number }>({ preview: null, open: false, run: 0 })
+  const openFolders = () =>
+    void api.knowledge.chooseFolder().then((preview) => {
+      if (preview) setFolder((f) => ({ preview, open: true, run: f.run + 1 }))
+    })
+  const addFolder = (preview: FolderPreview) => {
+    setFolder((f) => ({ ...f, open: false }))
+    void api.knowledge.addFolder(preview)
+  }
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
@@ -156,6 +166,7 @@ export function KnowledgeView() {
         {dragging ? 'Drop to add to your secure knowledge' : ''}
       </p>
 
+      <ChooseFolderDialog key={folder.run} open={folder.open} onOpenChange={(open) => setFolder((f) => ({ ...f, open }))} preview={folder.preview} onAdd={addFolder} />
       {original && <OriginalDialog doc={original.doc} open={original.open} onOpenChange={(open) => setOriginal((o) => (o ? { ...o, open } : o))} />}
       {removal && (
         <RemoveDialog

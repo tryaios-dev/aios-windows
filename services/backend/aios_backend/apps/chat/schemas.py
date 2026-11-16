@@ -67,6 +67,8 @@ class MessageOut(BaseModel):
 
 class SendIn(BaseModel):
     text: str = Field(min_length=1, max_length=200_000)
+    # Documents from My secure knowledge to answer from; their text goes with the question.
+    knowledge_ids: list[str] = Field(default_factory=list, max_length=50)
 
 
 class Exchange(BaseModel):
@@ -91,6 +93,20 @@ class ProvidersStatus(BaseModel):
     company: CompanyStatus | None = None  # null while the operator flag is off
 
 
+class SummaryOut(BaseModel):
+    """The summary of the earlier part of a long conversation (M-07), shown above the messages."""
+
+    id: str
+    conversation_id: str
+    covers_until_message_id: str
+    content: str
+    classification_effective: Classification
+    classification_source: ClassificationSource
+    model_id: str
+    provider: Provider
+    created_at: datetime
+
+
 class GenerationOut(BaseModel):
     """Whether this conversation is answering right now (list dot, Stop button)."""
 
@@ -98,6 +114,8 @@ class GenerationOut(BaseModel):
     message_id: str | None
     phase: Literal["loading_engine", "preparing", "streaming"] | None
     provider: Provider | None
+    # The answer so far while it is written (live answers in the desktop app); null otherwise.
+    text: str | None = None
 
 
 class ContinueIn(BaseModel):

@@ -1,5 +1,6 @@
 """First-run rules: create the store (signing key, recovery key, recovery.pkg), finish setup,
-and restore a backup with its recovery key (M-15, AC-17; Recovery Package v1, section 5).
+make a backup, and restore a backup with its recovery key (M-15, AC-17; Recovery Package v1,
+section 5; backup: decision D3).
 
 Security-relevant. Keys go only to the OS keystore (desktop profile) and into the wrapped
 Recovery Package; the recovery key is returned once and kept nowhere. Nothing here logs.
@@ -7,6 +8,7 @@ Recovery Package; the recovery key is returned once and kept nowhere. Nothing he
 
 import os
 import secrets
+import shutil
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -16,16 +18,25 @@ from sqlalchemy.orm import Session
 
 from aios_backend.apps.setup import recovery_package as rp
 from aios_backend.apps.setup import repository as repo
-from aios_backend.apps.setup.schemas import Completed, Restored, SetupStatus, StoreCreated
+from aios_backend.apps.setup.schemas import (
+    BackupOut,
+    Completed,
+    RecoveryKeyOut,
+    Restored,
+    SetupStatus,
+    StoreCreated,
+)
 from aios_backend.config import APP_VERSION, Settings
 from aios_backend.errors import AppError
 from aios_backend.evidence.client import WriterClient, WriterUnavailable
 from aios_common import keystore
 from aios_common.canonical import b64url
 from db import lookups, migrate
+from db.base import utcnow
 from db.models import Project
 from db.session import KEYSTORE_ENTRY as DB_KEY_ENTRY
 from db.session import Database
+from db.sqlcipher import backup_encrypted, integrity_ok
 
 SIGNING_ENTRY = "evidence-signing-seed"
 DEFAULT_PROJECT = "My workspace"
@@ -92,6 +103,10 @@ def status(session: Session, settings: Settings) -> SetupStatus:
         completed_at=state.completed_at,
         last_restore_at=state.last_restore_at,
         recovery_package_present=settings.recovery_pkg.is_file(),
+        backup_location=state.backup_location,
+        last_backup_at=state.last_backup_at,
+        last_backup_size=state.last_backup_size,
+        recovery_key_issued_at=state.recovery_key_issued_at,
     )
 
 
@@ -133,6 +148,7 @@ def create_store(
         body={"package_id": package_id, "package_digest": rp.package_digest(file_bytes)},
     )
     repo.record_event(session, "recovery_key_issued", actor="app", body={"package_id": package_id})
+    repo.mark_key_issued(session)
     return StoreCreated(
         recovery_key=rp.format_recovery_key(recovery_key),
         package_id=package_id,
@@ -165,6 +181,155 @@ def complete(session: Session) -> Completed:
         )
     repo.set_first_run_complete(session, project.id)
     return Completed(default_project_id=project.id)
+
+
+# ------------------------------------------------------------------ new recovery key (D4)
+def _evidence_tip(writer: WriterClient | None) -> dict[str, Any] | None:
+    """The writer's tip, recorded in the package so a restore checks the evidence reaches it."""
+    if writer is None:
+        return None
+    try:
+        st = writer.status()
+    except WriterUnavailable:
+        return None
+    if st.get("tip_seq") is None:
+        return None
+    return {
+        "stream_id": st["stream_id"],
+        "epoch": st["epoch"],
+        "seq": st["tip_seq"],
+        "event_hash": st["tip_hash"],
+    }
+
+
+def new_recovery_key(
+    session: Session, db: Database, settings: Settings, writer: WriterClient | None = None
+) -> RecoveryKeyOut:
+    """Wrap the same database key and signing key under a new recovery key (decision D4).
+
+    recovery.pkg is written again, so the new key opens backups made from now on; backups made
+    before still open only with the older key (their own package wraps it). The new key is
+    returned once and kept nowhere; the events record only the package id (SR-07).
+    """
+    identity = repo.store(session)
+    if identity is None:
+        raise AppError("store_not_created", 409)
+    recovery_key = rp.new_recovery_key()
+    file_bytes, package_id = rp.write(
+        recovery_key=recovery_key,
+        db_key=bytes.fromhex(db.key_hex()),
+        signing_seed=current_signing_seed(settings),
+        stream_id=identity.stream_id,
+        security_state_revision=_security_state(session, db),
+        evidence_tip=_evidence_tip(writer),
+        writer_file=_writer_file(writer),
+    )
+    _write_atomic(settings.recovery_pkg, file_bytes)
+    repo.update_store(session, signing_key_id=identity.signing_key_id, package_id=package_id)
+    repo.record_event(
+        session,
+        "recovery_package_written",
+        actor="app",
+        body={"package_id": package_id, "package_digest": rp.package_digest(file_bytes)},
+    )
+    repo.record_event(session, "recovery_key_issued", actor="user", body={"package_id": package_id})
+    repo.mark_key_issued(session)
+    return RecoveryKeyOut(
+        recovery_key=rp.format_recovery_key(recovery_key),
+        package_id=package_id,
+        issued_at=repo.state(session).recovery_key_issued_at or utcnow(),
+    )
+
+
+# ------------------------------------------------------------------ backup (decision D3)
+def set_backup_location(session: Session, settings: Settings, path_text: str | None) -> SetupStatus:
+    """Where backups go: an existing folder, chosen in the system folder dialog. ``None`` clears it."""
+    if path_text is not None:
+        folder = Path(path_text)
+        if not folder.is_absolute() or not folder.is_dir():
+            raise AppError("invalid_path", 400)
+    repo.set_backup_location(session, path_text)
+    return status(session, settings)
+
+
+def _new_backup_folder(location: Path) -> Path:
+    """``AIOS backup 2026-11-15 0648``; a second backup in the same minute gets a number."""
+    base = f"AIOS backup {utcnow():%Y-%m-%d %H%M}"
+    folder, n = location / base, 1
+    while folder.exists() or folder.with_name(folder.name + ".partial").exists():
+        n += 1
+        folder = location / f"{base} ({n})"
+    return folder
+
+
+def backup(
+    session: Session, db: Database, settings: Settings, writer: WriterClient | None = None
+) -> BackupOut:
+    """A backup restore accepts as it is, written to a new folder in the chosen location.
+
+    chats.db is copied through SQLite's online backup (a consistent snapshot while AIOS runs) and
+    must pass the integrity check; the evidence file is copied by the evidence writer, the only
+    process that opens it (SR-04); recovery.pkg is copied as it is, so the same recovery key opens
+    the backup. Every file the package's manifest requires must be there. The folder appears only
+    when it is complete; on any failure nothing is left behind and nothing is recorded.
+    """
+    if repo.store(session) is None:
+        raise AppError("store_not_created", 409)
+    state = repo.state(session)
+    if not state.backup_location:
+        raise AppError("no_backup_location", 409)
+    location = Path(state.backup_location)
+    if not location.is_dir():
+        raise AppError("backup_location_unavailable", 422)  # the drive is not plugged in
+    if not settings.recovery_pkg.is_file():
+        raise AppError("no_recovery_package", 409)
+
+    folder = _new_backup_folder(location)
+    partial = folder.with_name(folder.name + ".partial")
+    try:
+        partial.mkdir(parents=True)
+        key = db.key_hex()
+        backup_encrypted(settings.chats_db, partial / "chats.db", key)
+        if not integrity_ok(partial / "chats.db", key):
+            raise AppError("backup_unreadable", 500)
+        pkg_bytes = settings.recovery_pkg.read_bytes()
+        shutil.copyfile(settings.recovery_pkg, partial / "recovery.pkg")
+        if writer is not None:
+            # The writer names its own file (AC-14: the backend never names it); without the
+            # name the evidence cannot be copied, so the backup stops instead of guessing.
+            writer_file = _writer_file(writer)
+            if writer_file is None:
+                raise AppError("writer_unavailable", 503)
+            writer.backup(str(partial / writer_file))
+        missing = [n for n in rp.required_files(rp.read(pkg_bytes)) if not (partial / n).is_file()]
+        if missing:
+            raise AppError("backup_incomplete", 500)
+        os.replace(partial, folder)
+    except AppError:
+        shutil.rmtree(partial, ignore_errors=True)
+        raise
+    except WriterUnavailable as exc:
+        shutil.rmtree(partial, ignore_errors=True)
+        raise AppError("writer_unavailable", 503) from exc
+    except OSError as exc:
+        shutil.rmtree(partial, ignore_errors=True)
+        raise AppError("backup_failed", 500) from exc
+
+    files = [p for p in folder.iterdir() if p.is_file()]
+    size = sum(p.stat().st_size for p in files)
+    repo.mark_backed_up(session, size)
+    # Content-free (SR-07): no folder or file names. Not in the v1 registry yet: the wire-format
+    # owner has to agree the type (decision 19); verifiers report it as unknown_type.
+    repo.record_event(
+        session, "backup_created", actor="user", body={"size_bytes": size, "files": len(files)}
+    )
+    return BackupOut(
+        path=str(folder),
+        size_bytes=size,
+        files=len(files),
+        conversations=repo.conversation_count(session),
+        at=repo.state(session).last_backup_at or utcnow(),
+    )
 
 
 # ------------------------------------------------------------------ restore
