@@ -22,14 +22,13 @@ from pathlib import Path
 from typing import Any
 
 from aios_backend.config import Profile, Settings
+from aios_backend.evidence import leftover
 from aios_backend.evidence.client import (
     WRITER_PURPOSE,
     HttpWriterClient,
     WriterClient,
     WriterUnavailable,
 )
-from aios_backend.evidence import leftover
-from aios_backend.evidence.client import WRITER_PURPOSE, HttpWriterClient
 from aios_common import platforms
 from aios_common.handshake import derive
 from aios_common.logging import get_logger, log_event
