@@ -294,7 +294,8 @@ describe("desktop app against the real backend", () => {
     expect(await ui.api.conversations.send(conversationId, "When is the rent review?", [notes.id])).toEqual({ ok: true });
 
     await ui.api.knowledge.remove(picture!.id);
-    expect(docs().some((d) => d.id === picture!.id)).toBe(false);
+    expect(lastToast()).not.toMatchObject({ title: "Document not removed" }); // a failure shows its reason
+    await eventually(() => expect(docs().some((d) => d.id === picture!.id)).toBe(false));
     expect(existsSync(path.join(folder, "photo.png"))).toBe(true); // the original is never touched
   });
 
