@@ -6,6 +6,10 @@
 3. Bind 127.0.0.1 (port 0 = the OS picks one), serve, then print one READY line.
 4. Exit when the parent (the backend) is gone; a checkpoint is signed on the way out.
 
+Once it holds evidence.db it records its pid and its parent's next to the file
+(``evidence-writer.pid``), so a backend restarted after a crash can end a writer left behind
+(D-07). A clean exit removes the record.
+
 ``--data-dir`` is the folder that holds chats.db (the backend passes it; a path, not a secret).
 The shipped executable always takes its signing key from the OS key store. From source,
 ``--profile dev`` uses the fixed, non-secret development seed instead.
@@ -24,7 +28,7 @@ from pathlib import Path
 import psutil
 import uvicorn
 
-from aios_common import paths
+from aios_common import paths, pidfile
 from aios_common.handshake import HandshakeError, read_handshake, token
 from aios_common.logging import file_handler, get_logger, log_event
 from aios_evidence_writer.app import create_app
@@ -131,7 +135,21 @@ def main(argv: list[str] | None = None) -> None:
     except WriterLocked:
         sys.stderr.write("evidence-writer: another writer holds evidence.db\n")
         sys.exit(EXIT_LOCKED)
-    asyncio.run(serve(store, token(), hs.api_port, parent=psutil.Process(os.getppid())))
+    parent = psutil.Process(os.getppid())
+    record = folder / pidfile.WRITER_PID_FILE
+    pidfile.write(record, holder(parent))
+    try:
+        asyncio.run(serve(store, token(), hs.api_port, parent=parent))
+    finally:
+        pidfile.remove(record, os.getpid())
+
+
+def holder(parent: psutil.Process) -> pidfile.Holder:
+    try:
+        parent_created: float | None = parent.create_time()
+    except psutil.Error:
+        parent_created = None
+    return pidfile.Holder(os.getpid(), psutil.Process().create_time(), parent.pid, parent_created)
 
 
 if __name__ == "__main__":

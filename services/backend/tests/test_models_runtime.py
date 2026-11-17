@@ -12,6 +12,7 @@ from tests.conftest import LAUNCH_TOKEN, LOOPBACK
 from tests.test_models import CONTENT, gguf, tiny_entry  # noqa: F401  (fixture)
 
 from aios_backend.apps.models import catalogue
+from aios_backend.apps.models.downloads import RetryPolicy
 from aios_backend.apps.models.engine import BenchmarkRun, EngineState, Fallback
 from aios_backend.config import Settings
 from aios_backend.main import create_app
@@ -31,6 +32,7 @@ class FakeMirror:
         self.offsets: list[int] = []
         self.version = "2026-12-01"
         self.down = False
+        self.drop_after: int | None = None  # chunks sent before the connection drops (once)
 
     def fetch(self, entry_id: str, url: str, offset: int) -> Iterator[bytes]:
         if self.down:
@@ -39,6 +41,9 @@ class FakeMirror:
         for i, start in enumerate(range(offset, len(self.content), CHUNK)):
             if self.gate is not None and (self.hold_after is None or i >= self.hold_after):
                 self.gate.wait(5)
+            if self.drop_after is not None and i == self.drop_after:
+                self.drop_after = None
+                raise ConnectionError("connection reset")  # the network was pulled
             yield self.content[start : start + CHUNK]
 
     def catalogue_version(self) -> str:
@@ -91,8 +96,13 @@ def runtime(
 ) -> Iterator[TestClient]:
     headers = {"Authorization": f"Bearer {LAUNCH_TOKEN}"}
     app = create_app(settings, db, local_engine=engine, mirror=mirror)
+    app.state.downloads.retry = FAST_RETRY
     with TestClient(app, client=LOOPBACK, headers=headers) as c:
         yield c
+
+
+# Retries in milliseconds instead of seconds; gives up after 0.3 s without progress.
+FAST_RETRY = RetryPolicy(delays=(0.01, 0.02, 0.05), give_up_after=0.3)
 
 
 def wait_received(client: TestClient, entry_id: str, at_least: int) -> dict:
@@ -226,6 +236,70 @@ def test_an_unreachable_mirror_fails_the_download(
     mirror.down = True
     runtime.post("/models/downloads", json={"entry_id": tiny_entry.id})
     assert wait_for(runtime, tiny_entry.id, "failed")["error"] == "mirror_unreachable"
+
+
+def test_d07_a_dropped_connection_resumes_on_its_own(
+    runtime: TestClient,
+    mirror: FakeMirror,
+    tiny_entry: catalogue.Entry,  # noqa: F811
+    settings: Settings,
+) -> None:
+    """D-07: pull the network mid-download; the download continues from the partial file by
+    itself, without Retry, and installs the verified file."""
+    mirror.drop_after = 3
+    runtime.post("/models/downloads", json={"entry_id": tiny_entry.id})
+    done = wait_for(runtime, tiny_entry.id, "done")
+    assert done["error"] is None
+    assert mirror.offsets == [0, 3 * CHUNK]  # the second request asks only for the rest
+    assert (settings.models_dir / tiny_entry.file_name).read_bytes() == CONTENT
+
+
+def test_d07_the_download_waits_for_the_network_to_come_back(
+    runtime: TestClient,
+    mirror: FakeMirror,
+    tiny_entry: catalogue.Entry,  # noqa: F811
+) -> None:
+    """While the network is gone the download keeps trying (not failed); when it is back the
+    download finishes."""
+    mirror.down = True
+    runtime.post("/models/downloads", json={"entry_id": tiny_entry.id})
+    time.sleep(0.1)  # several attempts, still inside the 0.3 s window
+    assert runtime.get(f"/models/downloads/{tiny_entry.id}").json()["status"] == "downloading"
+    mirror.down = False
+    wait_for(runtime, tiny_entry.id, "done")
+
+
+def test_d07_pause_while_waiting_for_the_network(
+    runtime: TestClient,
+    mirror: FakeMirror,
+    tiny_entry: catalogue.Entry,  # noqa: F811
+) -> None:
+    mirror.down = True
+    runtime.post("/models/downloads", json={"entry_id": tiny_entry.id})
+    time.sleep(0.05)
+    assert runtime.post(f"/models/downloads/{tiny_entry.id}/pause").status_code == 200
+    assert wait_for(runtime, tiny_entry.id, "paused")["error"] is None
+
+
+def test_d07_a_complete_partial_file_is_verified_without_asking_for_more(
+    runtime: TestClient,
+    mirror: FakeMirror,
+    tiny_entry: catalogue.Entry,  # noqa: F811
+    settings: Settings,
+) -> None:
+    """Killed while verifying: the next start finds every byte and only checks the file."""
+    settings.models_dir.mkdir(parents=True, exist_ok=True)
+    (settings.models_dir / f"{tiny_entry.file_name}.download").write_bytes(CONTENT)
+    runtime.post("/models/downloads", json={"entry_id": tiny_entry.id})
+    wait_for(runtime, tiny_entry.id, "done")
+    assert mirror.offsets == []
+
+
+def test_d07_retry_policy_backs_off_and_stops_growing() -> None:
+    policy = RetryPolicy()
+    waits = [policy.delay(i) for i in range(10)]
+    assert waits == sorted(waits) and waits[0] <= 5 and waits[-1] == policy.delays[-1]
+    assert policy.give_up_after >= 300  # a pulled cable gets minutes, not seconds
 
 
 # ------------------------------------------------------------------ catalogue check
