@@ -1,0 +1,15 @@
+{
+  "scorer": "Andrea Rossetti",
+  "date": "2026-11-17",
+  "status": "proposed, to be confirmed by the technical reviewer",
+  "items": {
+    "SU-1": {"score": 2, "note": "37 words; dates, rooms 1A/1B, 28 Feb, contact all right. Leaves out the Termotec visit, which needs no action from staff."},
+    "DR-1": {"score": 2, "note": ""},
+    "DR-2": {"score": 2, "note": "Three sentences, no invented facts."},
+    "DR-3": {"score": 2, "note": "Opens with \"Welcome to the team!\" and then talks about new staff in the third person; small edit. Generic content, nothing that needs checking."},
+    "DR-4": {"score": 2, "note": ""},
+    "DR-5": {"score": 2, "note": "Good tips; 203 words, longer than needed."},
+    "ML-1": {"score": 2, "note": "Natural, correct Italian."},
+    "ML-3": {"score": 2, "note": "Correct German; covers encrypted storage, master password and generated passwords."}
+  }
+}
