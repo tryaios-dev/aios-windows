@@ -32,7 +32,8 @@ language detected automatically). Time for one call:
   `manifest.json` with SHA-256), CPU and Vulkan builds, without a dependency on an installed
   Visual C++ runtime. It runs as its own process, `whisper-server`, on loopback.
 - **Model.** Whisper small, multilingual, q5_1 (190 MB, MIT). Language detected
-  automatically; `--translate` is not used, so the text is in the language that was spoken.
+  automatically; `--translate` is not used, so the text is in the language that was spoken, and
+  the chat model answers in that language.
 - **Key.** A new derived token purpose `aios/ipc/v1/voice`, sent over stdin with a patch like
   `build/llama/patches/0001-api-key-stdin.patch`; without the key every request is refused.
   This adds a row to the Process and IPC contract (section 5) and a section like section 7.
@@ -84,7 +85,6 @@ language detected automatically). Time for one call:
 4. **In the first build?** The setup checklist's Voice line shows "ready" only when the model
    is installed. The backend looks for the model in the models folder, so shipping it with the
    installer or as a catalogue entry needs no code change.
-5. **Text in the spoken language, or always English?** Proposed: the spoken language.
 
 **Consequences.**
 - One more executable and one more model to build, sign and ship (about 190 MB more if it
