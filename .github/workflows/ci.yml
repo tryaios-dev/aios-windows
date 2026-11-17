@@ -12,7 +12,9 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "0 5 * * 1"        # weekly dependency scan against new advisories
+    # Nightly (M-03): the whole suite, including the full-stack e2e run and the dependency scan
+    # against new advisories, also runs when nothing was pushed.
+    - cron: "0 2 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -49,6 +51,7 @@ jobs:
       - run: uv run python tools/contracts/gen_evidence_vectors.py --check      # evidence golden vectors current (F-02)
       - run: uv run python tools/contracts/gen_project_packages.py --check      # golden project packages current (J-02)
       - run: uv run python tools/contracts/gen_recovery_reference.py --check    # reference Recovery Package current (E-03)
+      - run: uv run python tools/contracts/gen_model_catalogue_vectors.py --check  # model catalogue golden vectors current (A-03)
 
   py-unit:
     strategy:
@@ -110,7 +113,7 @@ jobs:
           AIOS_LLAMA_SERVER: ${{ github.workspace }}/build/out/llama/cpu/llama-server
           AIOS_TEST_MODEL: ${{ runner.temp }}/test.gguf
         working-directory: services/backend
-        run: uv run pytest -v tests/test_spike.py tests/test_engine_launcher.py tests/test_engine_lifetime.py
+        run: uv run pytest -v tests/test_spike.py tests/test_engine_launcher.py tests/test_engine_lifetime.py tests/test_real_model_chat.py
 
   llama-windows:
     strategy:
@@ -154,7 +157,7 @@ jobs:
           AIOS_LLAMA_SERVER: ${{ github.workspace }}\build\out\llama\cpu\llama-server.exe
           AIOS_TEST_MODEL: ${{ runner.temp }}\test.gguf
         working-directory: services/backend
-        run: uv run pytest -v tests/test_spike.py tests/test_engine_launcher.py tests/test_engine_lifetime.py
+        run: uv run pytest -v tests/test_spike.py tests/test_engine_launcher.py tests/test_engine_lifetime.py tests/test_real_model_chat.py
       - uses: actions/upload-artifact@v4
         with:
           name: llama-${{ matrix.variant }}
@@ -178,6 +181,8 @@ jobs:
       - run: uv sync --frozen --all-packages --all-extras
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:e2e
+      - if: runner.os == 'Windows'                # M-03: the real app in a real window (needs a display)
+        run: pnpm --filter @aios/desktop test:window
 
   backend-linux-build:                           # B-03 / AC-23: backend + writer build on Ubuntu (not shipped)
     needs: [py-unit]

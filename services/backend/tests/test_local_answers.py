@@ -32,6 +32,8 @@ class FakeEngine(BaseHTTPRequestHandler):
         events = [{"choices": [{"delta": {"reasoning_content": "hidden"}}]}]
         events += [{"choices": [{"delta": {"content": p}}]} for p in PIECES]
         events.append({"choices": [{"delta": {}}], "timings": {"predicted_per_second": 14.5}})
+        if body.get("stream_options") == {"include_usage": True}:  # the final usage chunk
+            events.append({"choices": [], "usage": {"prompt_tokens": 11, "completion_tokens": 3}})
         for e in events:
             self.wfile.write(f"data: {json.dumps(e)}\n\n".encode())
         self.wfile.write(b"data: [DONE]\n\n")
@@ -163,3 +165,23 @@ def test_g_02_local_models_answer_with_the_installed_model(
     assert sent[0] == {"role": "system", "content": SYSTEM_PROMPT}
     assert sent[1:] == [{"role": "user", "content": "Hi"}]
     assert local.state().state == "ready"
+
+
+def test_g03_the_engine_reports_its_token_counts(engine_port: int, tmp_path: Path) -> None:
+    stream = stream_chat(
+        fake_engine(engine_port, tmp_path / "m.gguf"), [{"role": "user", "content": "Hi"}]
+    )
+    assert "".join(stream) == "Hello there!"
+    assert stream.usage == (11, 3)
+    assert FakeEngine.requests[0]["stream_options"] == {"include_usage": True}
+
+
+def test_g03_prepare_adds_the_aios_prompt_once() -> None:
+    local = LocalModels.__new__(LocalModels)  # prepare needs no database or engine
+    once = local.prepare("local", [{"role": "user", "content": "Hi"}])
+    assert once[0] == {"role": "system", "content": SYSTEM_PROMPT}
+    assert local.prepare("local", once) == once
+    noted = local.prepare(
+        "local", [{"role": "system", "content": "Note"}, {"role": "user", "content": "Hi"}]
+    )
+    assert noted[0]["content"] == f"{SYSTEM_PROMPT}\n\nNote"

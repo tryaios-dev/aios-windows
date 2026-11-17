@@ -105,24 +105,43 @@ class LocalModels:
             runtime="llama-server",
         )
 
-    def answer(self, provider: str, model_id: str, messages: list[dict[str, str]]) -> Iterator[str]:
+    def prepare(self, provider: str, messages: list[dict[str, str]]) -> list[dict[str, str]]:
+        """The messages exactly as they go to the engine: the AIOS prompt first, once. Chat calls
+        this before the input commitment, so evidence covers the bytes sent (G-03)."""
+        if not messages or messages[0].get("role") != "system":
+            return [{"role": "system", "content": SYSTEM_PROMPT}, *messages]
+        if messages[0]["content"].startswith(SYSTEM_PROMPT):
+            return list(messages)
+        # A note from chat (skills, documents, the summary of earlier messages) goes after it.
+        merged = f"{SYSTEM_PROMPT}\n\n{messages[0]['content']}"
+        return [{"role": "system", "content": merged}, *messages[1:]]
+
+    def answer(
+        self, provider: str, model_id: str, messages: list[dict[str, str]]
+    ) -> engine_client.Streamed:
+        out = engine_client.Streamed()
+        out._chunks = self._answer(provider, model_id, self.prepare(provider, messages), out)
+        return out
+
+    def _answer(
+        self,
+        provider: str,
+        model_id: str,
+        messages: list[dict[str, str]],
+        out: engine_client.Streamed,
+    ) -> Iterator[str]:
         model = self._installed(model_id)
         if provider != "local" or model is None:
             raise NoModel
-        if not messages or messages[0].get("role") != "system":
-            messages = [{"role": "system", "content": SYSTEM_PROMPT}, *messages]
-        elif not messages[0]["content"].startswith(SYSTEM_PROMPT):
-            # A note from chat (the summary of earlier messages, M-07) goes after the AIOS prompt.
-            note = messages[0]["content"]
-            merged = f"{SYSTEM_PROMPT}\n\n{note}"
-            messages = [{"role": "system", "content": merged}, *messages[1:]]
         for attempt in (1, 2):
             engine = self._call(self._manager.acquire(model.path))
             sent = False
             try:
-                for chunk in engine_client.stream_chat(engine, messages):
+                stream = engine_client.stream_chat(engine, messages)
+                for chunk in stream:
                     sent = True
                     yield chunk
+                out.usage = stream.usage
                 return
             except Exception:
                 lost = attempt == 1 and not sent and self._call(self._manager.lost_gpu(engine))

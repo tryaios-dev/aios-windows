@@ -59,10 +59,41 @@ class ThinkFilter:
         return rest
 
 
+class Streamed:
+    """Answer text in chunks. Once the engine has finished, ``usage`` holds its own (prompt,
+    completion) token counts, when it reported them (G-03). Closing it closes the request."""
+
+    def __init__(self) -> None:
+        self.usage: tuple[int, int] | None = None
+        self._chunks: Iterator[str] = iter(())
+
+    def __iter__(self) -> "Streamed":
+        return self
+
+    def __next__(self) -> str:
+        return next(self._chunks)
+
+    def close(self) -> None:
+        close = getattr(self._chunks, "close", None)
+        if callable(close):
+            close()
+
+
+def _usage(event: dict[str, object]) -> tuple[int, int] | None:
+    usage = event.get("usage")
+    if not isinstance(usage, dict):
+        return None
+    prompt, completion = usage.get("prompt_tokens"), usage.get("completion_tokens")
+    if isinstance(prompt, int) and isinstance(completion, int):
+        return prompt, completion
+    return None
+
+
 def _body(messages: list[dict[str, str]], max_tokens: int | None) -> dict[str, object]:
     body: dict[str, object] = {
         "messages": messages,
         "stream": True,
+        "stream_options": {"include_usage": True},  # a final chunk with the token counts
         "chat_template_kwargs": {"enable_thinking": False},
     }
     if max_tokens is not None:
@@ -98,8 +129,16 @@ def _delta(event: dict[str, object]) -> str:
 
 def stream_chat(
     engine: Engine, messages: list[dict[str, str]], max_tokens: int | None = None
-) -> Iterator[str]:
+) -> Streamed:
     """Answer text in chunks. Closing the iterator closes the request, so the engine stops."""
+    out = Streamed()
+    out._chunks = _chunks(engine, messages, max_tokens, out)
+    return out
+
+
+def _chunks(
+    engine: Engine, messages: list[dict[str, str]], max_tokens: int | None, out: Streamed
+) -> Iterator[str]:
     think = ThinkFilter()
     with (
         httpx.Client(timeout=httpx.Timeout(600.0, connect=5.0), trust_env=False) as client,
@@ -113,6 +152,7 @@ def stream_chat(
         if resp.status_code != 200:
             raise EngineAnswerError(f"engine_status_{resp.status_code}")
         for event in _events(resp):
+            out.usage = _usage(event) or out.usage
             text = think.feed(_delta(event))
             if text:
                 yield text

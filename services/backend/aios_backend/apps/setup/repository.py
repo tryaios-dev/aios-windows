@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from sqlalchemy import func, select, text
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from aios_backend.apps.setup.models import SINGLE_ROW, SetupState, StoreIdentity
@@ -31,9 +32,14 @@ def state(session: Session) -> SetupState:
     """The setup_state row, created (first run not done) the first time it is read."""
     row = session.get(SetupState, SINGLE_ROW)
     if row is None:
-        row = SetupState(id=SINGLE_ROW, first_run_complete=False, restore_count=0)
-        session.add(row)
-        session.flush()
+        # Another request may create it at the same moment (the window asks in parallel at start).
+        session.execute(
+            sqlite_insert(SetupState)
+            .values(id=SINGLE_ROW, first_run_complete=False, restore_count=0)
+            .on_conflict_do_nothing()
+        )
+        row = session.get(SetupState, SINGLE_ROW)
+        assert row is not None
     return row
 
 

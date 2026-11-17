@@ -9,10 +9,16 @@ review.
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 from typing import Any
+
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+from aios_common.canonical import b64url_decode, jcs, tagged_hash
 
 DEV_CATALOGUE = Path(__file__).with_name("catalogue_dev.json")
 CHUNK = 1024 * 1024
@@ -112,3 +118,56 @@ def sha256_file(path: Path) -> str:
         while chunk := f.read(CHUNK):
             h.update(chunk)
     return h.hexdigest()
+
+
+# ------------------------------------------------------------------ signed catalogue (section 5, 6)
+SIGNATURE_TAG = "aios/model-catalogue/v1"
+_KEY_ID = re.compile(r"[0-9a-f]{64}")
+
+
+class CatalogueRejected(Exception):
+    """A catalogue refused by section 6; ``code`` is C_SIG, C_UNKNOWN_KEY, C_FORMAT or C_ROLLBACK."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+def verify_signed(
+    file_bytes: bytes,
+    sig_bytes: bytes,
+    trusted_keys: dict[str, bytes],
+    last_issued_at: str | None,
+) -> tuple[str, tuple[Entry, ...]]:
+    """Section 6 steps 1 to 3, in that order: the signature over the exact bytes received, before
+    any parsing (C_SIG, C_UNKNOWN_KEY); canonical form and version (C_FORMAT); no rollback
+    (C_ROLLBACK). ``trusted_keys``: key_id -> raw Ed25519 public key, pinned in the build.
+    Returns (issued_at, entries) of an accepted catalogue."""
+    try:
+        sig = json.loads(sig_bytes)
+        if not isinstance(sig, dict) or sig.get("alg") != "ed25519":
+            raise ValueError("alg")
+        key_id, signature = str(sig["key_id"]), b64url_decode(str(sig["sig"]))
+    except (ValueError, KeyError, TypeError) as exc:
+        raise CatalogueRejected("C_SIG") from exc
+    if not _KEY_ID.fullmatch(key_id) or key_id not in trusted_keys:
+        raise CatalogueRejected("C_UNKNOWN_KEY")
+    public_key = trusted_keys[key_id]
+    if tagged_hash("aios/key/v1/ed25519", public_key) != key_id:
+        raise CatalogueRejected("C_UNKNOWN_KEY")  # a pinned id that does not name its key
+    digest = bytes.fromhex(tagged_hash(SIGNATURE_TAG, file_bytes))
+    try:
+        Ed25519PublicKey.from_public_bytes(public_key).verify(signature, digest)
+    except (InvalidSignature, ValueError) as exc:
+        raise CatalogueRejected("C_SIG") from exc
+    try:
+        data = json.loads(file_bytes)
+        if jcs(data) != file_bytes or data.get("catalogue_version") != 1:
+            raise ValueError("format")
+        issued_at = str(data["issued_at"])
+        found = tuple(_entry(e) for e in data["entries"])
+    except (ValueError, KeyError, TypeError) as exc:
+        raise CatalogueRejected("C_FORMAT") from exc
+    if last_issued_at is not None and issued_at <= last_issued_at:
+        raise CatalogueRejected("C_ROLLBACK")
+    return issued_at, found

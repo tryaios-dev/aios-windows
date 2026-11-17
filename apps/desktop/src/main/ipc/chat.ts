@@ -3,6 +3,7 @@ import {
   Conversation,
   ConversationPatch,
   ConversationSummary,
+  EvidenceCheckpoint,
   EvidenceEvent,
   EvidenceExport,
   EvidenceExportInput,
@@ -76,6 +77,8 @@ export const evidenceHandlers: Record<string, Handler> = {
   },
   "evidence.status": async (b) => EvidenceStatus.parse(await b.client.request("GET", "/evidence/status")),
   "evidence.stream": async (b) => EvidenceStream.parse(await b.client.request("GET", "/evidence/stream")),
+  "evidence.checkpoints": async (b) =>
+    z.array(EvidenceCheckpoint).parse(await b.client.request("GET", "/evidence/checkpoints")),
   /** The user picks where; the writer builds and signs the bundle (F-07); the backend writes it. */
   "evidence.export": async (b, input) => {
     const what = EvidenceExportInput.parse(input);
