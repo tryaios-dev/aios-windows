@@ -1,2 +1,14 @@
 | Date | Missing capability | Source | Impact | Effort |
 | --- | --- | --- | --- | --- |
+| 2026-11-17 | Installer and app are not code-signed; SmartScreen warns on install and auto-update cannot verify a publisher | A-01, B-04, C-03 (status report 16 Nov) | High: blocks the pilot release checklist (N-04) and AC-01 | Medium once the Azure Artifact Signing account exists |
+| 2026-11-17 | Auto-update feed URL and publisher name are placeholders; `latest.yml` is unsigned | C-04 | Medium: pilot users must install new builds by hand | Medium, needs A-01 and a hosted feed |
+| 2026-11-17 | Company provider (answers from the company server) is not built; Company conversations answer `company_unreachable` | G-06, K-10 | Medium: only Local answers in the pilot | Large, needs the lab GPU host |
+| 2026-11-17 | The app still reads the bundled development catalogue: the signed-catalogue check (section 5 and 6, golden vectors) exists, but no signed catalogue or release key does yet | A-03, I-01 | Medium: catalogue integrity relies on the bundled copy until a signed catalogue ships | Small once the release key exists (A-01/A-05) |
+| 2026-11-17 | D-04 spike endpoint, IPC channel and screen are still shipped | Status report section 7 | Low: unused code path | Small, coordinate with the engine CI tests |
+| 2026-11-17 | Add resources to my AI: Link and Unlink have no backend; the list is the design's demonstration data | Design, no Plane item | Low for the pilot: the page says it is not in this build | Large, needs providers, accounts and billing |
+| 2026-11-17 | Voice notes skill (Whisper) is not in this build | Skills catalogue | Low: listed as not available | Being built by another team member |
+| 2026-11-17 | Third-party skills (signed, downloaded packages) are not supported; skills are built-in instructions or a local `.aios-skill` file | Skills design | Low for the pilot | Large, needs a signed feed, a sandbox and a spec decision |
+| 2026-11-17 | Settings > Install update and "Starting fresh" on the could-not-open screen say "not in this build" | UI | Low | Small to medium |
+| 2026-11-17 | One preload channel per endpoint: the approved Process and IPC Contract (IPC-61) names one channel, `aios:invoke`, with an allow-list of methods | C-01 | Low | A reviewer decision on IPC-61 first |
+| 2026-11-17 | Restore drill not run on two clean VMs; hardware matrix not run | M-01, M-02, M-04 | Medium: restore and performance proven only in automated tests | Needs the test VMs |
+| 2026-11-17 | At start, Chromium looks for the Windows system proxy (WPAD: a DHCP query and a `wpad` name lookup on the local network). No request is sent; allowed by Network allowlist v1 rule 5, and pinned by the real-window network capture | C-01, L-02 | Low | None unless the reviewer wants proxy discovery off |

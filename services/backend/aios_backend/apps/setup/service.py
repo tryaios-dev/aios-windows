@@ -70,14 +70,21 @@ def _security_state(session: Session, db: Database) -> dict[str, Any]:
 
 
 def _writer_file(writer: WriterClient | None) -> str | None:
-    """The evidence writer's file name, for the backup manifest; None without a writer."""
+    """The evidence writer's file name, for the backup manifest; None without a writer.
+
+    A writer that is set up but does not answer stops the package from being written: without
+    the name the evidence would be left out of the backup manifest, and a restore would not
+    notice it missing. The person tries again once the writer is back (it restarts on its own).
+    """
     if writer is None:
         return None
     try:
         name = writer.status().get("file_name")
-    except WriterUnavailable:
-        return None
-    return name if isinstance(name, str) else None
+    except WriterUnavailable as exc:
+        raise AppError("writer_unavailable", 503) from exc
+    if not isinstance(name, str) or not name:
+        raise AppError("writer_unavailable", 503)
+    return name
 
 
 def current_signing_seed(settings: Settings) -> bytes:

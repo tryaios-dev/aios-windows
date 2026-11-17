@@ -25,6 +25,11 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), strictCsp()],
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
-  build: { outDir: "dist", sourcemap: false },
+  build: {
+    outDir: "dist",
+    sourcemap: false,
+    // Fonts stay files: the CSP allows fonts from 'self' only, so an inlined data: font is refused.
+    assetsInlineLimit: (file: string) => (/\.woff2?$/.test(file) ? false : undefined),
+  },
   test: { environment: "jsdom" },
 });

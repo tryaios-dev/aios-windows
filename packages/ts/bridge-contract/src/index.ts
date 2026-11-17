@@ -466,6 +466,20 @@ export const EvidenceExport = z.object({
 });
 export type EvidenceExport = z.infer<typeof EvidenceExport>;
 
+/** A signed checkpoint the evidence writer made over a range of events (GET /evidence/checkpoints). */
+export const EvidenceCheckpoint = z.object({
+  id: z.string(),
+  stream_id: z.string(),
+  epoch: z.number().int(),
+  seq_from: z.number().int(),
+  seq_to: z.number().int(),
+  root_hash: z.string(),
+  signer_key_id: z.string(),
+  signature: z.string(),
+  created_at: z.string(),
+});
+export type EvidenceCheckpoint = z.infer<typeof EvidenceCheckpoint>;
+
 export const EvidenceStatus = z.object({ writer: z.enum(["ok", "unavailable"]), pending: z.number().int() });
 export type EvidenceStatus = z.infer<typeof EvidenceStatus>;
 
@@ -699,6 +713,8 @@ export interface AiosBridge {
     list(projectId?: string): Promise<EvidenceEvent[]>;
     status(): Promise<EvidenceStatus>;
     stream(): Promise<EvidenceStream>;
+    /** Signed checkpoints, oldest first; empty until the writer has made one. */
+    checkpoints(): Promise<EvidenceCheckpoint[]>;
     /** System save dialog, then the evidence writer builds and signs the bundle. Null when cancelled. */
     export(input: EvidenceExportInput): Promise<EvidenceExport | null>;
   };

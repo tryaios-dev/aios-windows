@@ -46,8 +46,9 @@ interface UpdaterOptions {
   allowPrerelease: boolean;
 }
 
-/** Signed feed only (latest.yml and the installer's Authenticode signature are checked by
- * electron-updater against publisherName); downgrades and pre-releases are never installed. */
+/** The installer's Authenticode signature is checked by electron-updater against publisherName
+ * before it runs. latest.yml itself is not signed: it only names the installer and its SHA-512.
+ * Downgrades and pre-releases are never installed. */
 export function configureUpdater(target: UpdaterOptions, packaged: boolean): void {
   target.autoDownload = packaged;
   target.allowDowngrade = false;
@@ -81,11 +82,12 @@ export async function checkForUpdate(backend: BackendHandle, manual = false): Pr
  * Check at start and at most once a day, signed updates only, and only while the update check
  * is switched on in Settings (M-17). A feed that cannot be reached is logged and ignored.
  */
-export function initUpdater(backend: BackendHandle): void {
+export function initUpdater(current: () => BackendHandle): void {
   configureUpdater(autoUpdater(), app.isPackaged);
   autoUpdater().on("error", () => log("updater.error", { component: "updater" }));
   const tick = async () => {
     try {
+      const backend = current(); // the backend running now: crash recovery may have replaced it
       const settings = await backend.client.request<CheckSettings>("GET", "/settings");
       if (checkIsDue(settings)) await checkForUpdate(backend);
     } catch {

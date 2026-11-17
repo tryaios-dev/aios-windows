@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog } from "electron";
 import { startBackend, stopBackend } from "./backend/spawn.js";
 import { registerIpc } from "./ipc/index.js";
 import { currentPlatform } from "./platform/index.js";
-import { onSecondInstance, runStartup, startFailureText } from "./startup.js";
+import { onSecondInstance, runStartup, startFailureText, superviseBackend } from "./startup.js";
 import { createMainWindow, createStartupWindow } from "./window.js";
 import { initUpdater } from "./updater.js";
 import { configureLogFile, log } from "./logging.js";
@@ -79,11 +79,41 @@ app.whenReady().then(async () => {
     quitting: () => quitting,
   });
   if (!backend) return;
-  initUpdater(backend); // respects the update check switch in Settings
+  let current = backend;
+  initUpdater(() => current); // respects the update check switch in Settings
   log("app.ready", { port: backend.apiPort });
+  // Crash recovery: a backend that stops while AIOS is open is started again.
+  void superviseBackend(backend, {
+    startBackend: () => startBackend(),
+    stopBackend,
+    replaced: (b) => {
+      current = b;
+      registerIpc(b);
+      // The window reloads its data from the new backend (nothing it showed is lost).
+      for (const win of BrowserWindow.getAllWindows()) win.webContents.reload();
+    },
+    askRestartOrQuit: async (code) => {
+      const win = BrowserWindow.getAllWindows()[0];
+      const options = {
+        type: "error" as const,
+        title: "AIOS",
+        message: "AIOS stopped working",
+        detail: `The background service stopped several times. Your projects and conversations are safe. Restart it, or quit and open AIOS again later.\n\nCode: ${code}`,
+        buttons: ["Restart", "Quit"],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+      };
+      const { response } = win ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
+      return response === 0 ? "retry" : "quit";
+    },
+    quit: () => app.quit(),
+    quitting: () => quitting,
+  });
 });
 
 app.on("window-all-closed", async () => {
+  quitting = true; // before the backend stops, so crash recovery does not start it again
   await stopBackend();
   app.quit();
 });
