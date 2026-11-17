@@ -35,6 +35,7 @@ from aios_backend.config import Settings
 from aios_backend.errors import AppError, not_found
 from aios_backend.runtime import STOP_WAIT_SECONDS, Busy, Generation, Generations
 from aios_common.canonical import b64url, jcs, tagged_hash
+from aios_common.logging import get_logger, log_event
 from db.models import Conversation, Message, ProviderMove, Summary
 from db.session import Database
 
@@ -49,6 +50,11 @@ EVIDENCE_STATUS = {
     "partial": "cancelled",
     "error": "error",
 }
+# While an answer is produced, the words so far are saved this often (D-07): a hard kill keeps
+# the question and the answer up to the last save, with status ``partial``.
+SAVE_EVERY_S = 2.0
+
+log = get_logger("chat")
 
 
 # ------------------------------------------------------------------ text helpers (same as the UI)
@@ -298,7 +304,13 @@ def _produce(
 ) -> tuple[str, str, tuple[int, int] | None]:
     """Collect the answer. Returns (text, status, usage): status is complete, stopped, partial or
     error; usage is the engine's own (prompt, completion) token counts when it reported them."""
+    save: Callable[[str], None] | None = None,
+) -> tuple[str, str]:
+    """Collect the answer. Returns (text, status): complete, stopped, partial or error.
+
+    ``save`` gets the text so far at most every ``SAVE_EVERY_S`` (D-07)."""
     parts: list[str] = []
+    saved_at = time.monotonic()
     chunks = answers.answer(provider, info.model_id, context)
     try:
         for chunk in chunks:
@@ -311,6 +323,10 @@ def _produce(
                 on_chunk(chunk)
         status = "stopped" if generation.cancel.is_set() else "complete"
         return "".join(parts), status, _usage(chunks)
+            if save is not None and time.monotonic() - saved_at >= SAVE_EVERY_S:
+                _save_quietly(save, "".join(parts))
+                saved_at = time.monotonic()
+        return "".join(parts), "stopped" if generation.cancel.is_set() else "complete"
     except Exception:
         return "".join(parts), "partial" if parts else "error", None
     finally:
@@ -337,6 +353,12 @@ def _saver(save: Callable[[str], None], generation: Generation) -> Callable[[str
             save(generation.text)
 
     return on_chunk
+def _save_quietly(save: Callable[[str], None], text: str) -> None:
+    """A failed save never ends the answer; the next save or ``_finish`` stores it."""
+    try:
+        save(text)
+    except Exception:
+        log_event(log, "answer_save_failed")
 
 
 def _finish(
@@ -407,9 +429,17 @@ def _generate(
     context: list[dict[str, str]],
     regenerate: bool,
 ) -> MessageOut:
-    """Produce and store a whole answer in this request. Stop can end it early."""
+    """Produce and store a whole answer in this request. Stop can end it early.
+
+    The question and the empty answer (``partial``) are committed first, then the answer is
+    saved as it grows, so a hard kill mid-answer loses at most ``SAVE_EVERY_S`` of it (D-07)."""
     generation = _begin(generations, conv, assistant.id)
     result: MessageOut | None = None
+
+    def save(text: str) -> None:
+        assistant.content = text
+        session.commit()
+
     try:
         sent = _sent(answers, conv.current_provider, context)
         assistant.status = "partial"  # what is left if the process stops mid-answer
@@ -423,6 +453,12 @@ def _generate(
             answers, info, conv.current_provider, sent, generation, _saver(save, generation)
         )
         _finish(session, info, conv, assistant, sent, content, status, regenerate, usage)
+        assistant.status = "partial"
+        session.commit()
+        content, status = _produce(
+            answers, info, conv.current_provider, context, generation, save=save
+        )
+        _finish(session, info, conv, assistant, context, content, status, regenerate)
         result = message_out(session, [assistant])[0]
         return result
     finally:
@@ -792,6 +828,15 @@ def _stream(
             content, status, usage = _produce(
                 answers, info, provider, sent, generation, on_chunk_and_save
             )
+            assistant = session.get(Message, assistant_id)
+            if assistant is not None:
+                assistant.content = text
+                session.commit()
+
+    def work() -> None:
+        result: MessageOut | None = None
+        try:
+            content, status = _produce(answers, info, provider, context, generation, on_chunk, save)
             with db.session() as session:
                 conv = repo.get_conversation(session, conversation_id)
                 assistant = session.get(Message, assistant_id)

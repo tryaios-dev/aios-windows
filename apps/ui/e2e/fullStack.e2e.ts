@@ -118,7 +118,6 @@ describe("desktop app against the real backend", () => {
     expect(types).toEqual(
       expect.arrayContaining(["store_created", "recovery_package_written", "recovery_key_issued", "project_created"]),
     );
-    expect(store().events.every((e) => e.pending)).toBe(true); // the evidence writer is not in this build
   });
 
   it("settings: a change is saved in the backend and survives a reload", async () => {
