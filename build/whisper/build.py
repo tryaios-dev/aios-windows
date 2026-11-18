@@ -13,7 +13,6 @@ SHA-256. Writes build/out/whisper/manifest-<variant>.json with the digest of eve
 import hashlib
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -104,40 +103,19 @@ def remove_tree(path: Path) -> None:
         shutil.rmtree(path, onexc=writable_then_retry)
 
 
-def toolchain(src: Path) -> Path:
-    """The Windows toolchain file. Upstream's names ``clang`` and leaves it to PATH; some runner
-    images put a standalone LLVM (C:\\Program Files\\LLVM) first that is older than the Visual
-    Studio C++ library accepts (STL1000: "expected Clang 22 or newer"). When Visual Studio's own
-    Clang is there, a copy names it by full path; nothing else changes (PATH, linker, tools)."""
-    upstream = src / "cmake" / "x64-windows-llvm.cmake"
-    vc = os.environ.get("VCINSTALLDIR")
-    llvm = Path(vc) / "Tools" / "Llvm" / "x64" / "bin" if vc else None
-    if llvm is None or not (llvm / "clang.exe").is_file():
-        return upstream
-    text = upstream.read_text("utf-8")
-    for name in ("clang", "clang++"):
-        exe = (llvm / f"{name}.exe").as_posix()
-        text = re.sub(
-            rf"(CMAKE_C(?:XX)?_COMPILER\s+){re.escape(name)}\s*\)",
-            lambda m, e=exe: f'{m.group(1)}"{e}" )',
-            text,
-        )
-    own = WORK / "x64-windows-llvm.cmake"
-    own.parent.mkdir(parents=True, exist_ok=True)
-    own.write_text(text, "utf-8")
-    print(f"compiler: {llvm / 'clang.exe'}", flush=True)
-    return own
-
-
 def build(src: Path, variant: str) -> Path:
     flags = list(COMMON_FLAGS)
     if WINDOWS:
         # As build/llama/build.py: Clang, backend DLLs and every x64 CPU variant picked at runtime.
         flags += [
-            f"-DCMAKE_TOOLCHAIN_FILE={toolchain(src)}",
+            f"-DCMAKE_TOOLCHAIN_FILE={src / 'cmake' / 'x64-windows-llvm.cmake'}",
             "-DGGML_BACKEND_DL=ON",
             "-DGGML_CPU_ALL_VARIANTS=ON",
             "-DCMAKE_C_FLAGS=-Wno-error=incompatible-pointer-types",
+            # Some runner images have a Visual Studio C++ library newer than the LLVM on PATH
+            # accepts (STL1000: "expected Clang 22 or newer"). Microsoft's documented switch skips
+            # that version check only; the same Clang built and passed before the image update.
+            "-DCMAKE_CXX_FLAGS=-D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH",
         ]
     if variant == "vulkan":
         flags.append("-DGGML_VULKAN=ON")
