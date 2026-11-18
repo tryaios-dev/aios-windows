@@ -607,6 +607,31 @@ export const DownloadState = z.object({
 });
 export type DownloadState = z.infer<typeof DownloadState>;
 
+/* ------------------------------------------------------------------ voice (ADR 0016) */
+/** Whether speaking instead of typing can be used now (GET /voice/status). */
+export const VoiceStatus = z.object({
+  state: z.enum(["not_built", "no_model", "not_started", "starting", "ready", "failed"]),
+  build: z.enum(["cpu", "vulkan"]).nullable(),
+});
+export type VoiceStatus = z.infer<typeof VoiceStatus>;
+
+export const VoiceSessionId = z.string().regex(/^[0-9a-f]{32}$/);
+export const VoiceSession = z.object({ session_id: VoiceSessionId });
+export type VoiceSession = z.infer<typeof VoiceSession>;
+
+/** 16 kHz, mono, 16-bit little-endian PCM from the microphone: at most 2 s per call. */
+export const VOICE_MAX_AUDIO_BYTES = 64_000;
+export const VoiceAudio = z
+  .instanceof(Uint8Array)
+  .refine((a) => a.byteLength % 2 === 0 && a.byteLength <= VOICE_MAX_AUDIO_BYTES, "voice_audio_invalid");
+
+/** The words heard so far; `pending`: a phrase is still being turned into text. */
+export const VoiceText = z.object({ text: z.string(), pending: z.boolean() });
+export type VoiceText = z.infer<typeof VoiceText>;
+
+export const VoiceFinished = z.object({ text: z.string() });
+export type VoiceFinished = z.infer<typeof VoiceFinished>;
+
 /* ------------------------------------------------------------------ bridge */
 export interface AiosBridge {
   system: {
@@ -736,6 +761,18 @@ export interface AiosBridge {
     engine(): Promise<EngineStatus>;
     /** Starts the engine with the default model if needed and times a short answer. */
     benchmark(): Promise<BenchmarkRun>;
+  };
+  /** Speak instead of typing: turned into text on this computer (ADR 0016). */
+  voice: {
+    status(): Promise<VoiceStatus>;
+    /** Starts the speech engine if needed. Fails with `voice_not_built`, `voice_no_model` or `voice_failed`. */
+    start(): Promise<VoiceSession>;
+    /** About 250 ms of audio; returns at once with the words so far. */
+    audio(sessionId: string, pcm: Uint8Array): Promise<VoiceText>;
+    /** Turns the rest into text and returns all of it. */
+    finish(sessionId: string): Promise<VoiceFinished>;
+    /** Throws away what was heard. */
+    cancel(sessionId: string): Promise<void>;
   };
   /** SPIKE-D04 (temporary). */
   spike: {

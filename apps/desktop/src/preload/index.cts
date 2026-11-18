@@ -112,6 +112,13 @@ const bridge: AiosBridge = {
     engine: () => invoke("models.engine"),
     benchmark: () => invoke("models.benchmark"),
   },
+  voice: {
+    status: () => invoke("voice.status"),
+    start: () => invoke("voice.start"),
+    audio: (sessionId, pcm) => invoke("voice.audio", sessionId, pcm),
+    finish: (sessionId) => invoke("voice.finish", sessionId),
+    cancel: (sessionId) => invoke("voice.cancel", sessionId),
+  },
   spike: {
     ask: (prompt: string) => invoke("spike.ask", prompt), // SPIKE-D04 (temporary)
   },

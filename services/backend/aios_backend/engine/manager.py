@@ -118,6 +118,12 @@ class EngineManager:
     def safe_mode(self) -> bool:
         return self._safe_mode
 
+    @property
+    def gpu_found(self) -> bool:
+        """A GPU was found and its build has not failed this session (the voice engine follows
+        the chat engine's choice; it does not probe on its own)."""
+        return bool(self._has_gpu) and not self._cpu_fallback
+
     async def set_safe_mode(self, on: bool) -> None:
         async with self._lock:
             if on != self._safe_mode:

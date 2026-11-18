@@ -25,6 +25,8 @@ from aios_backend.apps.settings.router import router as settings_router
 from aios_backend.apps.setup.router import router as setup_router
 from aios_backend.apps.skills.router import router as skills_router
 from aios_backend.apps.spike.router import router as spike_router  # SPIKE-D04
+from aios_backend.apps.voice.router import router as voice_router
+from aios_backend.apps.voice.service import Sessions as VoiceSessions
 from aios_backend.components import Components, ComponentState
 from aios_backend.config import Settings
 from aios_backend.engine import EngineManager
@@ -37,6 +39,7 @@ from aios_backend.origin import HuggingFaceOrigin
 from aios_backend.routes import VERSION
 from aios_backend.routes import router as system_router
 from aios_backend.runtime import Generations
+from aios_backend.voice import VoiceManager
 from aios_common.asgi_auth import LoopbackTokenMiddleware
 from aios_common.logging import file_handler, get_logger, log_event
 from db.session import Database
@@ -128,6 +131,13 @@ def create_app(
         idle_unload_s=settings.engine_idle_unload_s,
         model_fn=(lambda: local_models.default_path() if local_models else None) if local else None,
     )
+    voice = VoiceManager(
+        settings.voice_root,
+        settings.models_dir,
+        settings.backups_dir.parent / "voice-tmp",
+        lambda: engine.job,
+        prefer_gpu=lambda: engine.gpu_found and not engine.safe_mode,
+    )
     if local:
         local_models = LocalModels(database, engine, components)
         answers = answers or local_models
@@ -141,6 +151,7 @@ def create_app(
             local_models.bind(asyncio.get_running_loop())
         await manager.set_safe_mode(load_safe_mode(database))  # before any engine can start
         await manager.startup()  # ends orphaned engines (IPC-52), starts the watcher
+        await voice.startup()  # the same for whisper-server (IPC-38)
         child = None
         if app.state.writer is None and start_writer:
             try:
@@ -165,6 +176,8 @@ def create_app(
                 log_event(log, "shutdown_checkpoint_failed", error_code=type(exc).__name__)
         if child is not None:
             child.stop()
+        await app.state.voice_sessions.close()
+        await voice.shutdown()
         await manager.shutdown()
         database.dispose()
 
@@ -181,6 +194,8 @@ def create_app(
     app.state.db = database
     app.state.components = components
     app.state.engine = engine
+    app.state.voice = voice
+    app.state.voice_sessions = VoiceSessions(voice)
     app.state.answers = answers
     app.state.generations = Generations()
     app.state.local_engine = local_engine
@@ -202,6 +217,7 @@ def create_app(
         models_router,
         knowledge_router,
         skills_router,
+        voice_router,
     ):
         app.include_router(router)
     app.include_router(spike_router)  # SPIKE-D04: temporary, removed by G-01

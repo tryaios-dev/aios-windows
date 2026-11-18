@@ -10,6 +10,7 @@ import { setupHandlers } from "./setup.js";
 import { skillsHandlers } from "./skills.js";
 import { spikeHandlers } from "./spike.js"; // SPIKE-D04
 import { systemHandlers } from "./system.js";
+import { voiceHandlers } from "./voice.js";
 
 export type Handler = (backend: BackendHandle, ...args: unknown[]) => Promise<unknown>;
 
@@ -25,6 +26,7 @@ export const handlers: Record<string, Handler> = {
   ...knowledgeHandlers,
   ...skillsHandlers,
   ...modelsHandlers,
+  ...voiceHandlers,
   ...spikeHandlers, // SPIKE-D04: temporary
 };
 

@@ -188,6 +188,13 @@ jobs:
           AIOS_WHISPER_MODEL: ${{ runner.temp }}/whisper.bin
           AIOS_WHISPER_SAMPLE: ${{ github.workspace }}/build/out/whisper-work/src/samples/jfk.wav
         run: uv run pytest -v tests/voice
+      - name: Backend -> whisper-server end to end (dictation of the sample)
+        env:
+          AIOS_WHISPER_SERVER: ${{ github.workspace }}/build/out/whisper/cpu/whisper-server
+          AIOS_WHISPER_MODEL: ${{ runner.temp }}/whisper.bin
+          AIOS_WHISPER_SAMPLE: ${{ github.workspace }}/build/out/whisper-work/src/samples/jfk.wav
+        working-directory: services/backend
+        run: uv run pytest -v tests/test_voice.py
 
   whisper-windows:
     strategy:
@@ -264,7 +271,7 @@ jobs:
       - run: uv run python tools/smoke_linux_build.py
 
   package-windows:
-    needs: [py-lint, py-unit, ts-lint, ts-unit, e2e, llama-windows]
+    needs: [py-lint, py-unit, ts-lint, ts-unit, e2e, llama-windows, whisper-windows]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -279,6 +286,11 @@ jobs:
           pattern: llama-*
           path: build/out/llama
           merge-multiple: true
+      - uses: actions/download-artifact@v4         # patched whisper-server builds from whisper-windows
+        with:
+          pattern: whisper-*
+          path: build/out/whisper
+          merge-multiple: true
       - run: pnpm build:backend                    # backend.exe (PyInstaller)
       - run: uv run python tools/smoke_backend_exe.py   # D-01 / AC-10 against the built exe
       - run: pnpm build
@@ -290,6 +302,7 @@ jobs:
             apps/desktop/release/*.exe
             build/out/backend/
             build/out/llama/manifest-*.json
+            build/out/whisper/manifest-*.json
           retention-days: 14                       # artefact retention (B-02)
 
   audit:

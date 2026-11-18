@@ -54,6 +54,8 @@ class Settings:
     # llama-server builds (engine_root/cpu, engine_root/vulkan); idle engines are unloaded.
     engine_root: Path = Path()
     engine_idle_unload_s: float = 300.0
+    # whisper-server builds (voice_root/cpu, voice_root/vulkan), ADR 0016.
+    voice_root: Path = Path()
     # Shown in Settings > Network and the composer while the flag is on. Set by an operator;
     # the API key is never here (it lives in the OS keystore, read only by the gateway).
     company_base_url: str | None = None
@@ -69,6 +71,14 @@ def _engine_root() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parents[1] / "llama"
     return REPO_ROOT / "build" / "out" / "llama"
+
+
+def _voice_root() -> Path:
+    """Installed: resources/whisper/{cpu,vulkan}/ next to resources/backend/. From source: the
+    output of build/whisper/build.py."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parents[1] / "whisper"
+    return REPO_ROOT / "build" / "out" / "whisper"
 
 
 def _models_dir() -> Path:
@@ -95,6 +105,7 @@ def load(profile: Profile | str | None = None) -> Settings:
             log_file=paths.logs_dir() / "backend.log",
             backups_dir=paths.data_dir() / "backups",
             engine_root=_engine_root(),
+            voice_root=_voice_root(),
             recovery_pkg=paths.recovery_pkg(),
             models_dir=_models_dir(),
         )
@@ -108,6 +119,7 @@ def load(profile: Profile | str | None = None) -> Settings:
             log_file=DEV_DIR / "backend.log",
             backups_dir=DEV_DIR / "backups",
             engine_root=_engine_root(),
+            voice_root=_voice_root(),
             recovery_pkg=DEV_DIR / "recovery.pkg",
             models_dir=DEV_DIR / "models",
             signing_seed=DEV_SIGNING_SEED,
@@ -124,6 +136,7 @@ def load(profile: Profile | str | None = None) -> Settings:
         log_file=None,
         backups_dir=tmp / "backups",
         engine_root=_engine_root(),
+        voice_root=_voice_root(),
         recovery_pkg=tmp / "recovery-test.pkg",
         models_dir=tmp / "models",
         signing_seed=DEV_SIGNING_SEED,

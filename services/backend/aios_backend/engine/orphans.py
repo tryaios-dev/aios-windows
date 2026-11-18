@@ -27,9 +27,9 @@ def _is_under(path: str, root: Path) -> bool:
         return False
 
 
-def is_orphan(proc: psutil.Process, engine_root: Path) -> bool:
+def is_orphan(proc: psutil.Process, engine_root: Path, exe: str = EXE) -> bool:
     try:
-        if proc.name().lower() != EXE.lower() or not _is_under(proc.exe(), engine_root):
+        if proc.name().lower() != exe.lower() or not _is_under(proc.exe(), engine_root):
             return False
         # parent() is None when the parent has exited (psutil also rejects a reused PID whose
         # process is younger than this one). Outside Windows an orphan is re-parented to init.
@@ -41,13 +41,17 @@ def is_orphan(proc: psutil.Process, engine_root: Path) -> bool:
 
 
 def kill_orphans(
-    engine_root: Path, procs: Iterable[psutil.Process] | None = None, timeout: float = 10.0
+    engine_root: Path,
+    procs: Iterable[psutil.Process] | None = None,
+    timeout: float = 10.0,
+    exe: str = EXE,
 ) -> int:
-    """End orphaned engines under ``engine_root``. Returns how many were found."""
+    """End orphaned engines under ``engine_root``. Returns how many were found. ``exe``: the
+    program name, llama-server by default (the voice manager passes whisper-server)."""
     orphans = [
         p
         for p in (procs if procs is not None else psutil.process_iter())
-        if is_orphan(p, engine_root)
+        if is_orphan(p, engine_root, exe)
     ]
     for p in orphans:
         try:
@@ -56,5 +60,5 @@ def kill_orphans(
             pass
     psutil.wait_procs(orphans, timeout=timeout)
     if orphans:
-        log_event(log, "engine_orphans_killed", status=len(orphans))
+        log_event(log, "engine_orphans_killed", status=len(orphans), component=exe)
     return len(orphans)

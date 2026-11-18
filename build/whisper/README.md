@@ -23,8 +23,9 @@ patch, in the same two variants as the chat engine (`build/llama/`):
   Vulkan variant needs the Vulkan SDK. The Visual C++ runtime is copied next to the binary: the
   spike showed the ready-made upstream build fails on a clean Windows 11 without it
   (0xC0000135). CI builds and tests every variant (`whisper-linux`, `whisper-windows`).
-- **Not yet:** the installer does not include it (`electron-builder.yml`); that lands with the
-  backend `voice` app that starts it.
+- **Installer:** `resources/whisper/{cpu,vulkan}/` (`electron-builder.yml`), next to
+  `resources/llama/`. The model (`ggml-small-q5_1.bin`, 190 MB) goes in the models folder; the
+  backend loads only the file with the SHA-256 pinned in `aios_backend/voice/manager.py`.
 
 ## The patch
 
@@ -39,8 +40,9 @@ Upstream `whisper-server` has no API key at all, loads any model file a request 
 | `POST /load` removed | It loaded any path it was given; the model is fixed at start-up (`-m`) |
 | HTML page, static files and CORS removed | Only the backend calls the server |
 
-The backend derives the voice key (`aios/ipc/v1/voice`, to be added to the Process and IPC
-contract) from its own token, writes it to stdin and closes the pipe, as for the engine.
+The backend derives the voice key (`aios/ipc/v1/voice`, contract IPC-35) from its own token,
+writes it to stdin and closes the pipe, as for the engine
+(`services/backend/aios_backend/voice/launcher.py`).
 
 Proven by `tests/voice/test_whisper_server.py` on every variant, Linux and Windows, in CI:
 
@@ -63,7 +65,7 @@ The same tests fail against the unpatched upstream server.
 
 ```
 whisper-server -m <ggml-small-q5_1.bin> --host 127.0.0.1 --port <random> --api-key-stdin
-               [-t <threads>] [-l auto]
+               -l auto -nt -t <threads>
 ```
 
 Never passed: `--convert` (runs `ffmpeg` through the shell), `--public`, `--tmp-dir`,

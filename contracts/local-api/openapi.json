@@ -91,6 +91,22 @@
         "title": "AllowlistEntry",
         "type": "object"
       },
+      "AudioIn": {
+        "description": "16 kHz, mono, 16-bit little-endian PCM, base64.",
+        "properties": {
+          "pcm": {
+            "maxLength": 86000,
+            "pattern": "^[A-Za-z0-9+/]*={0,2}$",
+            "title": "Pcm",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pcm"
+        ],
+        "title": "AudioIn",
+        "type": "object"
+      },
       "BackupLocationIn": {
         "description": "The folder backups go to, chosen in the system folder dialog. ``null``: set up later.",
         "properties": {
@@ -1696,6 +1712,19 @@
           "acknowledged"
         ],
         "title": "FallbackOut",
+        "type": "object"
+      },
+      "FinishedText": {
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "FinishedText",
         "type": "object"
       },
       "FolderFileOut": {
@@ -3746,6 +3775,75 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "VoiceSessionOut": {
+        "properties": {
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "title": "VoiceSessionOut",
+        "type": "object"
+      },
+      "VoiceStatus": {
+        "properties": {
+          "build": {
+            "anyOf": [
+              {
+                "enum": [
+                  "cpu",
+                  "vulkan"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build"
+          },
+          "state": {
+            "enum": [
+              "not_built",
+              "no_model",
+              "not_started",
+              "starting",
+              "ready",
+              "failed"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "build"
+        ],
+        "title": "VoiceStatus",
+        "type": "object"
+      },
+      "VoiceText": {
+        "description": "The words heard so far. ``pending``: a phrase is still being turned into text.",
+        "properties": {
+          "pending": {
+            "title": "Pending",
+            "type": "boolean"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "pending"
+        ],
+        "title": "VoiceText",
         "type": "object"
       },
       "WriterSummary": {
@@ -7073,6 +7171,183 @@
         "summary": "Zip the log folder (logs only, never databases or keys)",
         "tags": [
           "settings"
+        ]
+      }
+    },
+    "/voice/sessions": {
+      "post": {
+        "operationId": "open_session_voice_sessions_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceSessionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "voice_not_built, voice_no_model"
+          },
+          "503": {
+            "description": "voice_failed"
+          }
+        },
+        "summary": "Start listening: starts the speech engine if needed",
+        "tags": [
+          "voice"
+        ]
+      }
+    },
+    "/voice/sessions/{session_id}": {
+      "delete": {
+        "operationId": "cancel_session_voice_sessions__session_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stop listening and throw away what was heard",
+        "tags": [
+          "voice"
+        ]
+      }
+    },
+    "/voice/sessions/{session_id}/audio": {
+      "post": {
+        "operationId": "add_audio_voice_sessions__session_id__audio_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AudioIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceText"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add audio; returns the text so far at once",
+        "tags": [
+          "voice"
+        ]
+      }
+    },
+    "/voice/sessions/{session_id}/finish": {
+      "post": {
+        "operationId": "finish_session_voice_sessions__session_id__finish_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinishedText"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stop listening and return all the text",
+        "tags": [
+          "voice"
+        ]
+      }
+    },
+    "/voice/status": {
+      "get": {
+        "operationId": "voice_status_voice_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Whether speaking instead of typing can be used now",
+        "tags": [
+          "voice"
         ]
       }
     }

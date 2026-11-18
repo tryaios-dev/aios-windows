@@ -24,6 +24,7 @@ PURPOSES = {
     "gateway": "aios/ipc/v1/gateway",
     "evidence-writer": "aios/ipc/v1/evidence-writer",
     "engine": "aios/ipc/v1/engine",
+    "voice": "aios/ipc/v1/voice",
 }
 
 

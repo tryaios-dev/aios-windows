@@ -28,8 +28,9 @@ export default defineConfig({
   build: {
     outDir: "dist",
     sourcemap: false,
-    // Fonts stay files: the CSP allows fonts from 'self' only, so an inlined data: font is refused.
-    assetsInlineLimit: (file: string) => (/\.woff2?$/.test(file) ? false : undefined),
+    // Fonts and the voice audio worklet stay files: the CSP allows fonts and scripts from 'self'
+    // only, so an inlined data: URL would be refused.
+    assetsInlineLimit: (file: string) => (/\.woff2?$|worklet\.js$/.test(file) ? false : undefined),
   },
   test: { environment: "jsdom" },
 });

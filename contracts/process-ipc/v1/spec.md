@@ -108,6 +108,7 @@ Readers ignore unknown fields (later versions add optional fields only).
 | gateway | `aios/ipc/v1/gateway` | gateway module (accepts it as bearer) | the backend's provider router |
 | evidence-writer | `aios/ipc/v1/evidence-writer` | evidence writer (handshake frame) | backend → writer requests |
 | engine | `aios/ipc/v1/engine` | llama-server (stdin, section 7) | gateway → engine requests |
+| voice | `aios/ipc/v1/voice` | whisper-server (stdin, section 7a) | backend → voice engine requests |
 
 - **IPC-20** Purpose strings are part of the frozen contract. A derived token cannot be turned
   back into `T` or into another purpose's token, so a leaked engine key opens only the engine.
@@ -162,6 +163,27 @@ Implemented once in `aios_common.asgi_auth.LoopbackTokenMiddleware`, before rout
   A llama.cpp update that opens another route fails CI (section 12) and goes back to review.
 - Engine output (stdout/stderr) is never written to the log files; the backend records only
   exit codes and its own content-free events (SR-07).
+
+## 7a Voice engine (whisper-server, ADR 0016)
+
+- **IPC-35** The backend starts whisper-server only when someone starts speaking, with a free
+  loopback port it chose and with `derive(T, voice)` as its API key, written as **one line** to
+  its stdin, which is then closed (`--api-key-stdin`, `build/whisper/patches/`). The patched
+  server refuses to start without it. No key on the command line, in the environment or in a
+  file.
+- **IPC-36** Start-up flags are exactly
+  `-m <ggml-small-q5_1.bin> --host 127.0.0.1 --port <port> --api-key-stdin -l auto -nt`, plus
+  `-t <threads>`. `--convert` (runs ffmpeg through the shell), `--public`, `--tmp-dir`,
+  `-pr`/`--print-realtime` (prints the text), `-debug`, `-tr`, `--dtw` and `-oved` MUST NOT be
+  passed. Reasons: `build/whisper/README.md`.
+- **IPC-37** Every route of the patched server needs the key, `/health` included: there is no
+  public route, so no exception like IPC-34. The patch removes `POST /load` (it loaded any
+  model path), the HTML page, static files and CORS headers.
+- **IPC-38** Environment, Job Object, orphan clean-up and output as for the engine (IPC-32,
+  IPC-50, IPC-52, SR-07): built from scratch, in the backend's kill-on-close job, orphans
+  under the voice folder ended at start-up, output never logged. Only the model file with the
+  pinned SHA-256 is loaded. The renderer never sees the port or the key; audio and text pass
+  through Electron main and the backend only.
 
 ## 8 Evidence writer
 
@@ -242,6 +264,7 @@ tests close the rule; the rule is binding from the freeze regardless.
 | IPC-32 engine environment | every `tests/engine/test_engine.py` test runs with `minimal_env()`; `test_engine_launcher.py::test_ipc_32_environment_is_built_from_scratch`, `test_spike.py::test_ipc_30_engine_key_not_in_its_command_line_or_environment` (no `LLAMA*` variable reaches the engine) | proven |
 | IPC-33 engine readiness and state | `test_api.py::test_health_reports_component_states`; `test_engine_manager.py` (states through start, crash, idle unload, GPU fallback); `test_engine_lifetime.py::test_idle_unload_frees_the_engine_and_the_next_message_restarts_it` (real engine) | proven |
 | IPC-34 engine public routes (question 12) | `tests/engine/test_engine.py::test_health_routes_are_public_and_carry_liveness_only` (`/health`, `/v1/health`: status/error only), `::test_health_is_the_only_public_endpoint` (401 without the key on `/models`, `/v1/models`, `/props`, `/metrics`, `/api/tags`, `/v1/embeddings`, `/detokenize`, `/infill`), `::test_webui_paths_serve_nothing_without_the_key` | proven (CPU build on Linux and Windows, Vulkan build on Windows) |
+| IPC-35 to IPC-38 voice engine | `tests/voice/test_whisper_server.py` (key over stdin, every route 401 without it, no `/load`, page, static files or CORS, loopback only, key not in argv/env/disk/output, transcribed text not in the output, no key no start; CPU build on Linux and Windows, Vulkan build on Windows); `services/backend/tests/test_voice.py` (process manager states, GPU fallback, idle stop, pinned model file, real dictation of the sample) | proven |
 | IPC-40, IPC-41, IPC-42 evidence writer | writer start-up, auth and API tests (F-01) | pending F-01 |
 | IPC-50 to IPC-53 lifetime | IPC-50: `test_engine_launcher.py::test_ipc_50_closing_the_job_kills_its_processes`, `test_engine_lifetime.py::test_ac_09_no_engine_remains_after_the_backend_is_killed` (Windows CI, real engine, backend hard-killed), `test_spike.py::test_engine_stops_with_the_backend`. IPC-51: `test_startup.py::test_ipc_51_backend_exits_when_its_parent_is_gone`. IPC-52: `test_engine_orphans.py` (incl. `test_ac_09_real_orphan_left_by_a_crash_is_killed`, Windows CI), `test_engine_manager.py::test_shutdown_stops_the_engine`. IPC-53: `test_engine_lifetime.py` (engine stdin closed), `handshake.read_handshake` closes the backend's stdin; writer pipe (F-01) | IPC-50 to IPC-52 proven; IPC-53 engine side proven, writer pending F-01. Manual AC-09 run on the clean Windows 11 VM (2026-11-05, installed CI build of 6898871): engine gone after ending backend.exe, after ending the app, and after 5 min idle (memory released, next question restarted it); a hand-made orphan was ended at the next app start |
 | IPC-60 renderer sandbox | `apps/desktop/tests/security/csp.test.ts` ("ac-10 renderer hardening"); eslint renderer rules (`packages/ts/config`) | proven |

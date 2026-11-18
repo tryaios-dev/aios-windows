@@ -51,6 +51,12 @@ const fail = (code: string): never => {
   throw new Error(code);
 };
 
+/* ------------------------------------------------------------------ voice */
+const SIM_VOICE_WORDS = "Summarise this document in three bullet points, please".split(" ");
+const simVoice = { bytes: 0 };
+/** One more word for every 0.6 s of sound (16 kHz, 16-bit). */
+const simVoiceText = () => SIM_VOICE_WORDS.slice(0, Math.floor(simVoice.bytes / 19_200)).join(" ");
+
 /* ------------------------------------------------------------------ conversion */
 const toProject = (p: Project): LiveProject => ({ ...p, derived_from_project_id: p.derived_from_project_id ?? null });
 const toConversation = (c: Conversation): LiveConversation => ({
@@ -591,6 +597,24 @@ export const simBridge: AiosBridge = {
     },
   },
 
+  /** Voice in the browser preview: the real microphone, made-up words (no speech engine here). */
+  voice: {
+    status: async () => ({ state: "ready", build: "cpu" }),
+    start: async () => {
+      await wait(400);
+      simVoice.bytes = 0;
+      return { session_id: "5e".repeat(16) };
+    },
+    audio: async (_id, pcm) => {
+      simVoice.bytes += pcm.byteLength;
+      return { text: simVoiceText(), pending: false };
+    },
+    finish: async () => {
+      await wait(600);
+      return { text: simVoiceText() };
+    },
+    cancel: async () => undefined,
+  },
   spike: {
     ask: async () => ({ text: "", error: "backend_unavailable", firstTokenMs: null, totalMs: 0, tokens: null, tokensPerSecond: null }),
   },
