@@ -13,7 +13,7 @@ from tests.test_models import CONTENT, gguf, tiny_entry  # noqa: F401  (fixture)
 
 from aios_backend.apps.models import catalogue
 from aios_backend.apps.models.downloads import RetryPolicy
-from aios_backend.apps.models.engine import BenchmarkRun, EngineState, Fallback
+from aios_backend.apps.models.engine import BenchmarkRun, EngineBusy, EngineState, Fallback
 from aios_backend.config import Settings
 from aios_backend.main import create_app
 from db.session import Database
@@ -56,18 +56,35 @@ class FakeEngine:
     def __init__(self) -> None:
         self.current = EngineState(state="not_started", build="vulkan", loaded_model_id=None)
         self.started: list[tuple[str, bool]] = []
+        self.answering = False  # an answer is being written with the loaded model
+        self.loaded_path: str | None = None
+        self.unloaded: list[str] = []
 
     def state(self) -> EngineState:
         return self.current
 
     def start(self, model_id: str, model_path: str, cpu_only: bool) -> EngineState:
+        if self.answering and model_id != self.current.loaded_model_id:
+            raise EngineBusy
         self.started.append((model_id, cpu_only))
+        self.loaded_path = model_path
         build = "cpu" if cpu_only else "vulkan"
         self.current = EngineState(state="ready", build=build, loaded_model_id=model_id)
         return self.current
 
     def benchmark(self, model_id: str, model_path: str, cpu_only: bool) -> BenchmarkRun:
+        if self.answering and model_id != self.current.loaded_model_id:
+            raise EngineBusy
         return BenchmarkRun(tokens_per_second=36.456, time_to_first_token_ms=410, build="vulkan")
+
+    def unload(self, model_path: str) -> None:
+        assert Path(model_path).exists(), "the engine must let go of the file before it is deleted"
+        if model_path == self.loaded_path:
+            if self.answering:
+                raise EngineBusy
+            self.unloaded.append(model_path)
+            self.loaded_path = None
+            self.current = EngineState("not_started", self.current.build, loaded_model_id=None)
 
     def acknowledge_fallback(self) -> None:
         if self.current.fallback:
@@ -408,3 +425,47 @@ def test_manual_catalogue_check_runs_while_switched_off(runtime: TestClient) -> 
     out = runtime.post("/models/catalogue/check", json={"manual": True})
     assert out.status_code == 200 and out.json()["version"]
     assert runtime.get("/settings").json()["last_catalogue_check"] is not None
+
+
+# ------------------------------------------------------------------ busy engine (D-05, I-04, K-06)
+def test_i04_deleting_the_model_that_is_answering_is_refused(
+    runtime: TestClient,
+    engine: FakeEngine,
+    tmp_path: Path,
+    tiny_entry: catalogue.Entry,  # noqa: F811
+) -> None:
+    model = runtime.post("/models/import", json={"path": str(gguf(tmp_path))}).json()
+    runtime.post("/engine/start", json={"model_id": tiny_entry.id})
+    engine.answering = True
+    r = runtime.delete(f"/models/{tiny_entry.id}")
+    assert (r.status_code, r.json()) == (409, {"error": "model_in_use"})
+    assert Path(model["file_path"]).exists()  # nothing was removed
+    assert [m["id"] for m in runtime.get("/models").json()] == [tiny_entry.id]
+    assert "model_deleted" not in [e["event_type"] for e in runtime.get("/evidence").json()]
+
+
+def test_i04_deleting_the_loaded_model_stops_the_engine_first(
+    runtime: TestClient,
+    engine: FakeEngine,
+    tmp_path: Path,
+    tiny_entry: catalogue.Entry,  # noqa: F811
+) -> None:
+    model = runtime.post("/models/import", json={"path": str(gguf(tmp_path))}).json()
+    runtime.post("/engine/start", json={"model_id": tiny_entry.id})
+    assert runtime.delete(f"/models/{tiny_entry.id}").status_code == 204
+    assert engine.unloaded == [model["file_path"]]
+    assert not Path(model["file_path"]).exists()
+    assert runtime.get("/models").json() == []
+
+
+def test_d05_another_model_while_an_answer_is_written_is_busy(
+    runtime: TestClient,
+    engine: FakeEngine,
+    tmp_path: Path,
+    tiny_entry: catalogue.Entry,  # noqa: F811
+) -> None:
+    runtime.post("/models/import", json={"path": str(gguf(tmp_path))})
+    engine.answering = True  # another model is loaded and answering
+    for path in ("/engine/start", "/system/benchmark"):
+        r = runtime.post(path, json={"model_id": tiny_entry.id})
+        assert (r.status_code, r.json()) == (409, {"error": "busy"}), path

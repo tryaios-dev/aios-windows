@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { api } from '@/lib/api'
 import { selectRecommendedTier, useStore } from '@/lib/store'
-import type { ModelTier } from '@/lib/types'
+import type { Hardware, ModelTier } from '@/lib/types'
+import { catalogueEntry } from '@/data/catalogue'
 import { SetupFrame, type RailStep } from './SetupFrame'
 import { tierEntry, usableTier } from './tiers'
 import { WelcomeStep } from './steps/WelcomeStep'
@@ -46,10 +47,30 @@ function readStart(): { index: number; keyPending: boolean } {
   return { index, keyPending }
 }
 
+/**
+ * Offline package (MVP 10.1): the size of the AI model that came with the installer, when this computer can
+ * run it. Setting up then uses that file and needs no network.
+ */
+function usePackagedTier(hw: Hardware): ModelTier | null {
+  const [tier, setTier] = useState<ModelTier | null>(null)
+  useEffect(() => {
+    let live = true
+    void api.models.packageFiles().then((files) => {
+      const entry = files.map((f) => catalogueEntry(f.entry_id)).find((e) => e && tierEntry(e.tier).entry_id === e.entry_id)
+      if (live && entry && usableTier(entry.tier, hw) === entry.tier) setTier(entry.tier)
+    })
+    return () => {
+      live = false
+    }
+  }, [hw])
+  return tier
+}
+
 export function SetupWizard() {
   const hw = useStore((s) => s.hardware)
   const version = useStore((s) => s.settings.app_version)
-  const recommended = usableTier(useStore(selectRecommendedTier), hw)
+  const packaged = usePackagedTier(hw)
+  const recommended = packaged ?? usableTier(useStore(selectRecommendedTier), hw)
   const [start] = useState(readStart)
   const [index, setIndex] = useState(start.index)
   const [moved, setMoved] = useState(false)

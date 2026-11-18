@@ -58,14 +58,20 @@ aios_backend/          the API (import as aios_backend.*)
   errors.py            AppError: what services raise; main.py returns {"error": code}
   deps.py              Shared FastAPI dependencies (AppSettings)
   gateway/             OpenAI-compatible inference gateway (security-relevant path)
+  providers.py         Provider router: chat's only way to a model, through the gateway
+  local.py             Local model module: answers, token counts, engine start/benchmark/unload
+  engine/              llama-server launcher and process manager (one model at a time, GPU to CPU)
+  runtime.py           The answer being generated now, and background summary jobs
   apps/                One package per feature, named like apps/ui/src/features
-    chat/              Conversations and messages
+    chat/              Conversations and messages, context packing, summaries
     evidence/          Evidence log as the app shows it
-    models/            Model manager and catalogue
+    knowledge/         My secure knowledge: documents used in answers
+    models/            Model manager, catalogue, downloads, offline package
     projects/          Projects, classification, packages
     search/            Search across projects
     settings/          Settings and the network allowlist
     setup/             First run (store, recovery key) and restore
+    skills/            Skills that shape an answer
 db/                    chats.db (import as db.*): engine, sessions, base, models, registry, migrations
   models.py            The shared tables (projects, conversations, messages, summaries, outbox)
   outbox.py            record(): queue a content-free evidence event in the caller's transaction
@@ -91,18 +97,19 @@ helper modules with pure logic (no HTTP, no database), such as `projects/package
 | `repository.py` | Reads and writes `chats.db` through the session | `models`, `db.*` |
 | `models.py` | Tables only this app uses (setup: `store_identity`, `setup_state`; settings: `settings`; models: `installed_models`, `hardware_profile`). Shared tables are in `db/models.py` | `db.base` |
 
-All seven apps have endpoints. Not in this build: download from the model mirror, the local
-engine (llama-server, benchmark, the real chat answer source) and the evidence writer.
+Not in this build: the company provider (G-06; Company conversations answer
+`company_unreachable`), the EU model mirror (downloads come from the model's publisher on Hugging
+Face) and a signed catalogue (I-01).
 
 | Backend app | Endpoints | Notes |
 | --- | --- | --- |
 | `apps/setup` | `GET /setup/status`, `POST /setup/store`, `POST /setup/complete`, `POST /restore` | Store creation writes `recovery.pkg` (Recovery Package v1, `recovery_package.py`) and returns the recovery key once. Restore unwraps the package, checks the backup belongs to it, then swaps `chats.db` and the keys, all or nothing. State in `store_identity` and `setup_state` |
 | `apps/projects` | `GET/POST /projects`, `GET/PATCH/DELETE /projects/{id}`, `POST /projects/{id}/reclassify`, `PUT /projects/{id}/company-ai`, `POST /projects/{id}/export`, `POST /projects/import` | Lowering a class makes a reviewed copy (M-04). Project Package v1 in `package.py`, with every ZIP and checksum rule of the contract |
-| `apps/chat` | `GET/POST /projects/{id}/conversations`, `PATCH/DELETE /conversations/{id}`, `POST /conversations/{id}/provider`, `GET/POST /conversations/{id}/messages`, `POST /conversations/{id}/regenerate`, `GET /providers/status` | Answers come from an `AnswerSource` (`answers.py`). None exists yet, so sending returns `409 no_model`; tests use a fake. Commitments per Evidence Wire Format v1 §8 |
+| `apps/chat` | `GET/POST /projects/{id}/conversations`, `PATCH/DELETE /conversations/{id}`, `POST /conversations/{id}/provider`, `GET/POST /conversations/{id}/messages`, `POST /conversations/{id}/regenerate`, `GET /providers/status` | Answers come from an `AnswerSource` (`answers.py`): in `backend.exe` the provider router, which reaches the local model through the gateway; tests use a fake. Each request is the latest summary plus the newest messages that fit, counted with the engine's tokenizer when the model is loaded (else characters / 3.5 with a 20% margin); the summary is refreshed in the background after the answer. A conversation whose model was removed answers `409 model_missing` (the app asks which model carries on). Commitments per Evidence Wire Format v1 §8 |
 | `apps/search` | `GET /search?q=` | Substring match over messages, newest first, at most 60 hits |
-| `apps/evidence` | `GET /evidence`, `GET /projects/{id}/evidence`, `GET /evidence/status`, `POST /evidence/export` | Lists the outbox. Until the evidence writer exists, events stay pending and export returns `503 writer_unavailable` |
+| `apps/evidence` | `GET /evidence`, `GET /projects/{id}/evidence`, `GET /evidence/status`, `POST /evidence/export` | Lists the outbox. The evidence writer (`services/evidence-writer`, its own process) chains and signs the events; while it is down they stay pending and export returns `503 writer_unavailable` |
 | `apps/settings` | `GET/PATCH /settings`, `POST /settings/update-check`, `GET /system/network` | One typed row in `settings`. Electron main's updater records each check result. A test keeps the allowlist equal to `contracts/network-allowlist/v1` |
-| `apps/models` | `GET /models/catalogue`, `GET /models`, `POST /models/import`, `POST /models/download/{entry_id}`, `DELETE /models/{id}`, `GET /system/hardware`, `GET /engine/status` | Catalogue from `catalogue_dev.json` (unsigned until I-01; equal to the UI's, a test checks). Entries are real published files (MiniCPM5 2B small, Ornith 1.5 9B medium) with real size and SHA-256. Import installs a .gguf only if size and SHA-256 match an entry and a third-party entry's review passed (`deviation_not_approved` otherwise), then copies it into the models folder. Hardware read from Windows (`hardware.py`). Download answers `503 mirror_unavailable` |
+| `apps/models` | `GET /models/catalogue`, `GET /models`, `POST /models/import`, `POST /models/download/{entry_id}`, `DELETE /models/{id}`, `GET /system/hardware`, `GET /engine/status` | Catalogue from `catalogue_dev.json` (unsigned until I-01; equal to the UI's, a test checks). Entries are real published files (MiniCPM5 2B small, Ornith 1.5 9B medium) with real size and SHA-256. Import installs a .gguf only if size and SHA-256 match an entry and a third-party entry's review passed (`deviation_not_approved` otherwise), then copies it into the models folder. Offline package: `GET /models/offline-package` lists the files the installer copied into `models/offline`; `POST /models/offline-package/install` checks one the same way and moves it in, or deletes it. Delete stops the engine first if the model is loaded and refuses while it answers (`409 model_in_use`); engine start and benchmark for another model while one answers return `409 busy`. Hardware read from Windows (`hardware.py`). Downloads resume after a dropped connection; without a download source they answer `503 mirror_unavailable` |
 
 Full list: `uv run aios-backend routes`. Request and response shapes:
 `contracts/local-api/openapi.json`.
@@ -113,7 +120,7 @@ The backend never opens `evidence.db`. Every change the log covers calls
 `db.outbox.record(session, "type", body=...)` inside the same transaction, so the change and its
 event are saved together or not at all. The body may only hold ids, enum values, digests,
 counts and flags: a string with spaces or over 128 characters is refused. The evidence writer
-will drain the outbox, chain and sign the events, and set `seq`; until then events are pending.
+drains the outbox, chains and signs the events, and sets `seq`; while it is down events stay pending.
 
 ### Keys
 

@@ -24,7 +24,6 @@ from aios_backend.apps.settings import service as settings_service
 from aios_backend.apps.settings.router import router as settings_router
 from aios_backend.apps.setup.router import router as setup_router
 from aios_backend.apps.skills.router import router as skills_router
-from aios_backend.apps.spike.router import router as spike_router  # SPIKE-D04
 from aios_backend.components import Components, ComponentState
 from aios_backend.config import Settings
 from aios_backend.engine import EngineManager
@@ -157,6 +156,8 @@ def create_app(
             components.evidence_writer = ComponentState.STARTING
             pumping = asyncio.create_task(pump.run(database, app.state.writer, components))
         yield
+        # A summary still being written after the last answer: let it finish briefly (G-05).
+        await asyncio.to_thread(app.state.generations.background.wait, 5.0)
         if pumping is not None:
             pumping.cancel()
             try:
@@ -204,6 +205,5 @@ def create_app(
         skills_router,
     ):
         app.include_router(router)
-    app.include_router(spike_router)  # SPIKE-D04: temporary, removed by G-01
     app.add_middleware(LoopbackTokenMiddleware, public_paths=settings.public_paths)
     return app

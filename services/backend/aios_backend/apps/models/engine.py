@@ -13,6 +13,11 @@ from typing import Annotated, Protocol
 from fastapi import Depends, Request
 
 
+class EngineBusy(Exception):
+    """An answer is being written with the loaded model: it is never cut off (D-05, I-04).
+    ``start`` and ``benchmark`` for another model, and ``unload`` of this one, raise it."""
+
+
 @dataclass(frozen=True)
 class Fallback:
     """The GPU build stopped responding and the engine restarted on the CPU build."""
@@ -47,6 +52,10 @@ class LocalEngine(Protocol):
         ...
 
     def benchmark(self, model_id: str, model_path: str, cpu_only: bool) -> BenchmarkRun: ...
+
+    def unload(self, model_path: str) -> None:
+        """Stop the engine if it has this model file loaded, so the file can be deleted."""
+        ...
 
     def acknowledge_fallback(self) -> None: ...
 

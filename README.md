@@ -34,7 +34,9 @@ seven areas (setup, settings, projects, chat, search, evidence, models) run on t
 the UI uses its simulated backend (`apps/ui/src/bridge/sim/`). The evidence writer
 (`services/evidence-writer`, its own process; ADR 0014) chains, signs and exports every event, and
 `apps/verifier-cli` checks an export. Models download from Hugging Face (the mirror is not set up
-yet) and chat answers come from the local model through the gateway once one is installed.
+yet) and chat answers come from the local model through the gateway once one is installed. Without a
+network, a model can come in an offline package: a `models` folder next to `AIOS Setup.exe` is copied by
+the installer and checked like an import on first start ([build/installer/README.md](build/installer/README.md)).
 `pnpm test:e2e` runs the whole chain against a real backend. The
 app shell (sidebar, project header) lives in `apps/ui/src/app/`.
 

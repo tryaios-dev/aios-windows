@@ -21,9 +21,9 @@ its digest and size cannot be known in advance, and we do not make them up.
 
 ```
 uv run python tools/catalogue/build_entry.py --entry-id qwen3-4b-q4_k_m \
-    --llama-cpp-dir <llama.cpp source at commit 8642541b (b11960)> \
-    --quantize-bin <llama-b11960 bin>/llama-quantize.exe \
-    --llama-cpp-release b11960 --work-dir <scratch with ~30 GB free>
+    --llama-cpp-dir <llama.cpp source at commit 52e53a76 (b12111)> \
+    --quantize-bin <llama-b12111 bin>/llama-quantize.exe \
+    --llama-cpp-release b12111 --work-dir <scratch with ~30 GB free>
 ```
 
 The script:

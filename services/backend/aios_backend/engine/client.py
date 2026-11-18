@@ -161,6 +161,23 @@ def _chunks(
             yield rest
 
 
+def count_tokens(engine: Engine, text: str) -> int:
+    """How many tokens the loaded model makes of ``text`` (llama-server ``/tokenize``, G-04).
+    The text goes only to the engine on loopback; nothing is logged."""
+    with httpx.Client(timeout=httpx.Timeout(30.0, connect=5.0), trust_env=False) as client:
+        resp = client.post(
+            f"{engine.base_url}/tokenize",
+            json={"content": text, "add_special": False},
+            headers={"Authorization": f"Bearer {engine.key}"},
+        )
+    if resp.status_code != 200:
+        raise EngineAnswerError(f"engine_status_{resp.status_code}")
+    tokens = resp.json().get("tokens")
+    if not isinstance(tokens, list):
+        raise EngineAnswerError("engine_bad_tokenize")
+    return len(tokens)
+
+
 @dataclass(frozen=True)
 class Measured:
     tokens_per_second: float

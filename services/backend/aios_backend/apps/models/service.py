@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from aios_backend.apps.models import catalogue, hardware
 from aios_backend.apps.models import repository as repo
 from aios_backend.apps.models.downloads import Downloads, Job
-from aios_backend.apps.models.engine import LocalEngine
+from aios_backend.apps.models.engine import EngineBusy, LocalEngine
 from aios_backend.apps.models.mirror import ModelMirror
 from aios_backend.apps.models.models import Benchmark, EngineFallback, InstalledModel
 from aios_backend.apps.models.schemas import (
@@ -34,6 +34,7 @@ from aios_backend.apps.models.schemas import (
     InstalledModelDetail,
     InstalledModelOut,
     ModelChecks,
+    PackageFile,
 )
 from aios_backend.components import Components, ComponentState
 from aios_backend.config import Settings
@@ -43,6 +44,8 @@ from db.base import utcnow
 from db.session import Database
 
 DOWNLOAD_SUFFIX = ".download"
+# Where the installer puts the model files of an offline package (build/installer/installer.nsh).
+PACKAGE_FOLDER = "offline"
 
 
 def _entry_out(e: catalogue.Entry) -> CatalogueEntryOut:
@@ -149,6 +152,53 @@ def import_model(
     return _model_out(_install(session, entry, target, "offline"))
 
 
+def _package_folder(settings: Settings) -> Path:
+    return settings.models_dir / PACKAGE_FOLDER
+
+
+def list_package(session: Session, settings: Settings) -> list[PackageFile]:
+    """The model files that came with the installer and wait to be checked (MVP 10.1)."""
+    folder = _package_folder(settings)
+    files = sorted(folder.glob("*.gguf")) if folder.is_dir() else []
+    out = []
+    for file in files:
+        size = file.stat().st_size
+        matches = [
+            e
+            for e in catalogue.entries()
+            if e.size_bytes == size and catalogue.installable(e) and repo.get(session, e.id) is None
+        ]
+        entry_id = matches[0].id if len(matches) == 1 else None
+        out.append(PackageFile(file_name=file.name, size_bytes=size, entry_id=entry_id))
+    return out
+
+
+def install_package_file(session: Session, settings: Settings, file_name: str) -> InstalledModelOut:
+    """Install one file of the offline package with the import checks (size, SHA-256, review).
+    It is moved into the models folder, not copied again. A file that fails is deleted."""
+    if Path(file_name).name != file_name or not file_name.lower().endswith(".gguf"):
+        raise AppError("invalid_path", 400)
+    folder = _package_folder(settings)
+    source = folder / file_name
+    if not source.is_file():
+        raise not_found("package_file")
+    try:
+        entry = _match(source, None)
+        if not catalogue.installable(entry):
+            raise AppError("deviation_not_approved", 422)
+        if repo.get(session, entry.id) is not None:
+            raise AppError("model_installed", 409)
+    except AppError:
+        source.unlink(missing_ok=True)  # nothing unverified (or a second copy) is kept
+        raise
+    target = settings.models_dir / entry.file_name
+    os.replace(source, target)
+    model = _install(session, entry, target, "offline")
+    if not any(folder.iterdir()):
+        folder.rmdir()
+    return _model_out(model)
+
+
 def _install(session: Session, entry: catalogue.Entry, target: Path, source: str) -> InstalledModel:
     model = InstalledModel(
         id=entry.id,
@@ -202,14 +252,26 @@ def get_model(session: Session, model_id: str) -> InstalledModelDetail:
     return InstalledModelDetail(**_model_out(model).model_dump(), checks=checks)
 
 
-def delete_model(session: Session, settings: Settings, model_id: str) -> None:
+def delete_model(
+    session: Session, settings: Settings, engine: LocalEngine | None, model_id: str
+) -> None:
+    """Delete an installed model (I-04). If the engine has it loaded, it is stopped first; while
+    an answer is being written with it, nothing is deleted (``409 model_in_use``)."""
     model = repo.get(session, model_id)
     if model is None:
         raise not_found("model")
     file = Path(model.file_path)
+    if engine is not None:
+        try:
+            engine.unload(model.file_path)
+        except EngineBusy as exc:
+            raise AppError("model_in_use", 409) from exc
     # Only files AIOS copied into its own models folder are removed from disk.
     if file.is_file() and file.resolve().parent == settings.models_dir.resolve():
-        file.unlink()
+        try:
+            file.unlink()
+        except OSError as exc:  # the engine took it again in the meantime: keep everything
+            raise AppError("model_in_use", 409) from exc
     if repo.default_model_id(session) == model_id:
         repo.clear_default_model(session)
     repo.delete(session, model)
@@ -386,6 +448,8 @@ def start_engine(
         raise AppError("engine_unavailable", 503)
     try:
         engine.start(model.id, model.file_path, repo.setting_flag(session, "safe_mode_cpu"))
+    except EngineBusy as exc:  # another model is answering (D-05)
+        raise AppError("busy", 409) from exc
     except Exception as exc:
         raise AppError("engine_failed", 500) from exc
     return engine_status(session, engine, generations)
@@ -406,6 +470,8 @@ def run_benchmark(
         run = engine.benchmark(
             model.id, model.file_path, repo.setting_flag(session, "safe_mode_cpu")
         )
+    except EngineBusy as exc:  # another model is answering (D-05)
+        raise AppError("busy", 409) from exc
     except Exception as exc:
         raise AppError("engine_failed", 500) from exc
     row = Benchmark(
