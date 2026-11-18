@@ -160,7 +160,13 @@ def test_transcribes_with_the_key(whisper):
     [("/inference", "POST", True), ("/health", "GET", False), ("/inference", "OPTIONS", False)],
 )
 def test_every_route_rejects_a_missing_or_wrong_key(whisper, path, method, with_audio):
-    fields = _audio() if with_audio else None
+    # A small upload: the server refuses before reading the body, and Windows resets a
+    # connection whose unread upload is still arriving, which would hide the 401.
+    fields = (
+        {"file": Path(SAMPLE).read_bytes()[:1024], "response_format": b"json"}
+        if with_audio
+        else None
+    )
     for key in (None, "wrong-key", whisper.key[:-1]):
         status, _, _ = _request(f"{whisper.base}{path}", key, fields, method)
         assert status == 401, (path, method, key is None)
