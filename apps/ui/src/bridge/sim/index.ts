@@ -53,7 +53,15 @@ const fail = (code: string): never => {
 
 /* ------------------------------------------------------------------ voice */
 const SIM_VOICE_WORDS = "Summarise this document in three bullet points, please".split(" ");
-const simVoice = { bytes: 0 };
+const simVoice: { bytes: number; modelAt: number | null } = { bytes: 0, modelAt: 0 };
+const SIM_VOICE_MODEL_BYTES = 190_085_487;
+/** The speech model "downloads" in about 8 s once asked for; it is there from the start otherwise. */
+const simVoiceModel = () => {
+  const elapsed = simVoice.modelAt === null ? 0 : Date.now() - simVoice.modelAt;
+  const received = simVoice.modelAt === 0 ? SIM_VOICE_MODEL_BYTES : Math.min(SIM_VOICE_MODEL_BYTES, Math.round((elapsed / 8000) * SIM_VOICE_MODEL_BYTES));
+  const status = simVoice.modelAt === null ? "missing" : received < SIM_VOICE_MODEL_BYTES ? "downloading" : "ready";
+  return { status, received_bytes: status === "missing" ? 0 : received, total_bytes: SIM_VOICE_MODEL_BYTES, error: null } as const;
+};
 /** One more word for every 0.6 s of sound (16 kHz, 16-bit). */
 const simVoiceText = () => SIM_VOICE_WORDS.slice(0, Math.floor(simVoice.bytes / 19_200)).join(" ");
 
@@ -122,6 +130,7 @@ const state = {
     catalogue_check: true,
     safe_mode_cpu: false,
     default_model_id: SEED_INSTALLED_MODELS[0]?.id ?? null,
+    voice_languages: null,
     last_update_check: new Date(Date.now() - 3 * 3_600_000).toISOString(),
     last_catalogue_check: null,
     update_available: null,
@@ -599,7 +608,11 @@ export const simBridge: AiosBridge = {
 
   /** Voice in the browser preview: the real microphone, made-up words (no speech engine here). */
   voice: {
-    status: async () => ({ state: "ready", build: "cpu" }),
+    status: async () => ({ state: "ready", build: "cpu", model: simVoiceModel() }),
+    downloadModel: async () => {
+      if (simVoice.modelAt === null) simVoice.modelAt = Date.now();
+      return { state: "ready", build: "cpu", model: simVoiceModel() };
+    },
     start: async () => {
       await wait(400);
       simVoice.bytes = 0;

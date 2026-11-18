@@ -1,4 +1,12 @@
-import { VoiceAudio, VoiceFinished, VoiceSession, VoiceSessionId, VoiceStatus, VoiceText } from "@aios/bridge-contract";
+import {
+  VoiceAudio,
+  VoiceFinished,
+  VoiceLanguages,
+  VoiceSession,
+  VoiceSessionId,
+  VoiceStatus,
+  VoiceText,
+} from "@aios/bridge-contract";
 import type { Handler } from "./index.js";
 
 const session = (id: unknown) => `/voice/sessions/${VoiceSessionId.parse(id)}`;
@@ -9,7 +17,11 @@ const session = (id: unknown) => `/voice/sessions/${VoiceSessionId.parse(id)}`;
  */
 export const voiceHandlers: Record<string, Handler> = {
   "voice.status": async (b) => VoiceStatus.parse(await b.client.request("GET", "/voice/status")),
-  "voice.start": async (b) => VoiceSession.parse(await b.client.request("POST", "/voice/sessions")),
+  "voice.downloadModel": async (b) => VoiceStatus.parse(await b.client.request("POST", "/voice/model")),
+  "voice.start": async (b, languages) => {
+    const body = { languages: VoiceLanguages.parse(languages ?? []) };
+    return VoiceSession.parse(await b.client.request("POST", "/voice/sessions", body));
+  },
   "voice.audio": async (b, id, pcm) => {
     const path = `${session(id)}/audio`;
     const audio = Buffer.from(VoiceAudio.parse(pcm)).toString("base64");

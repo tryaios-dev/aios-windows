@@ -8,9 +8,10 @@
  * is done. The list and its order follow the 12 November review: the screen
  * shows everything that comes with AIOS, not only the AI model.
  *
- * Only what this build really puts in place is listed (document reading, the knowledge base,
- * voice and memory come later; secure storage is created on the next step). A line must not
- * read "ready" for something the build does not include.
+ * Only what this build really puts in place is listed (document reading, the knowledge base and
+ * memory come later; secure storage is created on the next step). A line must not read "ready"
+ * for something the build does not include. Voice has its own line in the setting-up step,
+ * driven by the real download of its speech model (features/voice).
  */
 export interface AiosPart {
   id: 'storage' | 'documents' | 'knowledge' | 'voice' | 'memory' | 'rules' | 'activity' | 'model'

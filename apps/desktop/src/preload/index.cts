@@ -114,7 +114,8 @@ const bridge: AiosBridge = {
   },
   voice: {
     status: () => invoke("voice.status"),
-    start: () => invoke("voice.start"),
+    downloadModel: () => invoke("voice.downloadModel"),
+    start: (languages) => invoke("voice.start", languages),
     audio: (sessionId, pcm) => invoke("voice.audio", sessionId, pcm),
     finish: (sessionId) => invoke("voice.finish", sessionId),
     cancel: (sessionId) => invoke("voice.cancel", sessionId),

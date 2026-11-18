@@ -44,14 +44,28 @@ describe("voice handlers (ADR 0016)", () => {
 
   it("start, finish and cancel map to the backend's endpoints", async () => {
     const { handlers, request, backend } = await setup({ session_id: SESSION });
-    expect(await handlers["voice.start"]!(backend)).toEqual({ session_id: SESSION });
-    expect(request).toHaveBeenLastCalledWith("POST", "/voice/sessions");
+    expect(await handlers["voice.start"]!(backend, ["it", "en"])).toEqual({ session_id: SESSION });
+    expect(request).toHaveBeenLastCalledWith("POST", "/voice/sessions", { languages: ["it", "en"] });
+    await handlers["voice.start"]!(backend);
+    expect(request).toHaveBeenLastCalledWith("POST", "/voice/sessions", { languages: [] });
+    await expect(handlers["voice.start"]!(backend, ["it; rm -rf"])).rejects.toThrow();
     request.mockResolvedValueOnce({ text: "All of it." } as never);
     expect(await handlers["voice.finish"]!(backend, SESSION)).toEqual({ text: "All of it." });
     expect(request).toHaveBeenLastCalledWith("POST", `/voice/sessions/${SESSION}/finish`);
     request.mockResolvedValueOnce(undefined as never);
     await handlers["voice.cancel"]!(backend, SESSION);
     expect(request).toHaveBeenLastCalledWith("DELETE", `/voice/sessions/${SESSION}`);
+  });
+
+  it("start the speech model download", async () => {
+    const status = {
+      state: "no_model",
+      build: null,
+      model: { status: "downloading", received_bytes: 1, total_bytes: 2, error: null },
+    };
+    const { handlers, request, backend } = await setup(status);
+    expect(await handlers["voice.downloadModel"]!(backend)).toEqual(status);
+    expect(request).toHaveBeenLastCalledWith("POST", "/voice/model");
   });
 
   it("validate what the backend answers", async () => {

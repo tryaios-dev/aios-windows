@@ -267,6 +267,8 @@ export interface Settings {
   catalogue_check: boolean
   safe_mode_cpu: boolean
   default_model_id: string | null
+  /** Voice: the languages the person speaks, main first (Whisper codes). Null until chosen. */
+  voice_languages: string[] | null
   last_update_check: string | null
   last_catalogue_check: string | null
   update_available: { version: string; size_bytes: number } | null

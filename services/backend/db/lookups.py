@@ -21,6 +21,13 @@ def clear_default_model(session: Session) -> None:
     session.execute(text("UPDATE settings SET default_model_id = NULL WHERE id = 1"))
 
 
+def voice_languages(session: Session) -> tuple[str, ...]:
+    """The languages the person speaks for Voice, main first (table of apps/settings); empty
+    until chosen."""
+    value = session.execute(text("SELECT voice_languages FROM settings WHERE id = 1")).scalar()
+    return tuple(value.split(",")) if isinstance(value, str) and value else ()
+
+
 def setting_flag(session: Session, name: str) -> bool:
     """One boolean of the settings row (apps/settings); the column default when there is no row."""
     if name not in ("update_check", "catalogue_check", "safe_mode_cpu"):

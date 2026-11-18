@@ -8,9 +8,26 @@ from pydantic import BaseModel, Field
 MAX_AUDIO_B64 = 86_000
 
 
+class ModelStatus(BaseModel):
+    """The speech model: on this computer, or being downloaded (setup, Settings > Voice)."""
+
+    status: Literal["missing", "downloading", "verifying", "ready", "failed"]
+    received_bytes: int
+    total_bytes: int
+    error: str | None
+
+
 class VoiceStatus(BaseModel):
     state: Literal["not_built", "no_model", "not_started", "starting", "ready", "failed"]
     build: Literal["cpu", "vulkan"] | None
+    model: ModelStatus
+
+
+class OpenIn(BaseModel):
+    """The computer's languages as the window sees them, main first: used while none are
+    chosen in Settings > Voice."""
+
+    languages: list[str] = Field(default_factory=list, max_length=5)
 
 
 class VoiceSessionOut(BaseModel):

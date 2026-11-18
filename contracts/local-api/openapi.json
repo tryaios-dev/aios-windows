@@ -2568,6 +2568,64 @@
         "title": "ModelChoiceIn",
         "type": "object"
       },
+      "ModelStatus": {
+        "description": "The speech model: on this computer, or being downloaded (setup, Settings > Voice).",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "received_bytes": {
+            "title": "Received Bytes",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "missing",
+              "downloading",
+              "verifying",
+              "ready",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "total_bytes": {
+            "title": "Total Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "received_bytes",
+          "total_bytes",
+          "error"
+        ],
+        "title": "ModelStatus",
+        "type": "object"
+      },
+      "OpenIn": {
+        "description": "The computer's languages as the window sees them, main first: used while none are\nchosen in Settings > Voice.",
+        "properties": {
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 5,
+            "title": "Languages",
+            "type": "array"
+          }
+        },
+        "title": "OpenIn",
+        "type": "object"
+      },
       "PackageRecordOut": {
         "description": "One export or import of a Project Package (project settings, package history).",
         "properties": {
@@ -3091,6 +3149,20 @@
           "update_check": {
             "title": "Update Check",
             "type": "boolean"
+          },
+          "voice_languages": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Languages"
           }
         },
         "required": [
@@ -3098,6 +3170,7 @@
           "catalogue_check",
           "safe_mode_cpu",
           "default_model_id",
+          "voice_languages",
           "last_update_check",
           "last_catalogue_check",
           "update_available",
@@ -3156,6 +3229,21 @@
               }
             ],
             "title": "Update Check"
+          },
+          "voice_languages": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 5,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Languages"
           }
         },
         "title": "SettingsPatch",
@@ -3807,6 +3895,9 @@
             ],
             "title": "Build"
           },
+          "model": {
+            "$ref": "#/components/schemas/ModelStatus"
+          },
           "state": {
             "enum": [
               "not_built",
@@ -3822,7 +3913,8 @@
         },
         "required": [
           "state",
-          "build"
+          "build",
+          "model"
         ],
         "title": "VoiceStatus",
         "type": "object"
@@ -7174,9 +7266,47 @@
         ]
       }
     },
+    "/voice/model": {
+      "post": {
+        "operationId": "download_model_voice_model_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Download the speech model (setup, Settings > Voice)",
+        "tags": [
+          "voice"
+        ]
+      }
+    },
     "/voice/sessions": {
       "post": {
         "operationId": "open_session_voice_sessions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/OpenIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -7190,6 +7320,16 @@
           },
           "409": {
             "description": "voice_not_built, voice_no_model"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           },
           "503": {
             "description": "voice_failed"

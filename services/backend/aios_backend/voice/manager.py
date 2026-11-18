@@ -20,6 +20,8 @@ from pathlib import Path
 from aios_backend.engine.job import ChildJob
 from aios_backend.engine.orphans import kill_orphans
 from aios_backend.voice.launcher import EXE, VoiceError, Whisper, start
+from aios_backend.voice.model import SIZE as MODEL_SIZE
+from aios_backend.voice.model import Fetch, ModelDownloader, fetch
 from aios_common.logging import get_logger, log_event
 
 # Whisper small, multilingual, q5_1 (MIT): the model ADR 0016 chose. Only this exact file is
@@ -57,6 +59,8 @@ class VoiceManager:
         watch_interval_s: float = WATCH_INTERVAL_S,
         start_fn: StartFn = start,
         model_sha256: str = MODEL_SHA256,
+        fetch_fn: Fetch = fetch,
+        model_size: int | None = None,
     ) -> None:
         self._root = voice_root  # holds cpu/ and vulkan/
         self._models_dir = models_dir
@@ -76,6 +80,13 @@ class VoiceManager:
         self._last_used = 0.0
         self._verified: tuple[int, float] | None = None  # (size, mtime) of the checked model
         self._watcher: asyncio.Task[None] | None = None
+        self.downloader = ModelDownloader(
+            self.model_path,
+            model_sha256,
+            fetch_fn=fetch_fn,
+            size=model_size if model_size is not None else MODEL_SIZE,
+            on_done=self._forget_check,
+        )
 
     # ---- lifetime -------------------------------------------------------------------------
 
@@ -89,6 +100,7 @@ class VoiceManager:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._watcher
             self._watcher = None
+        await asyncio.to_thread(self.downloader.stop)
         await self._stop()
 
     # ---- state ----------------------------------------------------------------------------
@@ -154,6 +166,9 @@ class VoiceManager:
         return True
 
     # ---- internals ------------------------------------------------------------------------
+
+    def _forget_check(self) -> None:
+        self._verified = None  # a new file: check it again before loading
 
     def _start(self, build: str) -> Whisper:
         return self._start_fn(

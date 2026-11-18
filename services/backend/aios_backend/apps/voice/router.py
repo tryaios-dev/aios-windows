@@ -5,15 +5,18 @@ import binascii
 
 from fastapi import APIRouter, Request, status
 
+from aios_backend.apps.voice import service
 from aios_backend.apps.voice.schemas import (
     AudioIn,
     FinishedText,
+    OpenIn,
     VoiceSessionOut,
     VoiceStatus,
     VoiceText,
 )
 from aios_backend.apps.voice.service import Sessions
 from aios_backend.errors import AppError
+from db.session import DbSession
 
 router = APIRouter(prefix="/voice", tags=["voice"])
 
@@ -25,8 +28,12 @@ def _sessions(request: Request) -> Sessions:
 
 @router.get("/status", summary="Whether speaking instead of typing can be used now")
 def voice_status(request: Request) -> VoiceStatus:
-    state, build = request.app.state.voice.state()
-    return VoiceStatus(state=state.value, build=build)
+    return service.status(request.app.state.voice)
+
+
+@router.post("/model", summary="Download the speech model (setup, Settings > Voice)")
+def download_model(request: Request) -> VoiceStatus:
+    return service.download_model(request.app.state.voice)
 
 
 @router.post(
@@ -37,8 +44,11 @@ def voice_status(request: Request) -> VoiceStatus:
         503: {"description": "voice_failed"},
     },
 )
-async def open_session(request: Request) -> VoiceSessionOut:
-    session = await _sessions(request).open()
+async def open_session(
+    request: Request, db: DbSession, body: OpenIn | None = None
+) -> VoiceSessionOut:
+    languages = service.languages(db, body.languages if body else [])
+    session = await _sessions(request).open(languages)
     return VoiceSessionOut(session_id=session.id)
 
 

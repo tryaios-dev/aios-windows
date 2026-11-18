@@ -29,7 +29,15 @@ from aios_backend.apps.voice.service import Sessions
 from aios_backend.config import Settings
 from aios_backend.engine.job import ChildJob, kill_on_close_job
 from aios_backend.main import create_app
-from aios_backend.voice import VoiceError, VoiceManager, VoiceState, Whisper, launcher, phrases
+from aios_backend.voice import (
+    VoiceError,
+    VoiceManager,
+    VoiceState,
+    Whisper,
+    languages,
+    launcher,
+    phrases,
+)
 from aios_backend.voice.launcher import EXE
 from aios_backend.voice.manager import MODEL_FILE
 from db.session import Database
@@ -135,12 +143,21 @@ def test_a_phrase_is_a_16_khz_mono_wav() -> None:
 
 # ------------------------------------------------------------------ process manager
 class FakeWhisper(Whisper):
-    """A sleeping Python process that 'transcribes' each phrase as its length."""
+    """A sleeping Python process that 'transcribes' each phrase as its length and language.
+    ``scores``: what its language guess returns; ``calls`` records what was asked."""
 
-    def transcribe(self, wav: bytes, audio_ctx: int) -> str:
+    scores: dict[str, float] = {}
+    calls: list[str] = []
+
+    def transcribe(self, wav: bytes, audio_ctx: int, language: str = "auto") -> str:
         if not self.alive():
             raise VoiceError("voice_unreachable")
-        return f"phrase{audio_ctx}"
+        FakeWhisper.calls.append(f"transcribe:{language}")
+        return f"phrase{audio_ctx}-{language}"
+
+    def detect(self, wav: bytes, audio_ctx: int) -> dict[str, float]:
+        FakeWhisper.calls.append("detect")
+        return dict(FakeWhisper.scores)
 
 
 class Starts:
@@ -334,9 +351,17 @@ def b64(pcm: bytes) -> str:
 
 def test_dictation_phrase_by_phrase(voice_client: tuple[TestClient, Starts]) -> None:
     c, starts = voice_client
-    assert c.get("/voice/status").json() == {"state": "not_started", "build": None}
+    status = c.get("/voice/status").json()
+    assert (status["state"], status["build"], status["model"]["status"]) == (
+        "not_started",
+        None,
+        "ready",
+    )
     session = c.post("/voice/sessions").json()["session_id"]
-    assert c.get("/voice/status").json() == {"state": "ready", "build": "cpu"}
+    assert (c.get("/voice/status").json()["state"], c.get("/voice/status").json()["build"]) == (
+        "ready",
+        "cpu",
+    )
 
     texts = []
     for chunk in chunks(quiet(0.5) + tone(1.5) + quiet(1) + tone(1)):
@@ -475,3 +500,163 @@ def test_real_server_key_stays_out_of_its_command_line(tmp_path: Path) -> None:
         await m.shutdown()
 
     asyncio.run(body())
+
+
+# ------------------------------------------------------------------ languages (Settings > Voice)
+def test_language_choice_among_the_languages_spoken() -> None:
+    # Whisper said Latin for a short Italian phrase (measured): among it/en, Italian wins.
+    assert languages.choose({"la": 0.54, "it": 0.30, "en": 0.02}, ["it", "en"]) == ("it", True)
+    # No listed language clearly ahead: the main one.
+    assert languages.choose({"it": 0.2, "en": 0.25}, ["it", "en"]) == ("it", False)
+    assert languages.choose({}, ["en", "it"]) == ("en", False)
+    assert languages.valid(["it", "en"]) and not languages.valid(["it", "xx"])
+    assert not languages.valid(["it", "it"]) and not languages.valid(["en"] * 6)
+
+
+def _dictate(c: TestClient, pcm: bytes, body: dict[str, Any] | None = None) -> str:
+    session = c.post("/voice/sessions", json=body).json()["session_id"]
+    for chunk in chunks(pcm):
+        assert (
+            c.post(f"/voice/sessions/{session}/audio", json={"pcm": b64(chunk)}).status_code == 200
+        )
+    text: str = c.post(f"/voice/sessions/{session}/finish").json()["text"]
+    return text
+
+
+TWO_PHRASES = quiet(0.5) + tone(3) + quiet(1) + tone(1) + quiet(1)
+
+
+def test_one_language_is_always_used_without_guessing(
+    voice_client: tuple[TestClient, Starts],
+) -> None:
+    c, _ = voice_client
+    assert c.patch("/settings", json={"voice_languages": ["it"]}).json()["voice_languages"] == [
+        "it"
+    ]
+    FakeWhisper.calls = []
+    _dictate(c, TWO_PHRASES, {"languages": ["en"]})  # the setting wins over the suggestion
+    assert FakeWhisper.calls == ["transcribe:it", "transcribe:it"]
+
+
+def test_a_clear_long_phrase_settles_the_language(voice_client: tuple[TestClient, Starts]) -> None:
+    c, _ = voice_client
+    c.patch("/settings", json={"voice_languages": ["en", "it"]})
+    FakeWhisper.scores, FakeWhisper.calls = {"la": 0.5, "it": 0.4, "en": 0.05}, []
+    _dictate(c, TWO_PHRASES)
+    # The 3 s phrase is guessed once and settles Italian; the next one is not guessed again.
+    assert FakeWhisper.calls == ["detect", "transcribe:it", "transcribe:it"]
+
+
+def test_unclear_short_phrases_use_the_main_language(
+    voice_client: tuple[TestClient, Starts],
+) -> None:
+    c, _ = voice_client
+    c.patch("/settings", json={"voice_languages": ["it", "en"]})
+    FakeWhisper.scores, FakeWhisper.calls = {"en": 0.3, "it": 0.25}, []
+    _dictate(c, quiet(0.5) + tone(1) + quiet(1) + tone(1) + quiet(1))
+    assert FakeWhisper.calls == ["detect", "transcribe:it", "detect", "transcribe:it"]
+
+
+def test_without_a_choice_the_computers_languages_are_used(
+    voice_client: tuple[TestClient, Starts],
+) -> None:
+    c, _ = voice_client
+    FakeWhisper.calls = []
+    _dictate(c, TWO_PHRASES, {"languages": ["xx", "en"]})  # unknown codes dropped
+    assert FakeWhisper.calls == ["transcribe:en", "transcribe:en"]
+    FakeWhisper.calls = []
+    _dictate(c, TWO_PHRASES)
+    assert FakeWhisper.calls == ["transcribe:auto", "transcribe:auto"]
+
+
+def test_the_languages_setting_is_checked_and_can_be_cleared(client: TestClient) -> None:
+    assert client.get("/settings").json()["voice_languages"] is None
+    assert client.patch("/settings", json={"voice_languages": ["it", "en"]}).json()[
+        "voice_languages"
+    ] == ["it", "en"]
+    for bad in (["klingon"], ["it", "it"], ["en", "it", "de", "fr", "es", "pt"]):
+        assert client.patch("/settings", json={"voice_languages": bad}).status_code == 422
+    assert client.get("/settings").json()["voice_languages"] == ["it", "en"]
+    assert client.patch("/settings", json={"voice_languages": []}).json()["voice_languages"] is None
+
+
+# ------------------------------------------------------------------ the speech model download
+class FakeOrigin:
+    """Serves ``data``; ``drop_after`` bytes into the first request the connection drops."""
+
+    def __init__(self, data: bytes, drop_after: int | None = None) -> None:
+        self.data, self.drop_after, self.offsets = data, drop_after, []
+
+    def __call__(self, url: str, offset: int) -> Iterator[bytes]:
+        self.offsets.append(offset)
+        end = len(self.data)
+        if self.drop_after is not None:
+            end, self.drop_after = offset + self.drop_after, None
+            yield self.data[offset:end]
+            raise OSError("connection reset")
+        for i in range(offset, end, 7):
+            yield self.data[i : min(i + 7, end)]
+
+
+def _wait_download(m: VoiceManager) -> None:
+    import time
+
+    for _ in range(200):
+        if m.downloader.state.status in ("done", "failed"):
+            return
+        time.sleep(0.02)
+
+
+def test_the_speech_model_downloads_resumes_and_is_checked(tmp_path: Path) -> None:
+    origin = FakeOrigin(MODEL_BYTES, drop_after=5)
+    m = make_manager(tmp_path, Starts(), model=None, fetch_fn=origin, model_size=len(MODEL_BYTES))
+    m.downloader._delays = (0.01,)  # noqa: SLF001 - no waiting in a test
+    assert m.state()[0] is VoiceState.NO_MODEL
+    m.downloader.start()
+    _wait_download(m)
+    assert m.downloader.state.status == "done"
+    assert origin.offsets == [0, 5]  # carried on from where the connection dropped
+    assert m.model_path.read_bytes() == MODEL_BYTES
+    assert not m.downloader.part.exists()
+    assert m.state()[0] is VoiceState.NOT_STARTED  # usable now
+
+
+def test_a_wrong_file_is_never_used(tmp_path: Path) -> None:
+    wrong = b"x" * len(MODEL_BYTES)
+    m = make_manager(
+        tmp_path, Starts(), model=None, fetch_fn=FakeOrigin(wrong), model_size=len(wrong)
+    )
+    m.downloader.start()
+    _wait_download(m)
+    assert (m.downloader.state.status, m.downloader.state.error) == ("failed", "digest_mismatch")
+    assert not m.model_path.exists() and not m.downloader.part.exists()
+
+
+def test_setup_starts_the_download_and_sees_its_progress(
+    settings: Settings, db: Database, tmp_path: Path
+) -> None:
+    m = make_manager(
+        tmp_path,
+        Starts(),
+        model=None,
+        fetch_fn=FakeOrigin(MODEL_BYTES),
+        model_size=len(MODEL_BYTES),
+    )
+    app = create_app(dataclasses.replace(settings, voice_root=tmp_path / "whisper"), db)
+    with TestClient(app, client=LOOPBACK, headers={"Authorization": f"Bearer {LAUNCH_TOKEN}"}) as c:
+        app.state.voice = m
+        assert c.get("/voice/status").json()["model"]["status"] == "missing"
+        assert c.post("/voice/model").json()["model"]["status"] in (
+            "downloading",
+            "verifying",
+            "ready",
+        )
+        _wait_download(m)
+        model = c.get("/voice/status").json()["model"]
+        assert model == {
+            "status": "ready",
+            "received_bytes": len(MODEL_BYTES),
+            "total_bytes": len(MODEL_BYTES),
+            "error": None,
+        }
+        assert c.post("/voice/model").json()["model"]["status"] == "ready"  # nothing to do

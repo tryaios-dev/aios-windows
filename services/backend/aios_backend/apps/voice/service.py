@@ -15,16 +15,62 @@ import secrets
 import time
 from dataclasses import dataclass, field
 
+from sqlalchemy.orm import Session as DbSession
+
+from aios_backend.apps.voice.schemas import ModelStatus, VoiceStatus
 from aios_backend.errors import AppError
 from aios_backend.voice import VoiceError, VoiceManager, Whisper
+from aios_backend.voice import languages as langs
 from aios_backend.voice.phrases import BYTES_PER_SAMPLE, RATE, Phrases, audio_ctx, clean, wav
 from aios_common.logging import get_logger, log_event
+from db import lookups
 
 MAX_SESSION_S = 600.0  # ten minutes of audio
 STALE_S = 120.0  # a session nothing has been sent to for this long is dropped
 MAX_SESSIONS = 1  # one window, one microphone
 
 log = get_logger("voice")
+
+
+def status(manager: VoiceManager) -> VoiceStatus:
+    state, build = manager.state()
+    d = manager.downloader.state
+    if d.status in ("downloading", "verifying", "failed"):
+        model = ModelStatus(
+            status=d.status,
+            received_bytes=d.received_bytes,
+            total_bytes=d.total_bytes,
+            error=d.error,
+        )
+    else:
+        ready = manager.model_path.is_file()
+        model = ModelStatus(
+            status="ready" if ready else "missing",
+            received_bytes=d.total_bytes if ready else 0,
+            total_bytes=d.total_bytes,
+            error=None,
+        )
+    return VoiceStatus(state=state.value, build=build, model=model)
+
+
+def download_model(manager: VoiceManager) -> VoiceStatus:
+    """Start the speech model download unless it is here already or on its way."""
+    if not manager.model_path.is_file():
+        manager.downloader.start()
+    return status(manager)
+
+
+def languages(db: DbSession, suggested: list[str]) -> tuple[str, ...]:
+    """The languages for a dictation: the ones chosen in Settings > Voice, else the computer's
+    as the window sees them (unknown ones dropped), else none (Whisper's own guess)."""
+    chosen = lookups.voice_languages(db)
+    if chosen:
+        return chosen
+    known: list[str] = []
+    for code in suggested:
+        if code in langs.CODES and code not in known:
+            known.append(code)
+    return tuple(known[: langs.MAX_LANGUAGES])
 
 
 @dataclass
@@ -39,6 +85,9 @@ class Session:
     worker: "asyncio.Task[None] | None" = None
     pending: int = 0  # phrases cut but not yet turned into text
     error: str | None = None
+    # The languages the person speaks, main first; empty: Whisper's own guess (voice/languages).
+    languages: tuple[str, ...] = ()
+    settled: str | None = None  # the language of this dictation, once a clear phrase decided it
 
     @property
     def joined(self) -> str:
@@ -50,9 +99,9 @@ class Sessions:
         self._manager = manager
         self._sessions: dict[str, Session] = {}
 
-    async def open(self) -> Session:
+    async def open(self, languages: tuple[str, ...] = ()) -> Session:
         """Start whisper-server if needed and open a session. Opening a second one ends the
-        first (one microphone)."""
+        first (one microphone). ``languages``: the ones the person speaks, main first."""
         self._drop_stale()
         try:
             await self._manager.ensure()
@@ -63,7 +112,7 @@ class Sessions:
             raise AppError("voice_failed", 503) from None
         while len(self._sessions) >= MAX_SESSIONS:
             await self.cancel(next(iter(self._sessions)))
-        session = Session(secrets.token_hex(16))
+        session = Session(secrets.token_hex(16), languages=languages)
         session.worker = asyncio.create_task(self._work(session))
         self._sessions[session.id] = session
         return session
@@ -142,7 +191,7 @@ class Sessions:
         """Turn the session's phrases into text, one at a time, in order."""
         while (phrase := await session.queue.get()) is not None:
             try:
-                text = await self._transcribe(phrase)
+                text = await self._transcribe(session, phrase)
             except VoiceError as exc:
                 session.error = "voice_failed"
                 log_event(log, "voice_transcribe_failed", error_code=str(exc))
@@ -150,16 +199,16 @@ class Sessions:
             session.text.append(clean(text))
             session.pending -= 1
 
-    async def _transcribe(self, phrase: bytes) -> str:
+    async def _transcribe(self, session: Session, phrase: bytes) -> str:
         began = time.monotonic()
         whisper: Whisper = await self._manager.ensure()
         try:
-            text = await asyncio.to_thread(whisper.transcribe, wav(phrase), audio_ctx(phrase))
+            text = await self._in_language(whisper, session, phrase)
         except VoiceError:
             if not await self._manager.lost_gpu(whisper):
                 raise
             whisper = await self._manager.ensure()  # the GPU build died: once more on the CPU
-            text = await asyncio.to_thread(whisper.transcribe, wav(phrase), audio_ctx(phrase))
+            text = await self._in_language(whisper, session, phrase)
         log_event(
             log,
             "voice_phrase",
@@ -167,3 +216,16 @@ class Sessions:
             duration_ms=round((time.monotonic() - began) * 1000),
         )
         return text
+
+    async def _in_language(self, whisper: Whisper, session: Session, phrase: bytes) -> str:
+        """Turn the phrase into text in the right language (aios_backend.voice.languages)."""
+        audio, ctx = wav(phrase), audio_ctx(phrase)
+        language = session.settled
+        if language is None and len(session.languages) == 1:
+            language = session.languages[0]
+        elif language is None and session.languages:
+            scores = await asyncio.to_thread(whisper.detect, audio, ctx)
+            language, clear = langs.choose(scores, session.languages)
+            if clear and len(phrase) / (RATE * BYTES_PER_SAMPLE) >= langs.SETTLE_S:
+                session.settled = language
+        return await asyncio.to_thread(whisper.transcribe, audio, ctx, language or "auto")

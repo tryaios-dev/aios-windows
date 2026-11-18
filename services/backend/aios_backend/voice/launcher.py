@@ -76,28 +76,56 @@ class Whisper:
         except httpx.HTTPError:
             return None
 
-    def transcribe(self, wav: bytes, audio_ctx: int) -> str:
+    def transcribe(self, wav: bytes, audio_ctx: int, language: str = "auto") -> str:
         """The text of one phrase. ``audio_ctx`` fits Whisper's 30 s window to the audio (the
-        spike's ``-ac``): about twice as fast on short phrases, same text."""
+        spike's ``-ac``): about twice as fast on short phrases, same text. ``language``: a
+        Whisper code, or "auto" for Whisper's own guess."""
+        body = self._post(
+            wav,
+            {
+                "response_format": "json",
+                "temperature": "0.0",
+                "audio_ctx": str(audio_ctx),
+                "no_timestamps": "true",
+                "language": language,
+            },
+        )
+        text = body.get("text")
+        return text if isinstance(text, str) else ""
+
+    def detect(self, wav: bytes, audio_ctx: int) -> dict[str, float]:
+        """Whisper's score per language code for this phrase, without turning it into text."""
+        body = self._post(
+            wav,
+            {
+                "response_format": "verbose_json",
+                "detect_language": "true",
+                "audio_ctx": str(audio_ctx),
+            },
+        )
+        scores = body.get("language_probabilities")
+        if not isinstance(scores, dict):
+            return {}
+        return {str(k): float(v) for k, v in scores.items() if isinstance(v, int | float)}
+
+    def _post(self, wav: bytes, data: dict[str, str]) -> dict[str, object]:
         try:
             r = httpx.post(
                 f"{self.base_url}/inference",
                 headers=self._auth(),
                 files={"file": ("phrase.wav", wav, "audio/wav")},
-                data={
-                    "response_format": "json",
-                    "temperature": "0.0",
-                    "audio_ctx": str(audio_ctx),
-                    "no_timestamps": "true",
-                },
+                data=data,
                 timeout=TRANSCRIBE_TIMEOUT_S,
             )
         except httpx.HTTPError as exc:
             raise VoiceError("voice_unreachable") from exc
         if r.status_code != 200:
             raise VoiceError(f"voice_http_{r.status_code}")
-        text = r.json().get("text")
-        return text if isinstance(text, str) else ""
+        try:
+            body = r.json()
+        except ValueError as exc:
+            raise VoiceError("voice_bad_answer") from exc
+        return body if isinstance(body, dict) else {}
 
     def _auth(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.key}"}

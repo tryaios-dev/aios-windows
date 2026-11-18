@@ -31,6 +31,7 @@ function fakeVoice(text = ['Hello', 'there']) {
   let bytes = 0
   const voice = {
     status: vi.fn(),
+    downloadModel: vi.fn(),
     start: vi.fn(async () => ({ session_id: SESSION })),
     audio: vi.fn(async (_id: string, pcm: Uint8Array) => {
       bytes += pcm.byteLength

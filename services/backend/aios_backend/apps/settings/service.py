@@ -28,9 +28,16 @@ from aios_backend.apps.settings.schemas import (
 )
 from aios_backend.config import APP_VERSION, Settings
 from aios_backend.errors import AppError
+from aios_backend.voice import languages as voice_languages
 from db.base import utcnow
 
-EDITABLE = ("update_check", "catalogue_check", "safe_mode_cpu", "default_model_id")
+EDITABLE = (
+    "update_check",
+    "catalogue_check",
+    "safe_mode_cpu",
+    "default_model_id",
+    "voice_languages",
+)
 
 # The allowlist itself lives in aios_backend.net, the one client that enforces it (G-08).
 ALLOWLIST = net.ALLOWLIST
@@ -50,6 +57,7 @@ def get(session: Session) -> SettingsOut:
         catalogue_check=row.catalogue_check,
         safe_mode_cpu=row.safe_mode_cpu,
         default_model_id=row.default_model_id,
+        voice_languages=row.voice_languages.split(",") if row.voice_languages else None,
         last_update_check=row.last_update_check,
         last_catalogue_check=row.last_catalogue_check,
         update_available=update,
@@ -79,7 +87,11 @@ def update(
         if field not in patch:
             continue
         value = patch[field]
-        if value is None and field != "default_model_id":
+        if field == "voice_languages":
+            if value and not voice_languages.valid(value):
+                raise AppError("invalid_setting", 422)
+            value = ",".join(value) if value else None
+        elif value is None and field != "default_model_id":
             raise AppError("invalid_setting", 422)
         setattr(row, field, value)
     repo.save(session)
