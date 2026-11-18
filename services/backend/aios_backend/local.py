@@ -1,8 +1,8 @@
 """The local model (G-02): chat answers and the engine endpoints over the process manager.
 
 ``LocalModels`` is both the chat app's ``AnswerSource`` and the models app's ``LocalEngine``.
-It answers with the installed model (the one asked for, else the default model, else the first
-installed one), started on demand by ``EngineManager``. One model is loaded at a time.
+It answers with the installed model (the one asked for; when none is asked for, the default model,
+else the first installed one), started on demand by ``EngineManager``. One model is loaded at a time.
 
 Chat produces answers in a worker thread, the process manager lives on the event loop: every
 call into the manager is handed to the loop (``bind`` gives it at start-up). A lease is held for
@@ -14,6 +14,7 @@ The Company provider is not built yet (G-06), so ``model("company", …)`` is No
 """
 
 import asyncio
+import hashlib
 from collections.abc import Coroutine, Iterator
 from dataclasses import dataclass
 from datetime import datetime
@@ -23,9 +24,10 @@ from typing import Any
 from sqlalchemy import select
 
 from aios_backend.apps.chat.answers import ModelInfo
-from aios_backend.apps.models.engine import BenchmarkRun, EngineState, Fallback
+from aios_backend.apps.models.engine import BenchmarkRun, EngineBusy, EngineState, Fallback
 from aios_backend.apps.models.models import InstalledModel
 from aios_backend.components import Components, ComponentState
+from aios_backend.engine import EngineBusy as ManagerBusy
 from aios_backend.engine import EngineManager, NoModel
 from aios_backend.engine import client as engine_client
 from aios_backend.engine.launcher import CONTEXT_TOKENS, EngineError
@@ -34,6 +36,7 @@ from db.lookups import default_model_id
 from db.session import Database
 
 WAIT_S = 300.0  # starting a large model from a slow disk
+COUNTS_KEPT = 4096  # token counts remembered per text digest (no text is kept)
 # Sent before every local conversation (the chat app reserves room for it: SYSTEM_PROMPT_TOKENS).
 # Without it, small models answer every later message with their self-introduction.
 SYSTEM_PROMPT = (
@@ -64,6 +67,7 @@ class LocalModels:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._fallback_at: datetime | None = None
         self._fallback_seen = False
+        self._counts: dict[tuple[str, bytes], int] = {}
 
     def bind(self, loop: asyncio.AbstractEventLoop) -> None:
         self._loop = loop
@@ -71,10 +75,15 @@ class LocalModels:
     # ---- which model ----------------------------------------------------------------------
 
     def _installed(self, model_id: str | None) -> _Model | None:
+        """The model asked for; without one, the default model, else the first installed one.
+        A model asked for that is no longer installed is None, never another model: the person
+        chooses which one carries on (I-04, K-06)."""
         with self._db.session() as session:
             row = None
             if model_id is not None:
                 row = session.get(InstalledModel, model_id)
+                if row is None:
+                    return None
             if row is None:
                 default = default_model_id(session)
                 row = session.get(InstalledModel, default) if default else None
@@ -151,6 +160,29 @@ class LocalModels:
                 self._release()
         raise EngineError("engine_failed")
 
+    def count_tokens(self, provider: str, model_id: str, text: str) -> int | None:
+        """Tokens as the model counts them, from the engine's tokenizer (G-04). None unless the
+        engine already has this model loaded: counting never starts or switches the engine."""
+        model = self._installed(model_id) if provider == "local" and self._loop else None
+        if model is None:
+            return None
+        key = (model.id, hashlib.sha256(text.encode("utf-8")).digest())
+        if key in self._counts:
+            return self._counts[key]
+        engine = self._call(self._manager.lease_if_loaded(model.path))
+        if engine is None:
+            return None
+        try:
+            n = engine_client.count_tokens(engine, text)
+        except Exception:
+            return None
+        finally:
+            self._release()
+        if len(self._counts) >= COUNTS_KEPT:
+            self._counts.clear()
+        self._counts[key] = n
+        return n
+
     # ---- LocalEngine ----------------------------------------------------------------------
 
     def state(self) -> EngineState:
@@ -182,17 +214,31 @@ class LocalModels:
 
     def start(self, model_id: str, model_path: str, cpu_only: bool) -> EngineState:
         self._call(self._manager.set_safe_mode(cpu_only))
-        self._call(self._manager.ensure(Path(model_path)))
+        try:  # the person waits on this: say "busy" at once rather than wait for the answer
+            self._call(self._manager.ensure(Path(model_path), wait_s=0))
+        except ManagerBusy:
+            raise EngineBusy from None
         return self.state()
 
     def benchmark(self, model_id: str, model_path: str, cpu_only: bool) -> BenchmarkRun:
         self._call(self._manager.set_safe_mode(cpu_only))
-        engine = self._call(self._manager.acquire(Path(model_path)))
+        try:
+            engine = self._call(self._manager.acquire(Path(model_path), wait_s=0))
+        except ManagerBusy:
+            raise EngineBusy from None
         try:
             run = engine_client.benchmark(engine)
         finally:
             self._release()
         return BenchmarkRun(run.tokens_per_second, run.time_to_first_token_ms, engine.build)
+
+    def unload(self, model_path: str) -> None:
+        if self._loop is None:  # the engine never ran in this process
+            return
+        try:
+            self._call(self._manager.unload(Path(model_path)))
+        except ManagerBusy:
+            raise EngineBusy from None
 
     def acknowledge_fallback(self) -> None:
         self._fallback_at = None

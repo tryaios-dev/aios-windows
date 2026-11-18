@@ -4,7 +4,6 @@
 | 2026-11-17 | Auto-update feed URL and publisher name are placeholders; `latest.yml` is unsigned | C-04 | Medium: pilot users must install new builds by hand | Medium, needs A-01 and a hosted feed |
 | 2026-11-17 | Company provider (answers from the company server) is not built; Company conversations answer `company_unreachable` | G-06, K-10 | Medium: only Local answers in the pilot | Large, needs the lab GPU host |
 | 2026-11-17 | The app still reads the bundled development catalogue: the signed-catalogue check (section 5 and 6, golden vectors) exists, but no signed catalogue or release key does yet | A-03, I-01 | Medium: catalogue integrity relies on the bundled copy until a signed catalogue ships | Small once the release key exists (A-01/A-05) |
-| 2026-11-17 | D-04 spike endpoint, IPC channel and screen are still shipped | Status report section 7 | Low: unused code path | Small, coordinate with the engine CI tests |
 | 2026-11-17 | Add resources to my AI: Link and Unlink have no backend; the list is the design's demonstration data | Design, no Plane item | Low for the pilot: the page says it is not in this build | Large, needs providers, accounts and billing |
 | 2026-11-17 | Voice notes skill (Whisper) is not in this build | Skills catalogue | Low: listed as not available | Being built by another team member |
 | 2026-11-17 | Third-party skills (signed, downloaded packages) are not supported; skills are built-in instructions or a local `.aios-skill` file | Skills design | Low for the pilot | Large, needs a signed feed, a sandbox and a spec decision |

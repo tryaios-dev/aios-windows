@@ -27,15 +27,11 @@ export function DeleteModelDialog({
   const freed = formatBytes(model.size_bytes)
 
   const confirm = async () => {
-    const answering = !!useStore.getState().generation
     const result = await api.models.remove(model.id)
     onOpenChange(false)
     if (!result.ok) {
-      useStore.getState().toast({
-        kind: 'deny',
-        title: `${label} was not removed`,
-        description: answering ? 'AIOS is writing an answer. Wait for it to finish, or stop it, then try again.' : result.reason,
-      })
+      // While an answer is written with this model the backend refuses (model_in_use); the reason says so in plain words.
+      useStore.getState().toast({ kind: 'deny', title: `${label} was not removed`, description: result.reason })
       return
     }
     // Finishing an update: new conversations go to the newer version, not to whichever other one is installed.

@@ -42,12 +42,11 @@ def test_ac_14_no_backend_code_names_evidence_db() -> None:
 
 
 # Modules allowed to use an HTTP client: the one door to the network (G-08) and the loopback
-# clients for the evidence writer and the temporary D-04 spike. Anything that reaches the network
+# clients for the evidence writer, the engine and the gateway. Anything that reaches the network
 # must go through aios_backend.net, so the allowlist is checked on every request (M-22, AC-21).
 HTTP_CLIENTS = {
     "aios_backend/net.py",
     "aios_backend/evidence/client.py",
-    "aios_backend/apps/spike/service.py",  # loopback to the engine; removed by G-01
     "aios_backend/engine/launcher.py",  # loopback: polls the engine's /health (IPC-33)
     "aios_backend/engine/client.py",  # loopback: answers from the engine (G-02)
     "aios_backend/voice/launcher.py",  # loopback: whisper-server health and phrases (ADR 0016)

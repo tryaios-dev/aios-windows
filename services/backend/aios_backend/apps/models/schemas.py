@@ -70,6 +70,19 @@ class ImportIn(BaseModel):
     entry_id: str | None = Field(default=None, max_length=64)
 
 
+class PackageFile(BaseModel):
+    """A model file that came with the installer (the offline package, MVP 10.1), not yet checked.
+    ``entry_id``: the catalogue entry its size matches, if exactly one installable entry does."""
+
+    file_name: str
+    size_bytes: int
+    entry_id: str | None
+
+
+class PackageInstallIn(BaseModel):
+    file_name: str = Field(min_length=1, max_length=255)
+
+
 class Gpu(BaseModel):
     name: str
     vram_gb: int

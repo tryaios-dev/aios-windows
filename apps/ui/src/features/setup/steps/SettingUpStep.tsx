@@ -61,6 +61,8 @@ export function SettingUpStep({ note, tier, skipped, onSkip, onUnskip, onBack, o
   const installed = useStore((s) => s.installedModels.some((m) => m.id === entryId))
   const installedSource = useStore((s) => s.installedModels.find((m) => m.id === entryId)?.source)
   const [fromFile, setFromFile] = useState(false)
+  // The model file from the installer package is being checked (offline package, MVP 10.1).
+  const [checkingPackage, setCheckingPackage] = useState(false)
   // How far along the checklist is, 0 to 100. Replay mode arrives with the model installed: show it finished.
   const [shown, setShown] = useState(installed ? 100 : 0)
   const started = useRef(false)
@@ -98,13 +100,20 @@ export function SettingUpStep({ note, tier, skipped, onSkip, onUnskip, onBack, o
     for (const other of availableTiers().map((t) => tierEntry(t).entry_id)) {
       if (other !== entryId && inFlight[other]) api.models.cancel(other)
     }
-    if (installed || skipped || download || !enoughSpace) return
-    api.models.download(entryId)
+    if (installed || skipped || download) return
+    // A model that came with the installer is used first: no download, no network (MVP 10.1).
+    void (async () => {
+      setCheckingPackage(true)
+      const fromPackage = await api.models.installFromPackage(entryId)
+      setCheckingPackage(false)
+      if (fromPackage) setFromFile(true)
+      else if (enoughSpace) api.models.download(entryId)
+    })()
     // The ref keeps this to one start, whatever changes afterwards.
   }, [installed, skipped, download, entryId, enoughSpace])
 
   const status = download?.status
-  const verifying = status === 'verifying'
+  const verifying = status === 'verifying' || checkingPackage
   const failed = status === 'failed'
   const damaged = failed && download?.error_kind === 'damaged'
   const paused = status === 'paused'
@@ -158,7 +167,10 @@ export function SettingUpStep({ note, tier, skipped, onSkip, onUnskip, onBack, o
   const useInstallerFile = () => {
     api.models.cancel(entryId)
     setFromFile(true)
-    api.models.importOffline(entryId)
+    // The installer package first; otherwise the person picks the file.
+    void api.models.installFromPackage(entryId).then((done) => {
+      if (!done) void api.models.importOffline(entryId)
+    })
   }
 
   const skip = () => {

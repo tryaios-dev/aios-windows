@@ -2,7 +2,7 @@
 unload, shutdown. Contract rules IPC-30, IPC-33, IPC-50 to IPC-52; acceptance AC-09.
 
 The engine here is a stand-in process (Python sleeping) so these run everywhere in seconds.
-The real llama-server is covered by test_spike.py and test_engine_lifetime.py.
+The real llama-server is covered by test_engine_answers.py and test_engine_lifetime.py.
 """
 
 import asyncio
@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 
 from aios_backend.components import Components, ComponentState
-from aios_backend.engine import Engine, EngineError, EngineManager, NoModel
+from aios_backend.engine import Engine, EngineBusy, EngineError, EngineManager, NoModel
 from aios_backend.engine.job import ChildJob
 from aios_backend.engine.launcher import EXE, parse_device_list
 
@@ -314,5 +314,93 @@ def test_d06_lost_gpu_is_true_only_for_a_dead_gpu_engine(tmp_path: Path) -> None
         assert cpu.build == "cpu"
         cpu.process.kill()
         assert not await m.lost_gpu(cpu)  # a CPU crash is not retried
+
+    run(fakes, m, body)
+
+
+def _two_models(tmp_path: Path) -> tuple[Path, Path]:
+    a = tmp_path / "models" / "Qwen3-4B-Q4_K_M.gguf"
+    b = tmp_path / "models" / "Other-Q4_K_M.gguf"
+    b.write_bytes(b"")
+    return a, b
+
+
+def test_d05_another_model_is_loaded_when_the_engine_is_idle(tmp_path: Path) -> None:
+    fakes = FakeEngines()
+    m, c = setup(tmp_path, fakes)
+    a, b = _two_models(tmp_path)
+
+    async def body() -> None:
+        first = await m.ensure(a)
+        second = await m.ensure(b)
+        assert second.model == b and c.engine_model == b.name
+        assert not first.alive()  # one model at a time (MVP 2.2)
+
+    run(fakes, m, body)
+
+
+def test_d05_another_model_waits_for_the_answer_in_progress(tmp_path: Path) -> None:
+    """Model B asked for while model A answers: never model A, and A's answer is not cut off."""
+    fakes = FakeEngines()
+    m, _ = setup(tmp_path, fakes)
+    a, b = _two_models(tmp_path)
+
+    async def body() -> None:
+        first = await m.acquire(a)
+        switch = asyncio.create_task(m.ensure(b, wait_s=5.0))
+        await asyncio.sleep(0.3)
+        assert not switch.done() and first.alive()  # A keeps answering
+        m.release()
+        second = await switch
+        assert second.model == b and not first.alive()
+
+    run(fakes, m, body)
+
+
+def test_d05_another_model_is_busy_if_the_answer_does_not_end(tmp_path: Path) -> None:
+    fakes = FakeEngines()
+    m, c = setup(tmp_path, fakes)
+    a, b = _two_models(tmp_path)
+
+    async def body() -> None:
+        first = await m.acquire(a)
+        try:
+            with pytest.raises(EngineBusy):
+                await m.ensure(b, wait_s=0.2)
+            assert first.alive() and c.engine_model == a.name
+            assert (await m.ensure(a, wait_s=0)) is first  # the same model is fine
+        finally:
+            m.release()
+
+    run(fakes, m, body)
+
+
+def test_i04_unload_stops_the_engine_only_for_its_own_model(tmp_path: Path) -> None:
+    fakes = FakeEngines()
+    m, c = setup(tmp_path, fakes)
+    a, b = _two_models(tmp_path)
+
+    async def body() -> None:
+        engine = await m.ensure(a)
+        await m.unload(b)  # another file: the engine keeps running
+        assert engine.alive() and c.engine is ComponentState.OK
+        await m.unload(a)
+        assert not engine.alive() and c.engine is ComponentState.NOT_STARTED
+
+    run(fakes, m, body)
+
+
+def test_i04_unload_refuses_while_an_answer_uses_the_model(tmp_path: Path) -> None:
+    fakes = FakeEngines()
+    m, _ = setup(tmp_path, fakes)
+    a, _ = _two_models(tmp_path)
+
+    async def body() -> None:
+        async with m.use(a) as engine:
+            with pytest.raises(EngineBusy):
+                await m.unload(a)
+            assert engine.alive()
+        await m.unload(a)
+        assert not engine.alive()
 
     run(fakes, m, body)

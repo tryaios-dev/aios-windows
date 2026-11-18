@@ -402,55 +402,6 @@
         "title": "CatalogueOut",
         "type": "object"
       },
-      "ChatCompletionRequest": {
-        "properties": {
-          "max_tokens": {
-            "default": 512,
-            "maximum": 2048.0,
-            "minimum": 1.0,
-            "title": "Max Tokens",
-            "type": "integer"
-          },
-          "messages": {
-            "items": {
-              "$ref": "#/components/schemas/ChatMessage"
-            },
-            "maxItems": 64,
-            "minItems": 1,
-            "title": "Messages",
-            "type": "array"
-          }
-        },
-        "required": [
-          "messages"
-        ],
-        "title": "ChatCompletionRequest",
-        "type": "object"
-      },
-      "ChatMessage": {
-        "properties": {
-          "content": {
-            "maxLength": 32000,
-            "title": "Content",
-            "type": "string"
-          },
-          "role": {
-            "enum": [
-              "system",
-              "user",
-              "assistant"
-            ],
-            "title": "Role",
-            "type": "string"
-          }
-        },
-        "required": [
-          "role",
-          "content"
-        ],
-        "title": "ChatMessage",
-        "type": "object"
-      },
       "Checkpoint": {
         "properties": {
           "created_at": {
@@ -2624,6 +2575,52 @@
           }
         },
         "title": "OpenIn",
+        "type": "object"
+      },
+      "PackageFile": {
+        "description": "A model file that came with the installer (the offline package, MVP 10.1), not yet checked.\n``entry_id``: the catalogue entry its size matches, if exactly one installable entry does.",
+        "properties": {
+          "entry_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Id"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "file_name",
+          "size_bytes",
+          "entry_id"
+        ],
+        "title": "PackageFile",
+        "type": "object"
+      },
+      "PackageInstallIn": {
+        "properties": {
+          "file_name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "File Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file_name"
+        ],
+        "title": "PackageInstallIn",
         "type": "object"
       },
       "PackageRecordOut": {
@@ -5761,8 +5758,76 @@
         ]
       }
     },
+    "/models/offline-package": {
+      "get": {
+        "operationId": "list_package_models_offline_package_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PackageFile"
+                  },
+                  "title": "Response List Package Models Offline Package Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "AI model files that came with the installer (offline package), not yet checked",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/models/offline-package/install": {
+      "post": {
+        "description": "Size, SHA-256 and review are checked as for /models/import. The file is moved into the models folder; a file that fails the checks is deleted.",
+        "operationId": "install_package_file_models_offline_package_install_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackageInstallIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstalledModelOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Check a file from the offline package like an import and install it",
+        "tags": [
+          "models"
+        ]
+      }
+    },
     "/models/{model_id}": {
       "delete": {
+        "description": "Stops the engine first if it has this model loaded. While an answer is being written with it, nothing is deleted: `409 model_in_use`.",
         "operationId": "delete_model_models__model_id__delete",
         "parameters": [
           {
@@ -7019,51 +7084,6 @@
         "summary": "Turn an added skill on or off",
         "tags": [
           "skills"
-        ]
-      }
-    },
-    "/spike/v1/chat/completions": {
-      "post": {
-        "operationId": "chat_completions_spike_v1_chat_completions_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ChatCompletionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "409": {
-            "description": "no_model"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "503": {
-            "description": "engine_failed"
-          }
-        },
-        "summary": "TEMPORARY (D-04): stream one local answer; replaced by the gateway (G-01)",
-        "tags": [
-          "spike (temporary, D-04)"
         ]
       }
     },

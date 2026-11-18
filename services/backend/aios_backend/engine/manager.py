@@ -37,6 +37,9 @@ from aios_common.logging import get_logger, log_event
 
 IDLE_UNLOAD_S = 300.0  # 5 minutes without a request
 WATCH_INTERVAL_S = 1.0
+# How long a request for another model waits for the answer in progress (D-05).
+SWITCH_WAIT_S = 120.0
+SWITCH_POLL_S = 0.05
 
 log = get_logger("engine")
 
@@ -48,6 +51,10 @@ class Build(StrEnum):
 
 class NoModel(Exception):
     """No model in the models folder."""
+
+
+class EngineBusy(Exception):
+    """Another model is loaded and still answering; it was not cut off (D-05)."""
 
 
 StartFn = Callable[[Path, Path, Path, ChildJob, str], Engine]
@@ -142,9 +149,20 @@ class EngineManager:
         finally:
             self.release()
 
-    async def acquire(self, model: Path | None = None) -> Engine:
+    async def acquire(self, model: Path | None = None, wait_s: float = SWITCH_WAIT_S) -> Engine:
         """Like ``use``, for callers in a worker thread: pair every call with ``release``."""
-        engine = await self.ensure(model)
+        engine = await self.ensure(model, wait_s=wait_s)
+        self._leases += 1
+        return engine
+
+    async def lease_if_loaded(self, model: Path) -> Engine | None:
+        """The running engine with a lease (pair with ``release``) if it has ``model`` loaded;
+        otherwise None. Never starts, stops or waits for an engine (G-04 token counts)."""
+        if self._lock.locked():  # starting or stopping: no engine to use right now
+            return None
+        engine = self._engine
+        if engine is None or not engine.alive() or not _same_file(engine.model, model):
+            return None
         self._leases += 1
         return engine
 
@@ -152,24 +170,49 @@ class EngineManager:
         self._leases -= 1
         self._last_used = time.monotonic()
 
-    async def ensure(self, model: Path | None = None) -> Engine:
+    async def ensure(self, model: Path | None = None, wait_s: float = SWITCH_WAIT_S) -> Engine:
         """Start the engine if it is not running, with ``model`` (default: the default model).
-        One model is loaded at a time (MVP 2.2): asking for another one restarts the engine,
-        unless an answer is still streaming. Raises ``NoModel`` or ``EngineError``."""
+        One model is loaded at a time (MVP 2.2): asking for another one restarts the engine.
+        An answer in progress is never cut off and the caller never gets the other model
+        (D-05): it waits up to ``wait_s`` for that answer to end, then raises ``EngineBusy``.
+        Also raises ``NoModel`` or ``EngineError``."""
+        deadline = time.monotonic() + wait_s
+        while True:
+            async with self._lock:
+                self._last_used = time.monotonic()
+                self._reap()
+                wanted = model or self._model_fn()
+                engine = self._engine
+                other = engine is not None and wanted is not None and engine.model != wanted
+                if engine is not None and other and self._leases:
+                    if time.monotonic() >= deadline:
+                        log_event(log, "engine_switch_busy", component=engine.build)
+                        raise EngineBusy
+                elif engine is not None and other:
+                    self._engine = None
+                    await asyncio.to_thread(engine.stop)
+                    self._set(ComponentState.NOT_STARTED)
+                    return await self._start(wanted)
+                elif engine is not None:
+                    return engine
+                else:
+                    return await self._start(wanted)
+            await asyncio.sleep(SWITCH_POLL_S)  # the other model's answer is still running
+
+    async def unload(self, model: Path) -> None:
+        """Stop the engine if it has ``model`` loaded, so the file can be deleted (I-04).
+        Raises ``EngineBusy`` while an answer uses it: that answer is never cut off."""
         async with self._lock:
-            self._last_used = time.monotonic()
             self._reap()
-            wanted = model or self._model_fn()
             engine = self._engine
-            if engine is not None and wanted is not None and engine.model != wanted:
-                if self._leases:
-                    return engine  # never cut off an answer in progress
-                self._engine = None
-                await asyncio.to_thread(engine.stop)
-                self._set(ComponentState.NOT_STARTED)
-            if self._engine is not None:
-                return self._engine
-            return await self._start(wanted)
+            if engine is None or not _same_file(engine.model, model):
+                return
+            if self._leases:
+                raise EngineBusy
+            self._engine = None
+            await asyncio.to_thread(engine.stop)
+            self._set(ComponentState.NOT_STARTED)
+            log_event(log, "engine_unloaded_for_delete", component=engine.build)
 
     async def lost_gpu(self, engine: Engine, wait_s: float = 3.0) -> bool:
         """True if ``engine`` is the GPU build and has exited (a request to it just failed).
@@ -283,3 +326,10 @@ class EngineManager:
             self._set(ComponentState.NOT_STARTED)
             self._c.engine_idle_unloaded = True
             log_event(log, "engine_idle_unloaded", component=engine.build)
+
+
+def _same_file(a: Path, b: Path) -> bool:
+    try:
+        return a.resolve() == b.resolve()
+    except OSError:
+        return a == b

@@ -11,7 +11,7 @@ import pytest
 
 from aios_backend.components import Components
 from aios_backend.engine import EngineManager
-from aios_backend.engine.client import ThinkFilter, benchmark, stream_chat
+from aios_backend.engine.client import ThinkFilter, benchmark, count_tokens, stream_chat
 from aios_backend.engine.launcher import Engine
 from aios_backend.local import SYSTEM_PROMPT, LocalModels
 
@@ -26,6 +26,14 @@ class FakeEngine(BaseHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         FakeEngine.requests.append({"auth": self.headers["Authorization"], **body})
+        if self.path == "/tokenize":  # one token per word
+            out = json.dumps({"tokens": list(range(len(body["content"].split())))}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(out)))
+            self.end_headers()
+            self.wfile.write(out)
+            return
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.end_headers()
@@ -185,3 +193,102 @@ def test_g03_prepare_adds_the_aios_prompt_once() -> None:
         "local", [{"role": "system", "content": "Note"}, {"role": "user", "content": "Hi"}]
     )
     assert noted[0]["content"] == f"{SYSTEM_PROMPT}\n\nNote"
+
+
+def test_k06_a_removed_model_is_not_replaced_without_asking(tmp_path: Path, client: object) -> None:
+    """A conversation whose AI model was removed is not answered by another one: chat says
+    ``model_missing`` and the app asks which model carries on (I-04, K-06). Only a conversation
+    with no model of its own uses the default."""
+    from fastapi.testclient import TestClient
+
+    from aios_backend.apps.models.models import InstalledModel
+    from db.base import utcnow
+
+    assert isinstance(client, TestClient)
+    db = client.app.state.db  # type: ignore[attr-defined]
+    model_file = tmp_path / "kept.gguf"
+    model_file.write_bytes(b"GGUF")
+    with db.session() as session:
+        session.add(
+            InstalledModel(
+                id="kept",
+                name="Kept",
+                tier="small",
+                file_path=str(model_file),
+                artifact_digest="0" * 64,
+                size_bytes=4,
+                context_length=4096,
+                licence="Apache-2.0",
+                source="download",
+                installed_at=utcnow(),
+            )
+        )
+        session.commit()
+    components = Components()
+    manager = EngineManager(tmp_path / "llama", tmp_path / "m", tmp_path / "t", components)
+    local = LocalModels(db, manager, components)
+    assert local.model("local", "removed-model") is None
+    kept = local.model("local", None)
+    assert kept is not None and kept.model_id == "kept"
+    assert local.model("local", "kept") == kept
+
+
+def test_g04_the_engine_counts_tokens(engine_port: int, tmp_path: Path) -> None:
+    engine = fake_engine(engine_port, tmp_path / "m.gguf")
+    assert count_tokens(engine, "three words here") == 3
+    sent = FakeEngine.requests[-1]
+    assert sent["auth"] == "Bearer engine-key" and sent["add_special"] is False
+
+
+def test_g04_local_models_count_only_with_the_model_loaded(
+    engine_port: int, tmp_path: Path, client: object
+) -> None:
+    """Counting never starts the engine: without the model loaded there is no count (None)."""
+    from fastapi.testclient import TestClient
+
+    from aios_backend.apps.models.models import InstalledModel
+    from db.base import utcnow
+
+    assert isinstance(client, TestClient)
+    db = client.app.state.db  # type: ignore[attr-defined]
+    model_file = tmp_path / "tiny.gguf"
+    model_file.write_bytes(b"GGUF")
+    with db.session() as session:
+        session.add(
+            InstalledModel(
+                id="tiny",
+                name="Tiny",
+                tier="small",
+                file_path=str(model_file),
+                artifact_digest="0" * 64,
+                size_bytes=4,
+                context_length=4096,
+                licence="Apache-2.0",
+                source="download",
+                installed_at=utcnow(),
+            )
+        )
+        session.commit()
+    started: list[Path] = []
+
+    def start(root: Path, model: Path, temp: Path, job: object, build: str) -> Engine:
+        started.append(model)
+        return fake_engine(engine_port, model)
+
+    components = Components()
+    manager = EngineManager(
+        tmp_path / "llama", tmp_path / "m", tmp_path / "t", components, start_fn=start
+    )
+    local = LocalModels(db, manager, components)
+
+    async def run() -> tuple[int | None, int | None, int | None]:
+        local.bind(asyncio.get_running_loop())
+        before = await asyncio.to_thread(local.count_tokens, "local", "tiny", "one two")
+        await manager.ensure(model_file)
+        after = await asyncio.to_thread(local.count_tokens, "local", "tiny", "one two three")
+        other = await asyncio.to_thread(local.count_tokens, "company", "tiny", "one")
+        return before, after, other
+
+    assert asyncio.run(run()) == (None, 3, None)
+    assert started == [model_file]  # only the explicit ensure started it
+    assert manager._leases == 0  # type: ignore[attr-defined]

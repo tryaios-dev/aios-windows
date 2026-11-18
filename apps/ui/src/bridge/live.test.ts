@@ -152,7 +152,6 @@ function fakeBridge() {
       hardware: vi.fn(async () => HARDWARE),
     },
     voice: unused(),
-    spike: unused(), // SPIKE-D04
   } as AiosBridge;
   return { bridge, state };
 }

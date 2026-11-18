@@ -219,7 +219,7 @@ export const useStore = create<Store>()((set, get) => {
       freshInstall: false,
     },
 
-    // The backend has no prompts of these kinds yet; answering closes them.
+    // Answering closes them. The company prompt has no backend yet (G-06); the model choice is saved by api.conversations.chooseModel.
     answerContinueLocally: () => set({ continueLocally: null }),
     answerModelChoice: () => set({ modelChoice: null }),
     dismissFallbackNotice: () => set((s) => ({ fallbackNotice: s.fallbackNotice ? { ...s.fallbackNotice, dismissed: true } : null })),

@@ -565,6 +565,8 @@ export const simBridge: AiosBridge = {
     installed: async () => state.models.map((m) => ({ ...m })),
     chooseFile: async () => null,
     importFile: async () => fail("file_not_readable"),
+    packageFiles: async () => [],
+    installPackageFile: async () => fail("package_file_not_found"),
     download: async (entryId) => {
       const entry = SIM_CATALOGUE.find((e) => e.entry_id === entryId) ?? fail("catalogue_entry_not_found");
       if (state.models.some((m) => m.id === entryId)) fail("model_installed");
@@ -627,8 +629,5 @@ export const simBridge: AiosBridge = {
       return { text: simVoiceText() };
     },
     cancel: async () => undefined,
-  },
-  spike: {
-    ask: async () => ({ text: "", error: "backend_unavailable", firstTokenMs: null, totalMs: 0, tokens: null, tokensPerSecond: null }),
   },
 };

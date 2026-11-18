@@ -102,6 +102,8 @@ const bridge: AiosBridge = {
     installed: () => invoke("models.installed"),
     chooseFile: () => invoke("models.chooseFile"),
     importFile: (path, entryId) => invoke("models.importFile", path, entryId),
+    packageFiles: () => invoke("models.packageFiles"),
+    installPackageFile: (fileName) => invoke("models.installPackageFile", fileName),
     download: (entryId) => invoke("models.download", entryId),
     downloads: () => invoke("models.downloads"),
     pauseDownload: (entryId) => invoke("models.pauseDownload", entryId),
@@ -119,9 +121,6 @@ const bridge: AiosBridge = {
     audio: (sessionId, pcm) => invoke("voice.audio", sessionId, pcm),
     finish: (sessionId) => invoke("voice.finish", sessionId),
     cancel: (sessionId) => invoke("voice.cancel", sessionId),
-  },
-  spike: {
-    ask: (prompt: string) => invoke("spike.ask", prompt), // SPIKE-D04 (temporary)
   },
 };
 

@@ -37,7 +37,7 @@ The installer and the model download UI need to show the licence.
 
 | File | Upstream @ revision | Licence | Shipped in |
 |---|---|---|---|
-| `third-party/llama.cpp-LICENSE.txt` | `ggml-org/llama.cpp` @ `8642541b255bfb5dc39cd351a178be09013a55d6` (release b11960, `build/llama/manifest.json`) | MIT | installer: `resources/llama/` (CPU + Vulkan llama-server) |
+| `third-party/llama.cpp-LICENSE.txt` | `ggml-org/llama.cpp` @ `52e53a76df0298d2c316ae7e704eeec03b0bf478` (release b12111, `build/llama/manifest.json`) | MIT | installer: `resources/llama/` (CPU + Vulkan llama-server) |
 | `third-party/whisper.cpp-LICENSE.txt` | `ggml-org/whisper.cpp` @ `d1be6fde11ac6e0407606b4e42fe72d34add8037` (release v1.9.5, `build/whisper/manifest.json`) | MIT | installer: `resources/whisper/` (CPU + Vulkan whisper-server, ADR 0016) |
 
 The whole `licenses/` folder is copied into the installer as `resources/licenses/`

@@ -8,7 +8,6 @@ import { projectsHandlers } from "./projects.js";
 import { settingsHandlers } from "./settings.js";
 import { setupHandlers } from "./setup.js";
 import { skillsHandlers } from "./skills.js";
-import { spikeHandlers } from "./spike.js"; // SPIKE-D04
 import { systemHandlers } from "./system.js";
 import { voiceHandlers } from "./voice.js";
 
@@ -27,7 +26,6 @@ export const handlers: Record<string, Handler> = {
   ...skillsHandlers,
   ...modelsHandlers,
   ...voiceHandlers,
-  ...spikeHandlers, // SPIKE-D04: temporary
 };
 
 /** One registry of allowed calls. */

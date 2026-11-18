@@ -85,19 +85,6 @@ export const ExternalLink = z
   // http(s), a host with no user or password part, optional port, then a path, query or fragment.
   .regex(/^https?:\/\/[A-Za-z0-9.-]+(?::\d{1,5})?(?:[/?#][^\s]*)?$/, "not_a_web_link");
 
-/** SPIKE-D04 (temporary): one local answer. Removed when the chat screen (K-01) uses the gateway (G-01). */
-export const SpikePrompt = z.string().trim().min(1).max(4000);
-export const SpikeAnswer = z.object({
-  text: z.string(),
-  /** Short code, never a backend error body: no_model, engine_failed, engine_error, backend_unavailable. */
-  error: z.string().nullable(),
-  firstTokenMs: z.number().nullable(),
-  totalMs: z.number(),
-  tokens: z.number().int().nullable(),
-  tokensPerSecond: z.number().nullable(),
-});
-export type SpikeAnswer = z.infer<typeof SpikeAnswer>;
-
 /** Ids sent from the renderer: checked before they are put into a URL path. */
 export const Id = z.string().regex(/^[A-Za-z0-9._-]{1,64}$/);
 
@@ -550,6 +537,12 @@ export const InstalledModel = z.object({
 });
 export type InstalledModel = z.infer<typeof InstalledModel>;
 
+/** A model file that came with the installer (offline package), not yet checked. */
+export const PackageFile = z.object({ file_name: z.string(), size_bytes: z.number().int(), entry_id: z.string().nullable() });
+export type PackageFile = z.infer<typeof PackageFile>;
+/** A file name in the offline package folder: no folders, a .gguf file. */
+export const PackageFileName = z.string().regex(/^[^\\/:*?"<>|]{1,250}\.gguf$/i);
+
 export const Hardware = z.object({
   cpu: z.string(),
   cores: z.number().int(),
@@ -768,6 +761,10 @@ export interface AiosBridge {
     /** System open dialog for a .gguf file; null when cancelled. */
     chooseFile(): Promise<PickedFile | null>;
     importFile(path: string, entryId: string | null): Promise<InstalledModel>;
+    /** Model files that came with the installer (offline package), waiting to be checked. */
+    packageFiles(): Promise<PackageFile[]>;
+    /** Checks one of them like an import and installs it; a file that fails is deleted. */
+    installPackageFile(fileName: string): Promise<InstalledModel>;
     download(entryId: string): Promise<void>;
     /** Downloads in progress, paused, failed or just finished. */
     downloads(): Promise<DownloadState[]>;
@@ -797,10 +794,6 @@ export interface AiosBridge {
     finish(sessionId: string): Promise<VoiceFinished>;
     /** Throws away what was heard. */
     cancel(sessionId: string): Promise<void>;
-  };
-  /** SPIKE-D04 (temporary). */
-  spike: {
-    ask(prompt: string): Promise<SpikeAnswer>;
   };
 }
 
