@@ -19,30 +19,31 @@
   ${endIf}
 !macroend
 
-; Removing the program (an update, or an uninstall) deletes everything in the install folder
-; except the models folder, so an update never downloads a model again. electron-builder runs
-; this instead of its own "RMDir /r $INSTDIR"; customUnInstall above removes the models only when
-; the user chose to remove their data.
+; Removing the program (an update, or an uninstall) deletes exactly what the installer put in the
+; install folder, by name, and never the models folder, so an update never downloads a model again.
+; The user may have chosen a folder that already held their own files: nothing else is touched,
+; and the folder itself goes only when it is empty. electron-builder runs this instead of its own
+; "RMDir /r $INSTDIR"; customUnInstall above removes the models only when the user chose to
+; remove their data. The names are the top level of the packaged app (electron-builder output).
 !macro customRemoveFiles
-  Push $R0
-  Push $R1
-  FindFirst $R0 $R1 "$INSTDIR\*.*"
-  aios_remove_loop:
-    StrCmp $R1 "" aios_remove_done
-    StrCmp $R1 "." aios_remove_next
-    StrCmp $R1 ".." aios_remove_next
-    StrCmp $R1 "models" aios_remove_next
-    IfFileExists "$INSTDIR\$R1\*.*" 0 aios_remove_file
-      RMDir /r "$INSTDIR\$R1"
-      Goto aios_remove_next
-    aios_remove_file:
-      Delete "$INSTDIR\$R1"
-  aios_remove_next:
-    FindNext $R0 $R1
-    Goto aios_remove_loop
-  aios_remove_done:
-  FindClose $R0
-  RMDir "$INSTDIR" ; only when empty: a kept models folder keeps it
-  Pop $R1
-  Pop $R0
+  RMDir /r "$INSTDIR\resources"
+  RMDir /r "$INSTDIR\locales"
+  Delete "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
+  Delete "$INSTDIR\LICENSE.electron.txt"
+  Delete "$INSTDIR\LICENSES.chromium.html"
+  Delete "$INSTDIR\chrome_100_percent.pak"
+  Delete "$INSTDIR\chrome_200_percent.pak"
+  Delete "$INSTDIR\resources.pak"
+  Delete "$INSTDIR\d3dcompiler_47.dll"
+  Delete "$INSTDIR\ffmpeg.dll"
+  Delete "$INSTDIR\libEGL.dll"
+  Delete "$INSTDIR\libGLESv2.dll"
+  Delete "$INSTDIR\vk_swiftshader.dll"
+  Delete "$INSTDIR\vulkan-1.dll"
+  Delete "$INSTDIR\vk_swiftshader_icd.json"
+  Delete "$INSTDIR\icudtl.dat"
+  Delete "$INSTDIR\snapshot_blob.bin"
+  Delete "$INSTDIR\v8_context_snapshot.bin"
+  Delete "$INSTDIR\${UNINSTALL_FILENAME}"
+  RMDir "$INSTDIR" ; only when empty: a kept models folder or the user's own files keep it
 !macroend

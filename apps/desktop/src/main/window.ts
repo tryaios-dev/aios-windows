@@ -28,6 +28,19 @@ export const allowPermission = (permission: string): boolean => ALLOWED_PERMISSI
 const windowIcon = (): { icon?: string } =>
   app.isPackaged ? {} : { icon: path.join(import.meta.dirname, "../../../../build/icons/icon.png") };
 
+/** The main window's renderer: isolated and sandboxed, no Node (C-01). A runtime test opens a real
+ * window with exactly these and checks that no Node API is reachable from the page. */
+export const RENDERER_PREFERENCES = {
+  contextIsolation: true,
+  sandbox: true,
+  nodeIntegration: false,
+  nodeIntegrationInWorker: false,
+  nodeIntegrationInSubFrames: false,
+  webviewTag: false,
+  webSecurity: true,
+  spellcheck: false,
+} as const;
+
 export async function createMainWindow(): Promise<BrowserWindow> {
   const win = new BrowserWindow({
     width: 1280,
@@ -35,14 +48,7 @@ export async function createMainWindow(): Promise<BrowserWindow> {
     show: false,
     title: "AIOS",
     ...windowIcon(),
-    webPreferences: {
-      preload: path.join(import.meta.dirname, "../preload/index.cjs"),
-      contextIsolation: true,
-      sandbox: true,
-      nodeIntegration: false,
-      webSecurity: true,
-      spellcheck: false,
-    },
+    webPreferences: { ...RENDERER_PREFERENCES, preload: path.join(import.meta.dirname, "../preload/index.cjs") },
   });
 
   win.webContents.session.webRequest.onHeadersReceived((details, cb) =>

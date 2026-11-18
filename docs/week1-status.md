@@ -12,9 +12,9 @@ Re-checked 2026-10-28 on Windows 11 after the move from GitLab to GitHub (ADR 00
 | Python tests (`tools/run_tests.py`) | pass |
 | `pnpm install --frozen-lockfile`, typecheck, lint, vitest, desktop security tests (Node 22) | pass |
 | `aios-backend openapi --check` | up to date |
-| `pnpm package:win`: llama.cpp b11960 fetched + SHA-256 verified, `backend.exe`, `AIOS Setup 0.1.0.exe` with backend, llama-server CPU + Vulkan, licences | pass (unsigned) |
+| `pnpm package:win`: llama.cpp b11960 (now b12111) fetched + SHA-256 verified, `backend.exe`, `AIOS Setup 0.1.0.exe` with backend, llama-server CPU + Vulkan, licences | pass (unsigned) |
 | `verify-signatures.ps1` on the unsigned build | fails on 118 of 121 PE files, as it must until A-01 |
-| SBOM (`tools/release/sbom.py`) | 61 components incl. Electron 33.4.11, SQLCipher 4.19.0, llama.cpp b11960 |
+| SBOM (`tools/release/sbom.py`) | 61 components incl. Electron 33.4.11, SQLCipher 4.19.0, llama.cpp b11960 (now b12111) |
 | Dependency scans (pip-audit, pnpm audit) | 0 open findings |
 
 Note: Node 23+ breaks Electron's install. Use Node 22 (`.nvmrc`; `fnm use 22`).
@@ -43,12 +43,12 @@ Google's prohibited-use policy first. Llama 4 is excluded (Llama 4 Community Lic
 
 | Task | Acceptance criterion | Status |
 | --- | --- | --- |
-| B-01 | Repository, folder layout | **Repo.** GitHub `tryaios-dev/aios-windows` (not pushed yet). `services/evidence-writer/` and `apps/verifier-cli/` now exist (added 2026-11-12, ADR 0014) |
+| B-01 | Repository, folder layout | **Repo.** GitHub `tryaios-dev/aios-windows` (pushed). `services/evidence-writer/` and `apps/verifier-cli/` now exist (added 2026-11-12, ADR 0014) |
 | B-01 | A test PR touching the gateway folder cannot merge without the reviewer | **Repo ready, Team to enforce.** `services/backend/aios_backend/gateway/` exists; `.github/CODEOWNERS`; `tools/github/apply-main-ruleset.ps1` applies the ruleset. Needs GitHub Team plan + A-02 names |
 | B-01 | CLAUDE.md has the seven invariants verbatim + tests-first rule | **Repo done** (2026-11-12): CLAUDE.md has the 7 MVP 5.3 invariants word for word, the tests-first rule and how the repo applies each one |
 | B-02 | Lint + pytest on Linux and Windows; red pipeline blocks merge | **Repo done** (`.github/workflows/ci.yml`: `py-unit`/`ts-unit` on ubuntu + windows). Blocking needs the ruleset (Team plan) |
 | B-02 | Windows job produces backend.exe and an installer | **Repo done.** `package-windows` job, artefact kept 14 days. Verified locally |
-| B-02 | Lock files committed; unlocked dependency fails | **Done.** uv.lock, pnpm-lock.yaml (`--frozen`), SQLCipher pin, **llama.cpp b11960 pinned** with SHA-256 (`build/llama/manifest.json`) |
+| B-02 | Lock files committed; unlocked dependency fails | **Done.** uv.lock, pnpm-lock.yaml (`--frozen`), SQLCipher pin, **llama.cpp pinned** (b11960 at week 1, b12111 now) with SHA-256 (`build/llama/manifest.json`) |
 | B-04 | Release job signs all binaries; post-build check passes | **Repo done, Team credential.** `.github/workflows/release.yml` signs backend.exe, both llama-server builds, the Electron files and the installer, then fails on any unsigned PE. Needs the A-01 secrets |
 | B-04 | Credential nowhere in repo or CI logs | **Done.** GitHub secrets only; secret search clean; scripts print file names only |
 | B-05 | SBOM attached to the RC pipeline, matches the build | **Repo done.** release.yml uploads it and attaches it to the draft GitHub release |

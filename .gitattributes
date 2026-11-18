@@ -1,3 +1,6 @@
 # Patches are applied byte for byte and pinned by SHA-256 in build/llama/manifest.json:
 # Git must never convert their line endings (Windows checkouts default to CRLF).
 *.patch -text
+
+# Model catalogue vectors are signed bytes: a converted line ending would break the signature.
+contracts/model-catalogue/v1/golden-vectors/** -text

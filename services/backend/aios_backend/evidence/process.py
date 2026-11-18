@@ -15,12 +15,20 @@ import json
 import subprocess
 import sys
 import threading
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from aios_backend.config import Profile, Settings
 from aios_backend.evidence import leftover
-from aios_backend.evidence.client import WRITER_PURPOSE, HttpWriterClient
+from aios_backend.evidence.client import (
+    WRITER_PURPOSE,
+    HttpWriterClient,
+    WriterClient,
+    WriterUnavailable,
+)
 from aios_common import platforms
 from aios_common.handshake import derive
 from aios_common.logging import get_logger, log_event
@@ -133,3 +141,79 @@ def _start_once(settings: Settings, job: ChildJob) -> WriterProcess:
         raise WriterStartError(code)
     log_event(log, "writer_started", port=port[0])
     return WriterProcess(proc, port[0], HttpWriterClient.connect(port[0], token))
+
+
+# Crash recovery: restarts allowed within RESTART_WINDOW_S before the writer is left down.
+MAX_RESTARTS = 3
+RESTART_WINDOW_S = 300.0
+
+
+class SupervisedWriter:
+    """The writer's API, starting the writer again when it has exited (crash recovery).
+
+    A crashed writer is noticed on the next call (the pump calls every few seconds) and started
+    again with the same derived token on a new port. Events wait in the outbox meanwhile and are
+    replayed in order (F-05), so nothing is lost. A writer that keeps exiting is left down after
+    MAX_RESTARTS within RESTART_WINDOW_S: calls then raise ``WriterUnavailable`` and Health shows
+    the writer as unavailable, as before.
+    """
+
+    def __init__(
+        self,
+        start_writer: Callable[[], WriterProcess],
+        now: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._start = start_writer
+        self._now = now
+        self._lock = threading.Lock()
+        self._restarts: list[float] = []
+        self._proc = start_writer()
+
+    def stop(self) -> None:
+        with self._lock:
+            self._proc.stop()
+
+    def _client(self) -> WriterClient:
+        with self._lock:
+            exit_code = self._proc.process.poll()
+            if exit_code is None:
+                return self._proc.client
+            at = self._now()
+            self._restarts = [t for t in self._restarts if at - t < RESTART_WINDOW_S]
+            if len(self._restarts) >= MAX_RESTARTS:
+                raise WriterUnavailable("writer_unavailable")
+            self._restarts.append(at)
+            log_event(log, "writer_exited", error_code=f"exit_{exit_code}")
+            try:
+                self._proc = self._start()
+            except WriterStartError as exc:
+                raise WriterUnavailable("writer_unavailable") from exc
+            log_event(log, "writer_restarted")
+            return self._proc.client
+
+    def status(self) -> dict[str, Any]:
+        return self._client().status()
+
+    def init_stream(self, stream_id: str) -> dict[str, Any]:
+        return self._client().init_stream(stream_id)
+
+    def append(self, intents: list[dict[str, Any]]) -> dict[str, Any]:
+        return self._client().append(intents)
+
+    def checkpoint(self) -> dict[str, Any]:
+        return self._client().checkpoint()
+
+    def checkpoints(self, from_seq: int | None = None) -> list[dict[str, Any]]:
+        return self._client().checkpoints(from_seq)
+
+    def events(self, after_seq: int | None = None) -> list[dict[str, Any]]:
+        return self._client().events(after_seq)
+
+    def export(self, scope: dict[str, Any]) -> tuple[bytes, dict[str, Any]]:
+        return self._client().export(scope)
+
+    def backup(self, path: str) -> None:
+        self._client().backup(path)
+
+    def restore(self, backup_path: str, stream_id: str, min_tip_seq: int | None) -> dict[str, Any]:
+        return self._client().restore(backup_path, stream_id, min_tip_seq)

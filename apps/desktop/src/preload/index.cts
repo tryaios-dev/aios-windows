@@ -94,6 +94,7 @@ const bridge: AiosBridge = {
     list: (projectId) => invoke("evidence.list", projectId),
     status: () => invoke("evidence.status"),
     stream: () => invoke("evidence.stream"),
+    checkpoints: () => invoke("evidence.checkpoints"),
     export: (input) => invoke("evidence.export", input),
   },
   models: {

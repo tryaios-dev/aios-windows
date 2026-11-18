@@ -548,7 +548,9 @@ export const api = {
         return ''
       }
     },
-    remove: (id: string) => change('Document not removed', () => bridge().knowledge.remove(id), () => Promise.all([refreshKnowledge(), refreshEvents()])),
+    // A failed reload of the activity record must not report a removal that happened as failed.
+    remove: (id: string) =>
+      change('Document not removed', () => bridge().knowledge.remove(id), () => Promise.all([refreshKnowledge(), refreshEvents().catch(() => undefined)])),
     retry: async (id: string): Promise<void> => {
       // Shown as being read while AIOS reads the encrypted copy again.
       useExtras.setState((x) => ({ knowledge: x.knowledge.map((d) => (d.id === id ? { ...d, status: 'reading' as const, problem: undefined } : d)) }))

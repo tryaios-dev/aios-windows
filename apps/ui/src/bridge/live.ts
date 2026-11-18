@@ -454,11 +454,17 @@ export async function refreshSkills(): Promise<void> {
 
 export async function refreshEvents(): Promise<void> {
   const newest = ticket("events");
-  const [events, status] = await Promise.all([bridge().evidence.list(), bridge().evidence.status()]);
+  const [events, status, checkpoints] = await Promise.all([
+    bridge().evidence.list(),
+    bridge().evidence.status(),
+    // A writer that has not run yet: the record shows without checkpoints.
+    bridge().evidence.checkpoints().catch(() => []),
+  ]);
   if (!newest()) return;
   const streamId = useStore.getState().stream.stream_id;
   useStore.setState((s) => ({
     events: events.map((e) => toEvent(e, streamId)).sort((a, b) => a.seq - b.seq),
+    checkpoints: [...checkpoints].sort((a, b) => a.seq_to - b.seq_to),
     health: { ...s.health, writer: status.writer, evidence_pending: status.pending },
   }));
 }

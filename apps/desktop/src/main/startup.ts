@@ -66,6 +66,59 @@ export async function runStartup(d: StartupDeps): Promise<BackendHandle | null> 
   }
 }
 
+/** What crash recovery needs from Electron; injected so it can be tested without it. */
+export interface SuperviseDeps {
+  startBackend(): Promise<BackendHandle>;
+  stopBackend(): Promise<void>;
+  /** Point IPC (and the updater) at the backend that was started again. */
+  replaced(backend: BackendHandle): void;
+  /** Show "AIOS stopped working" with Restart and Quit. */
+  askRestartOrQuit(errorCode: string): Promise<"retry" | "quit">;
+  quit(): void;
+  quitting(): boolean;
+  now?(): number;
+}
+
+/** Restarts made without asking within RESTART_WINDOW_MS; one more asks Restart or Quit. */
+export const QUIET_RESTARTS = 3;
+export const RESTART_WINDOW_MS = 60_000;
+
+/**
+ * Crash recovery: a backend that exits while AIOS is open is started again with a new token,
+ * and the window keeps working through the new one. Its data is safe on disk (chats.db is
+ * written in transactions; the evidence writer and engine die with it, IPC-50, and restart with
+ * it). A backend that keeps stopping is not restarted in a loop: the person chooses.
+ */
+export async function superviseBackend(first: BackendHandle, d: SuperviseDeps): Promise<void> {
+  const now = d.now ?? Date.now;
+  let backend = first;
+  let recent: number[] = [];
+  for (;;) {
+    const code = await backend.exited;
+    if (d.quitting()) return;
+    const exitCode = `backend_exit_${code ?? "signal"}`;
+    log("backend.exited", { errorCode: exitCode });
+    const at = now();
+    recent = [...recent.filter((t) => at - t < RESTART_WINDOW_MS), at];
+    if (recent.length > QUIET_RESTARTS) {
+      if ((await d.askRestartOrQuit(exitCode)) === "quit") return d.quit();
+      recent = [];
+    }
+    for (;;) {
+      try {
+        backend = await d.startBackend();
+        d.replaced(backend);
+        log("backend.restarted");
+        break;
+      } catch (err) {
+        await d.stopBackend();
+        if (d.quitting()) return;
+        if ((await d.askRestartOrQuit(errorCode(err))) === "quit") return d.quit();
+      }
+    }
+  }
+}
+
 /** A second launch of AIOS: bring the open window forward, or open one if none exists. */
 export function onSecondInstance(
   windows: { isMinimized(): boolean; restore(): void; show(): void; focus(): void }[],

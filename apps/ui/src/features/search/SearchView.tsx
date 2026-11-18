@@ -90,7 +90,7 @@ export function SearchView() {
   const conversationById = useMemo(() => new Map(conversations.map((c) => [c.id, c])), [conversations])
 
   // `messages` keeps results current while the store changes underneath.
-  const hits: SearchHit[] = useMessageSearch(debounced.length >= MIN_QUERY ? debounced : null, messages)
+  const { hits, failed: searchFailed, retry: retrySearch } = useMessageSearch(debounced.length >= MIN_QUERY ? debounced : null, messages)
 
   // Documents are found by name. The whole list is selected, then narrowed here.
   const knowledge = useExtras((s) => s.knowledge)
@@ -192,6 +192,16 @@ export function SearchView() {
     )
   } else if (debounced.length < MIN_QUERY) {
     body = <EmptyState compact title="Keep typing" description={`Search needs at least ${MIN_QUERY} characters.`} />
+  } else if (searchFailed && found === 0 && !pending) {
+    body = (
+      <EmptyState
+        compact
+        icon={<SearchX strokeWidth={1.75} />}
+        title="Search did not work this time"
+        description="AIOS could not search your conversations just now. Nothing is lost; try again in a moment."
+        action={<Button size="sm" onClick={retrySearch}>Try again</Button>}
+      />
+    )
   } else if (found === 0 && !pending) {
     body = (
       <div className="flex flex-col items-center px-6 py-14 text-center">

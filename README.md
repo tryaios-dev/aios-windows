@@ -33,8 +33,9 @@ seven areas (setup, settings, projects, chat, search, evidence, models) run on t
 (UI → `window.aios` → Electron IPC → backend; `uv run aios-backend routes`). In a plain browser
 the UI uses its simulated backend (`apps/ui/src/bridge/sim/`). The evidence writer
 (`services/evidence-writer`, its own process; ADR 0014) chains, signs and exports every event, and
-`apps/verifier-cli` checks an export. Not in this build: model download from the mirror and a
-ready local model (so chat answers "no local model is ready"). `pnpm test:e2e` runs the whole chain against a real backend. The
+`apps/verifier-cli` checks an export. Models download from Hugging Face (the mirror is not set up
+yet) and chat answers come from the local model through the gateway once one is installed.
+`pnpm test:e2e` runs the whole chain against a real backend. The
 app shell (sidebar, project header) lives in `apps/ui/src/app/`.
 
 AIOS ships for Windows only. Everything OS-specific sits behind one platform layer per

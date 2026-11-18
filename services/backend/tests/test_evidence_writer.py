@@ -385,3 +385,29 @@ def test_ac_17_backup_now_makes_a_backup_the_restore_drill_accepts(
             pump.drain(b_db, b_writer)
             assert any(e["event_type"] == "continuation" for e in _events(b))
             assert {p["name"] for p in b.get("/projects").json()} >= {"Before backup"}
+
+
+def test_a_store_is_not_created_while_the_writer_is_down(
+    app_client: TestClient, writer: FlakyWriter, settings: Settings
+) -> None:
+    """Report 16 Nov, restore check gap: a package written without the writer's file name would
+    leave evidence out of the backup manifest, and a restore would not notice it was missing."""
+    writer.down = True
+    resp = app_client.post("/setup/store")
+    assert resp.status_code == 503 and resp.json() == {"error": "writer_unavailable"}
+    assert not settings.recovery_pkg.exists()
+    writer.down = False
+    first_run(app_client)
+    pkg = json.loads(settings.recovery_pkg.read_bytes())
+    assert pkg["backup_manifest"]["required"] == ["chats.db", "evidence.db"]
+
+
+def test_a_new_recovery_key_waits_for_the_writer(
+    app_client: TestClient, writer: FlakyWriter, settings: Settings
+) -> None:
+    first_run(app_client)
+    before = settings.recovery_pkg.read_bytes()
+    writer.down = True
+    resp = app_client.post("/recovery-key")
+    assert resp.status_code == 503 and resp.json() == {"error": "writer_unavailable"}
+    assert settings.recovery_pkg.read_bytes() == before  # the old package and key still work

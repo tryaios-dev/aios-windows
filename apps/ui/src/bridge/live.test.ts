@@ -139,7 +139,12 @@ function fakeBridge() {
     search: unused(),
     knowledge: { ...unused(), list: vi.fn(async () => []), pathOf: vi.fn(() => "") },
     skills: { ...unused(), list: vi.fn(async () => ({ catalogue: [], installed: [] })) },
-    evidence: { ...unused(), list: vi.fn(async () => []), status: vi.fn(async () => EVIDENCE) },
+    evidence: {
+      ...unused(),
+      list: vi.fn(async () => []),
+      status: vi.fn(async () => EVIDENCE),
+      checkpoints: vi.fn(async () => []),
+    },
     models: {
       ...unused(),
       installed: vi.fn(async () => []),
@@ -368,6 +373,23 @@ describe("desktop app: Settings read the backend, not the simulation", () => {
     });
     expect(s.health.evidence_pending).toBe(7);
     expect(s.live?.licences.map((l) => l.name)).toEqual(["Catalogue Model"]);
+  });
+
+  it("loads the writer's signed checkpoints for the Activity record (K-08)", async () => {
+    const checkpoint = {
+      id: "cp-1",
+      stream_id: "stream-live",
+      epoch: 3,
+      seq_from: 1,
+      seq_to: 8,
+      root_hash: "a".repeat(64),
+      signer_key_id: "key-1",
+      signature: "sig",
+      created_at: "2026-11-11T10:00:00Z",
+    };
+    fake.bridge.evidence.checkpoints = vi.fn(async () => [checkpoint]);
+    await hydrate();
+    expect(useStore.getState().checkpoints).toEqual([checkpoint]);
   });
 
   it("shows the bundled catalogue version and the backend's last check, never simulated ones", async () => {

@@ -137,3 +137,68 @@ describe("ac-21 start failure after a rollback", () => {
     expect(startFailureText("backend_start_timeout").canRetry).toBe(true);
   });
 });
+
+/** Crash recovery: a backend that stops while AIOS is open is started again (report 16 Nov, D-07). */
+describe("a backend that exits while AIOS is open", () => {
+  type SDeps = Parameters<typeof import("../../src/main/startup.js").superviseBackend>[1];
+
+  function handle(port: number) {
+    let exit!: (code: number | null) => void;
+    const exited = new Promise<number | null>((r) => (exit = r));
+    return { apiPort: port, client: {} as never, exited, exit };
+  }
+
+  function sdeps(over: Partial<SDeps>): SDeps & { calls: string[] } {
+    const calls: string[] = [];
+    return {
+      calls,
+      startBackend: async () => handle(99),
+      stopBackend: async () => void calls.push("stop"),
+      replaced: (b) => void calls.push(`replaced:${b.apiPort}`),
+      askRestartOrQuit: async (code) => (calls.push(`ask:${code}`), "quit"),
+      quit: () => void calls.push("quit"),
+      quitting: () => false,
+      ...over,
+    };
+  }
+
+  it("is started again without asking, and the app uses the new one", async () => {
+    const { superviseBackend } = await import("../../src/main/startup.js");
+    const first = handle(1);
+    const second = handle(2);
+    let quitting = false;
+    const d = sdeps({ startBackend: async () => second, quitting: () => quitting });
+    const done = superviseBackend(first, d);
+    first.exit(1);
+    await vi.waitFor(() => expect(d.calls).toEqual(["replaced:2"]));
+    quitting = true;
+    second.exit(0);
+    await done;
+    expect(d.calls).toEqual(["replaced:2"]);
+  });
+
+  it("asks Restart or Quit when it keeps stopping", async () => {
+    const { superviseBackend, QUIET_RESTARTS } = await import("../../src/main/startup.js");
+    const handles = Array.from({ length: QUIET_RESTARTS + 1 }, (_, i) => handle(10 + i));
+    let next = 0;
+    const d = sdeps({ startBackend: async () => handles[next++]!, now: () => 1_000 });
+    const first = handle(1);
+    const done = superviseBackend(first, d);
+    // Every backend stops at once, within the same minute.
+    [first, ...handles].forEach((h) => h.exit(3));
+    await vi.waitFor(() => expect(d.calls.at(-1)).toBe("quit"));
+    await done;
+    expect(d.calls.filter((c) => c.startsWith("replaced"))).toHaveLength(QUIET_RESTARTS);
+    expect(d.calls).toContain("ask:backend_exit_3");
+  });
+
+  it("does nothing when the user is closing AIOS", async () => {
+    const { superviseBackend } = await import("../../src/main/startup.js");
+    const first = handle(1);
+    const d = sdeps({ quitting: () => true });
+    const done = superviseBackend(first, d);
+    first.exit(0);
+    await done;
+    expect(d.calls).toEqual([]);
+  });
+});

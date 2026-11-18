@@ -80,7 +80,7 @@ export function CommandPalette() {
   })
 
   // `messages` re-runs the search so results follow the store while the palette is open.
-  const found = useMessageSearch(open && needle.length >= 2 ? needle : null, messages)
+  const { hits: found, failed: searchFailed } = useMessageSearch(open && needle.length >= 2 ? needle : null, messages)
   const hits = useMemo<SearchHit[]>(() => found.slice(0, MAX_MESSAGES), [found])
 
   // Documents are found by name. The stored list is selected as it is, then narrowed here.
@@ -248,7 +248,13 @@ export function CommandPalette() {
 
           <div ref={listRef} id="command-results" role="listbox" aria-label="Results" className="max-h-[min(60vh,440px)] overflow-y-auto p-2">
             {!needle && <p className="px-2.5 pb-1 pt-2.5 text-sm leading-5 text-ink-soft">Search everything you have asked and every answer, in every project, and the documents in My secure knowledge by name.</p>}
-            {noResults && (
+            {searchFailed && !pending && (
+              <div role="alert" className="px-2.5 pb-2 pt-2.5">
+                <p className="text-sm font-medium leading-5 text-ink">Messages could not be searched just now.</p>
+                <p className="mt-0.5 text-sm leading-5 text-ink-soft">Conversations and documents are still found by name. Try again in a moment.</p>
+              </div>
+            )}
+            {noResults && !searchFailed && (
               <div className="px-2.5 pb-2 pt-2.5">
                 <p className="break-words text-sm font-medium leading-5 text-ink">Nothing matches "{needle}".</p>
                 <p className="mt-0.5 text-sm leading-5 text-ink-soft">Search looks for the exact phrase in conversations, and in the names of your documents. Try fewer words, or check the spelling.</p>

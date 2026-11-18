@@ -11,7 +11,8 @@
     "lint": "echo ok",
     "test": "vitest run tests/unit",
     "test:security": "vitest run tests/security",
-    "package": "electron-builder --win --config electron-builder.yml --publish never"
+    "package": "electron-builder --win --config electron-builder.yml --publish never",
+    "test:window": "pnpm --filter @aios/bridge-contract build && pnpm --filter @aios/ui build && tsc -p tsconfig.json && vitest run tests/window"
   },
   "dependencies": {
     "@aios/bridge-contract": "workspace:*",
@@ -22,6 +23,7 @@
     "@types/node": "^22.9.0",
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8",
+    "playwright-core": "1.48.2",
     "typescript": "^5.6.3",
     "vitest": "^2.1.4"
   }

@@ -144,8 +144,12 @@ def create_app(
         child = None
         if app.state.writer is None and start_writer:
             try:
-                child = await asyncio.to_thread(writer_process.start, settings, manager.job)
-                app.state.writer = child.client
+                # Started again if it exits while the backend runs (crash recovery).
+                child = await asyncio.to_thread(
+                    writer_process.SupervisedWriter,
+                    lambda: writer_process.start(settings, manager.job),
+                )
+                app.state.writer = child
             except writer_process.WriterStartError:
                 components.evidence_writer = ComponentState.FAILED
         pumping = None

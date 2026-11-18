@@ -24,6 +24,7 @@ import { kindOf, unreadableReason } from "@/data/knowledge";
 import { pickAnswer } from "./answers";
 import { SIM_CATALOGUE, SIM_HARDWARE } from "./catalogue";
 import {
+  SEED_CHECKPOINTS,
   SEED_CONVERSATIONS,
   SEED_DEFAULT_PROJECT_ID,
   SEED_EVENTS,
@@ -535,6 +536,7 @@ export const simBridge: AiosBridge = {
   evidence: {
     list: async (projectId) => state.events.filter((e) => !projectId || e.project_id === projectId).map((e) => ({ ...e })),
     status: async () => ({ writer: "ok", pending: 0 }),
+    checkpoints: async () => SEED_CHECKPOINTS.map((c) => ({ ...c })),
     stream: async () => ({ stream_id: SEED_STREAM.stream_id, device_id: SEED_STREAM.device_id, epoch: SEED_STREAM.epoch, signer_key_id: SEED_STREAM.signer_key_id, prior_tip_hash: SEED_STREAM.prior_tip_hash ?? null, created_at: SEED_STREAM.created_at }),
     export: async (input) => {
       await wait(1600);
