@@ -13,6 +13,7 @@ SHA-256. Writes build/out/llama/manifest-<variant>.json with the digest of every
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -100,28 +101,38 @@ def remove_tree(path: Path) -> None:
         shutil.rmtree(path, onexc=writable_then_retry)
 
 
-def use_visual_studio_clang() -> None:
-    """Windows: put Visual Studio's own Clang first on PATH. Some runner images also carry a
-    standalone LLVM (C:\\Program Files\\LLVM) that is older than the Visual Studio C++ library
-    accepts (STL1000: "expected Clang 22 or newer"); the toolchain file picks whichever
-    ``clang`` comes first."""
+def toolchain(src: Path) -> Path:
+    """The Windows toolchain file. Upstream's names ``clang`` and leaves it to PATH; some runner
+    images put a standalone LLVM (C:\\Program Files\\LLVM) first that is older than the Visual
+    Studio C++ library accepts (STL1000: "expected Clang 22 or newer"). When Visual Studio's own
+    Clang is there, a copy names it by full path; nothing else changes (PATH, linker, tools)."""
+    upstream = src / "cmake" / "x64-windows-llvm.cmake"
     vc = os.environ.get("VCINSTALLDIR")
-    if not vc:
-        return
-    llvm = Path(vc) / "Tools" / "Llvm" / "x64" / "bin"
-    if (llvm / "clang.exe").is_file():
-        os.environ["PATH"] = f"{llvm}{os.pathsep}{os.environ.get('PATH', '')}"
-        print(f"using {llvm / 'clang.exe'}", flush=True)
+    llvm = Path(vc) / "Tools" / "Llvm" / "x64" / "bin" if vc else None
+    if llvm is None or not (llvm / "clang.exe").is_file():
+        return upstream
+    text = upstream.read_text("utf-8")
+    for name in ("clang", "clang++"):
+        exe = (llvm / f"{name}.exe").as_posix()
+        text = re.sub(
+            rf"(CMAKE_C(?:XX)?_COMPILER\s+){re.escape(name)}\s*\)",
+            lambda m, e=exe: f'{m.group(1)}"{e}" )',
+            text,
+        )
+    own = WORK / "x64-windows-llvm.cmake"
+    own.parent.mkdir(parents=True, exist_ok=True)
+    own.write_text(text, "utf-8")
+    print(f"compiler: {llvm / 'clang.exe'}", flush=True)
+    return own
 
 
 def build(src: Path, variant: str) -> Path:
     flags = list(COMMON_FLAGS)
     if WINDOWS:
-        use_visual_studio_clang()
         # Clang as upstream's Windows release (MSVC builds of the CPU kernels are slower).
         # Backend DLLs plus every x64 CPU variant, picked at runtime: one build for any CPU.
         flags += [
-            f"-DCMAKE_TOOLCHAIN_FILE={src / 'cmake' / 'x64-windows-llvm.cmake'}",
+            f"-DCMAKE_TOOLCHAIN_FILE={toolchain(src)}",
             "-DGGML_BACKEND_DL=ON",
             "-DGGML_CPU_ALL_VARIANTS=ON",
             # Clang 22 (Visual Studio 2026) makes incompatible-pointer-types an error; the pinned
