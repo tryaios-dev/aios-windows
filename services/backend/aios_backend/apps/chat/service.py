@@ -16,7 +16,7 @@ import uuid
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from aios_backend.apps.chat import repository as repo
 from aios_backend.apps.chat.answers import AnswerSource, ModelInfo
@@ -55,6 +55,42 @@ EVIDENCE_STATUS = {
 # ------------------------------------------------------------------ text helpers (same as the UI)
 def estimate_tokens(text: str) -> int:
     return math.ceil(len(text) / 3.5)
+
+
+Count = Callable[[str], int]
+# MVP 11.2: without the engine's count, estimate with a safety margin (a tokenizer can make more
+# tokens of a text than characters / 3.5).
+ESTIMATE_MARGIN = 1.2
+
+
+def safe_estimate(text: str) -> int:
+    return math.ceil(estimate_tokens(text) * ESTIMATE_MARGIN)
+
+
+def token_counter(answers: AnswerSource, provider: str, model_id: str) -> Count:
+    """Tokens as the model counts them (G-04): the engine's own tokenizer while it has the model
+    loaded (``count_tokens`` on the answer source), otherwise the estimate with its safety margin.
+    Counting never starts the engine. After one miss the rest of the request uses the estimate."""
+    count_tokens = getattr(answers, "count_tokens", None)
+    exact = callable(count_tokens)
+    known: dict[str, int] = {}
+
+    def count(text: str) -> int:
+        nonlocal exact
+        if not exact:
+            return safe_estimate(text)
+        if text not in known:
+            try:
+                n = count_tokens(provider, model_id, text)  # type: ignore[misc]
+            except Exception:
+                n = None
+            if not isinstance(n, int):
+                exact = False
+                return safe_estimate(text)
+            known[text] = n
+        return known[text]
+
+    return count
 
 
 def truncate(text: str, limit: int) -> str:
@@ -431,6 +467,9 @@ def _generate(
         )
         _finish(session, info, conv, assistant, sent, content, status, regenerate, usage)
         result = message_out(session, [assistant])[0]
+        session.commit()  # stored before the summary job reads the conversation
+        sessions = sessionmaker(bind=session.get_bind(), expire_on_commit=False)
+        _refresh_later(sessions, answers, generations, conv.id, info)
         return result
     finally:
         generations.end(generation, result)
@@ -450,14 +489,15 @@ SUMMARY_INSTRUCTION = (
     "names, figures, dates, decisions and open questions. Plain sentences, at most 200 words."
 )
 SUMMARY_NOTE = "Summary of the earlier part of this conversation:\n"
+SUMMARY_MAX_TOKENS = 400  # about 300 words: a longer summary is cut at its last full sentence
 
 
 def _summary_note(summary: Summary | None) -> list[dict[str, str]]:
     return [{"role": "system", "content": SUMMARY_NOTE + summary.content}] if summary else []
 
 
-def _tokens(messages: list[Message]) -> int:
-    return sum(estimate_tokens(m.content) for m in messages)
+def _tokens(messages: list[Message], count: Count) -> int:
+    return sum(count(m.content) for m in messages)
 
 
 def _fit_history(
@@ -467,37 +507,106 @@ def _fit_history(
     conv: Conversation,
     history: list[Message],
     reserve: int = 0,
+    count: Count | None = None,
 ) -> list[dict[str, str]]:
-    """The context for a request, rebuilt each time (M-07): the latest summary, then the newest
-    messages that fit. When the history no longer fits, the earlier part is summarised first.
+    """The context for a request, rebuilt each time (M-07, MVP 11.2): the latest summary, then
+    the messages after it, newest to oldest while they fit. Nothing is summarised here, so the
+    answer starts at once; ``refresh_summary`` runs in the background after the answer.
 
     ``reserve``: tokens kept free for what follows (the question being sent now). The newest
     message is always kept, so a regenerated answer still sees the question it answers.
+    ``count``: how tokens are counted (G-04, ``token_counter``).
     """
+    count = count or token_counter(answers, conv.current_provider, info.model_id)
     budget = max(context_budget(info.context_length) - reserve, 0)
+    summary, after = _after_summary(session, conv, history)
+    note = count(SUMMARY_NOTE + summary.content) if summary else 0
+    keep = _newest_within(after, budget - note, count)
+    return _summary_note(summary) + _context(keep)
+
+
+def _after_summary(
+    session: Session, conv: Conversation, history: list[Message]
+) -> tuple[Summary | None, list[Message]]:
+    """The latest summary and the usable messages it does not cover."""
     usable = _usable(history)
     summary = repo.latest_summary(session, conv.id)
-    after = usable
-    if summary is not None:
-        ids = [m.id for m in usable]
-        if summary.covers_until_message_id in ids:
-            after = usable[ids.index(summary.covers_until_message_id) + 1 :]
-    note = estimate_tokens(SUMMARY_NOTE + summary.content) if summary else 0
-    if note + _tokens(after) <= budget:
-        return _summary_note(summary) + _context(after)
+    if summary is None:
+        return None, usable
+    ids = [m.id for m in usable]
+    if summary.covers_until_message_id in ids:
+        return summary, usable[ids.index(summary.covers_until_message_id) + 1 :]
+    return summary, usable
 
+
+def _newest_within(messages: list[Message], room: int, count: Count) -> list[Message]:
+    """The newest messages whose tokens fit ``room``; always at least the newest one."""
     keep: list[Message] = []
     used = 0
-    for m in reversed(after):  # newest first, into half of the budget
-        cost = estimate_tokens(m.content)
-        if keep and used + cost > budget // 2:
+    for m in reversed(messages):
+        cost = count(m.content)
+        if keep and used + cost > room:
             break
         keep.insert(0, m)
         used += cost
+    return keep
+
+
+def refresh_summary(
+    session: Session, answers: AnswerSource, info: ModelInfo, conv: Conversation
+) -> Summary | None:
+    """After an answer (MVP 11.2): once the messages after the latest summary take more than
+    three quarters of the budget, summarise all but the newest quarter. The next request then has
+    a current summary and room for the question, and the next refresh is half a budget of new
+    messages away (not after every answer). Returns the new summary, or None."""
+    count = token_counter(answers, conv.current_provider, info.model_id)
+    budget = context_budget(info.context_length)
+    summary, after = _after_summary(session, conv, list(repo.messages(session, conv.id)))
+    note = count(SUMMARY_NOTE + summary.content) if summary else 0
+    if note + _tokens(after, count) <= budget * 3 // 4:
+        return None
+    keep = _newest_within(after, budget // 4, count)
     older = after[: len(after) - len(keep)]
-    if older:
-        summary = _summarise(session, answers, info, conv, summary, older) or summary
-    return _summary_note(summary) + _context(keep)
+    return _summarise(session, answers, info, conv, summary, older) if older else None
+
+
+def _refresh_later(
+    sessions: Callable[[], Session],
+    answers: AnswerSource,
+    generations: Generations,
+    conversation_id: str,
+    info: ModelInfo,
+) -> None:
+    """Refresh the conversation's summary in the background, after the answer is stored."""
+
+    def work() -> None:
+        with sessions() as session:
+            conv = repo.get_conversation(session, conversation_id)
+            if conv is not None and refresh_summary(session, answers, info, conv) is not None:
+                session.commit()
+
+    generations.background.start(conversation_id, work)
+
+
+def _capped(chunks: Iterator[str]) -> str:
+    """The summary text, at most ``SUMMARY_MAX_TOKENS``: past the cap the request is closed (the
+    engine stops) and the text ends at its last full sentence."""
+    parts: list[str] = []
+    length = 0
+    limit = int(SUMMARY_MAX_TOKENS * 3.5)
+    try:
+        for chunk in chunks:
+            parts.append(chunk)
+            length += len(chunk)
+            if length > limit:
+                text = "".join(parts)[:limit]
+                end = max(text.rfind(". "), text.rfind(".\n"))
+                return (text[: end + 1] if end > 0 else text).strip()
+    finally:
+        close = getattr(chunks, "close", None)
+        if callable(close):
+            close()
+    return "".join(parts).strip()
 
 
 def _summarise(
@@ -524,7 +633,7 @@ def _summarise(
     ]
     messages = _sent(answers, conv.current_provider, messages)
     try:
-        text = "".join(answers.answer(conv.current_provider, info.model_id, messages)).strip()
+        text = _capped(answers.answer(conv.current_provider, info.model_id, messages))
     except Exception:
         return None
     if not text:
@@ -585,11 +694,13 @@ def summary_of(session: Session, conversation_id: str) -> SummaryOut | None:
     )
 
 
-def _check_size(session: Session, conv: Conversation, info: ModelInfo, text: str) -> None:
+def _check_size(
+    session: Session, conv: Conversation, info: ModelInfo, text: str, count: Count = estimate_tokens
+) -> None:
     """A local message that cannot fit the model's context is refused, and the refusal recorded."""
     if conv.current_provider != "local":
         return
-    needed, budget = estimate_tokens(text), context_budget(info.context_length)
+    needed, budget = count(text), context_budget(info.context_length)
     if needed > budget:
         repo.record_event(
             session,
@@ -650,13 +761,15 @@ def _new_exchange(
     info: ModelInfo,
     text: str,
     knowledge_ids: list[str] | None = None,
+    count: Count | None = None,
 ) -> tuple[Message, Message, list[dict[str, str]]]:
     """Add the user's message and an empty answer; returns them with the context to send."""
+    count = count or token_counter(answers, conv.current_provider, info.model_id)
     notes = [n for n in (_skills_note(session), _knowledge_note(session, info, knowledge_ids)) if n]
     extra = "\n\n".join(notes)
-    reserve = estimate_tokens(text) + (estimate_tokens(extra) if extra else 0)
+    reserve = count(text) + (count(extra) if extra else 0)
     history = list(repo.messages(session, conv.id))
-    earlier = _fit_history(session, answers, info, conv, history, reserve=reserve)
+    earlier = _fit_history(session, answers, info, conv, history, reserve=reserve, count=count)
     if extra:
         if earlier and earlier[0]["role"] == "system":  # one note: skills, documents, summary
             earlier[0] = {"role": "system", "content": f"{extra}\n\n{earlier[0]['content']}"}
@@ -706,10 +819,13 @@ def send(
     clean = _clean(text)
     info = _ready_model(settings, answers, conv)
     assert answers is not None  # checked by _ready_model
-    _check_size(session, conv, info, clean)
+    count = token_counter(answers, conv.current_provider, info.model_id)
+    _check_size(session, conv, info, clean, count)
     if generations.busy():
         raise AppError("busy", 409)
-    user, assistant, context = _new_exchange(session, answers, conv, info, clean, knowledge_ids)
+    user, assistant, context = _new_exchange(
+        session, answers, conv, info, clean, knowledge_ids, count
+    )
     assistant_out = _generate(session, answers, generations, info, conv, assistant, context, False)
     return Exchange(user=message_out(session, [user])[0], assistant=assistant_out)
 
@@ -808,6 +924,7 @@ def _stream(
                 _finish(session, info, conv, assistant, sent, content, status, regenerate, usage)
                 result = message_out(session, [assistant])[0]
                 session.commit()
+            _refresh_later(db.session, answers, generations, conversation_id, info)
             data = {"assistant": result.model_dump(mode="json")}
             if status in ("partial", "error"):
                 events.put(("error", {"error": "answer_interrupted", **data}))
@@ -845,10 +962,13 @@ def stream_send(
         clean = _clean(text)
         info = _ready_model(settings, answers, conv)
         assert answers is not None
-        _check_size(session, conv, info, clean)
+        count = token_counter(answers, conv.current_provider, info.model_id)
+        _check_size(session, conv, info, clean, count)
         if generations.busy():
             raise AppError("busy", 409)
-        user, assistant, context = _new_exchange(session, answers, conv, info, clean, knowledge_ids)
+        user, assistant, context = _new_exchange(
+            session, answers, conv, info, clean, knowledge_ids, count
+        )
         assistant.status = "partial"  # what is left if the process stops mid-answer
         generation = _begin(generations, conv, assistant.id)
         try:

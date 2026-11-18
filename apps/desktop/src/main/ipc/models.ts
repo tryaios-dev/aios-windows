@@ -7,6 +7,8 @@ import {
   Hardware,
   Id,
   InstalledModel,
+  PackageFile,
+  PackageFileName,
 } from "@aios/bridge-contract";
 import { pickFile } from "./dialogs.js";
 import type { Handler } from "./index.js";
@@ -21,6 +23,11 @@ export const modelsHandlers: Record<string, Handler> = {
         path: z.string().min(1).max(1024).parse(file),
         entry_id: Id.nullable().parse(entryId),
       }),
+    ),
+  "models.packageFiles": async (b) => z.array(PackageFile).parse(await b.client.request("GET", "/models/offline-package")),
+  "models.installPackageFile": async (b, fileName) =>
+    InstalledModel.parse(
+      await b.client.request("POST", "/models/offline-package/install", { file_name: PackageFileName.parse(fileName) }),
     ),
   "models.download": async (b, entryId) => {
     await b.client.request("POST", "/models/downloads", { entry_id: Id.parse(entryId) });

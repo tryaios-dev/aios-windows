@@ -9,6 +9,23 @@
 ; (electron-builder.yml: allowToChangeInstallationDirectory). They count as the user's data: kept
 ; on update and on uninstall unless the user chooses to remove their data.
 
+; Offline package (MVP 10.1): a ZIP or USB folder with Setup.exe and a models folder. The model
+; files next to Setup.exe are copied into <install folder>\models\offline. On first start AIOS
+; checks each one like an import (size, SHA-256 and review against the catalogue) and installs it,
+; or deletes it when it fails (services/backend/aios_backend/apps/models/service.py,
+; install_package_file). No network is needed at any point. An update runs from the updater's
+; folder, which has no models folder, so it copies nothing.
+!macro customInstall
+  ${If} ${FileExists} "$EXEDIR\models\*.gguf"
+    CreateDirectory "$INSTDIR\models\offline"
+    ${If} ${Silent}
+      CopyFiles /SILENT "$EXEDIR\models\*.gguf" "$INSTDIR\models\offline"
+    ${Else}
+      CopyFiles "$EXEDIR\models\*.gguf" "$INSTDIR\models\offline"
+    ${EndIf}
+  ${EndIf}
+!macroend
+
 !macro customUnInstall
   ${ifNot} ${isUpdated}
     MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 "Also remove your AIOS data from this computer?$\r$\n$\r$\nThis deletes your projects, conversations, evidence log, downloaded models and logs. Choose No to keep them; a backup can be restored later with your recovery key." /SD IDNO IDNO aios_keep_data

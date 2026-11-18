@@ -6,7 +6,7 @@
  *
  * Not in the backend yet, so refused with a plain message and nothing changed: resources.
  */
-import { errorCode, type FolderPreview, type SkillFileCheck } from '@aios/bridge-contract'
+import { errorCode, type FolderPreview, type PackageFile, type SkillFileCheck } from '@aios/bridge-contract'
 import { bridge } from '@/bridge'
 import {
   applySettings,
@@ -233,6 +233,11 @@ export const api = {
     remove: (id: string) => void change('Conversation not deleted', () => bridge().conversations.remove(id)),
     setModel: (id: string, modelId: string) =>
       void change('AI model not changed', () => bridge().conversations.update(id, { model_id: modelId }), afterConversation(id)),
+    /** The answer to "Which AI model should carry on?": the conversation continues on it. */
+    chooseModel: async (id: string, modelId: string) => {
+      const saved = await change('AI model not changed', () => bridge().conversations.update(id, { model_id: modelId }), afterConversation(id))
+      if (saved) s().answerModelChoice(modelId) // a failure shows its reason and the dialog stays
+    },
     /** POST /conversations/{id}/provider, with the confirmation rules (M-09). */
     setProvider: (id: string, to: ProviderType, confirmed: boolean) =>
       void change(
@@ -262,7 +267,13 @@ export const api = {
         const code = errorCode(err)
         if (code === 'message_too_large') return { ok: false, reason: 'too_large', detail: messageFor(err) }
         if (code === 'no_model') return { ok: false, reason: 'no_model', detail: messageFor(err) }
-        if (code === 'model_missing') return { ok: false, reason: 'model_missing', detail: messageFor(err) }
+        if (code === 'model_missing') {
+          // The conversation's AI model was removed. Another one never answers without asking (K-06):
+          // the dialog asks which one carries on, and the message stays in the box.
+          const removed = s().conversations.find((c) => c.id === id)?.model_id ?? ''
+          useStore.setState({ modelChoice: { conversation_id: id, deleted_model_name: removed, pending_text: text } })
+          return { ok: false, reason: 'model_missing', detail: messageFor(err) }
+        }
         if (code === 'company_unreachable') return { ok: false, reason: 'company_unreachable', detail: messageFor(err) }
         return { ok: false, reason: 'error', detail: messageFor(err) }
       }
@@ -356,6 +367,24 @@ export const api = {
         Promise.all([refreshModels(), refreshEvents(), refreshSettings()]),
       )
       if (model) s().toast({ kind: 'success', title: `${model.name} installed`, description: 'AIOS checked it is the genuine, unmodified file.' })
+    },
+    /** Model files that came with the installer (offline package, MVP 10.1); none outside the desktop app. */
+    packageFiles: async (): Promise<PackageFile[]> => bridge().models.packageFiles().catch(() => []),
+    /**
+     * Offline package (MVP 10.1): each model file that came with the installer is checked like an import
+     * (size, fingerprint, review) and installed; one that fails is removed and the reason shown. True when
+     * `entryId` is installed from it, so nothing needs downloading.
+     */
+    installFromPackage: async (entryId: string): Promise<boolean> => {
+      const files = await api.models.packageFiles()
+      let wanted = false
+      for (const file of files) {
+        const model = await change(`${file.file_name} was not installed`, () => bridge().models.installPackageFile(file.file_name), async () => undefined)
+        if (model?.id === entryId) wanted = true
+        if (model) s().toast({ kind: 'success', title: `${model.name} installed`, description: 'From the installer package. AIOS checked it is the genuine, unmodified file.' })
+      }
+      if (files.length) await Promise.all([refreshModels(), refreshEvents(), refreshSettings()])
+      return wanted
     },
     remove: async (id: string): Promise<{ ok: true } | { ok: false; reason: string }> => {
       try {

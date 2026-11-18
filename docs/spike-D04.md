@@ -1,5 +1,11 @@
 # D-04 inference spike (temporary, marker `SPIKE-D04`)
 
+> **Removed (G-01).** The spike endpoint, bridge call, IPC channel, screen and tests are gone. Chat
+> answers through the provider router and the gateway; the real-engine tests that used the spike
+> endpoint now run through the local model module (`services/backend/tests/test_engine_answers.py`,
+> `test_engine_lifetime.py`). `git grep SPIKE-D04` finds only this file. The timings below are kept
+> as the week-1 record.
+
 One local answer through the installed app before the gateway (G-01) and the chat service
 exist. Proves installer → Electron → backend → llama-server → renderer on a clean machine
 (M1), with the engine key delivered over stdin (D-03), and gives the week-1 benchmark.

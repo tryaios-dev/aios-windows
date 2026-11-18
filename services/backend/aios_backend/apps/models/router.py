@@ -21,6 +21,8 @@ from aios_backend.apps.models.schemas import (
     InstalledModelDetail,
     InstalledModelOut,
     ModelChoiceIn,
+    PackageFile,
+    PackageInstallIn,
 )
 from aios_backend.deps import AppSettings
 from aios_backend.runtime import GenerationsDep
@@ -136,6 +138,27 @@ def import_model(body: ImportIn, session: DbSession, settings: AppSettings) -> I
     return service.import_model(session, settings, body.path, body.entry_id)
 
 
+@router.get(
+    "/models/offline-package",
+    summary="AI model files that came with the installer (offline package), not yet checked",
+)
+def list_package(session: DbSession, settings: AppSettings) -> list[PackageFile]:
+    return service.list_package(session, settings)
+
+
+@router.post(
+    "/models/offline-package/install",
+    status_code=status.HTTP_201_CREATED,
+    summary="Check a file from the offline package like an import and install it",
+    description="Size, SHA-256 and review are checked as for /models/import. The file is moved "
+    "into the models folder; a file that fails the checks is deleted.",
+)
+def install_package_file(
+    body: PackageInstallIn, session: DbSession, settings: AppSettings
+) -> InstalledModelOut:
+    return service.install_package_file(session, settings, body.file_name)
+
+
 @router.get("/models/{model_id}", summary="One installed model with its verification checks")
 def get_model(model_id: str, session: DbSession) -> InstalledModelDetail:
     return service.get_model(session, model_id)
@@ -145,9 +168,13 @@ def get_model(model_id: str, session: DbSession) -> InstalledModelDetail:
     "/models/{model_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete an installed model and its file",
+    description="Stops the engine first if it has this model loaded. While an answer is being "
+    "written with it, nothing is deleted: `409 model_in_use`.",
 )
-def delete_model(model_id: str, session: DbSession, settings: AppSettings) -> None:
-    service.delete_model(session, settings, model_id)
+def delete_model(
+    model_id: str, session: DbSession, settings: AppSettings, engine: LocalEngineDep
+) -> None:
+    service.delete_model(session, settings, engine, model_id)
 
 
 # ------------------------------------------------------------------ hardware and benchmark

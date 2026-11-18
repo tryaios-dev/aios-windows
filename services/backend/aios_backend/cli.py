@@ -139,10 +139,11 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
 class EchoAnswers:
     """End-to-end tests only (``serve-e2e --echo``): answers by repeating the question, so chat,
-    evidence and search can be tested before the local engine exists. Never used by backend.exe."""
+    evidence and search can be tested before the local engine exists. Never used by backend.exe.
+    The model id ``e2e-removed`` stands for an AI model that is no longer installed."""
 
     def model(self, provider: str, model_id: str | None) -> ModelInfo | None:
-        if provider != "local":
+        if provider != "local" or model_id == "e2e-removed":
             return None
         return ModelInfo(model_id=model_id or "e2e-echo", context_length=4096, runtime="e2e-echo")
 

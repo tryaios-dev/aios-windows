@@ -21,8 +21,9 @@ Artefacts:
 Settings shared by both default entries:
 
 - **Conversion:** llama.cpp `convert_hf_to_gguf.py` (to BF16), then `llama-quantize` (to Q4_K_M).
-- **llama.cpp version:** release **b11960**, commit `8642541b255bfb5dc39cd351a178be09013a55d6`, as
-  pinned in `build/llama/manifest.json` by B-02.
+- **llama.cpp version:** release **b12111**, commit `52e53a76df0298d2c316ae7e704eeec03b0bf478`, as
+  pinned in `build/llama/manifest.json` (B-02 pinned b11960 in week 1; D-03 moved the pin to
+  b12111).
 - **Publisher:** AIOS.
 - **Native context:** 32,768 tokens, per the model card. YaRN can extend this to 131k, but we do not
   enable it. `config.json` sets `max_position_embeddings` to 40,960; the card explains that this
@@ -57,7 +58,7 @@ Qwen has published newer small models since Qwen3:
 Both are tagged `image-text-to-text` (vision-language). The 9B model is outside the "8B-class"
 wording of MVP 10.2. As of 2026-10-28, Qwen 3.6 and 3.8 have no 4B or 8B dense text model on the
 Hub. Qwen3.5-4B and Qwen3.5-9B are valid **next candidates** under the same licence rule. We have not
-evaluated them, and we have not checked llama.cpp b11960's support for their architecture.
+evaluated them, and we have not checked llama.cpp b12111's support for their architecture.
 
 Qwen3 4B and 8B stay as the defaults because they are text-only, well supported by llama.cpp, and
 have official Qwen Q4_K_M GGUFs available as fallbacks.
@@ -102,7 +103,7 @@ draft catalogue because:
 
 - the ticket keeps Qwen3 as the default;
 - they are multimodal ("any-to-any") models that we have not evaluated;
-- llama.cpp b11960 support for them has not been checked.
+- llama.cpp b12111 support for them has not been checked.
 
 If one is added, it needs its own licence file under `licenses/models/`, using the Apache-2.0 text
 from the Gemma 4 licence page.
@@ -148,7 +149,7 @@ These gaps are part of what the deviation review must accept or reject.
 - Model choice, upstream repos and pinned revisions.
 - Source-weight manifests and digests, computed from Hub LFS hashes and not yet re-verified from
   downloaded bytes.
-- Conversion tool and version (b11960), and the quantisation method.
+- Conversion tool and version (b12111), and the quantisation method.
 - Licence SPDX ids and filed texts.
 - Publisher and pipeline.
 - Fallback artefact digests and sizes.
@@ -159,7 +160,7 @@ These gaps are part of what the deviation review must accept or reject.
 1. **Run the pipeline** (`tools/catalogue/build_entry.py`) for both own entries. This fills
    `artefact.sha256` and `artefact.size_bytes`, which are `null` until then. It needs about 16 GB of
    downloads for 8B, plus disk space for the BF16 intermediates. It also needs a llama.cpp **source**
-   checkout at commit `8642541b`, because the release zips have no `convert_hf_to_gguf.py`, and the
+   checkout at commit `52e53a76` (b12111), because the release zips have no `convert_hf_to_gguf.py`, and the
    Python requirements for convert.
 2. **Quality check** of our own Q4_K_M against the threshold. It is not formally needed for own-pipeline
    entries, but it is advisable.

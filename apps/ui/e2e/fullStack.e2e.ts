@@ -215,6 +215,23 @@ describe("desktop app against the real backend", () => {
     expect(store().events.some((e) => e.event_type === "refusal")).toBe(true);
   });
 
+  it("chat: a conversation whose AI model was removed asks which one carries on (K-06)", async () => {
+    const conv = (await ui.api.conversations.create(projectId))!;
+    ui.api.conversations.setModel(conv.id, "e2e-removed"); // the echo source treats it as removed
+    await eventually(() => expect(store().conversations.find((c) => c.id === conv.id)?.model_id).toBe("e2e-removed"));
+
+    const refused = await ui.api.conversations.send(conv.id, "Is the delivery note ready?");
+    expect(refused).toMatchObject({ ok: false, reason: "model_missing" });
+    // Never answered by another AI model without asking: the dialog opens and the message waits.
+    expect(store().modelChoice).toMatchObject({ conversation_id: conv.id, pending_text: "Is the delivery note ready?" });
+    expect(ui.api.conversations.messages(conv.id)).toEqual([]);
+
+    await ui.api.conversations.chooseModel(conv.id, "e2e-echo");
+    expect(store().modelChoice).toBeNull();
+    expect(store().conversations.find((c) => c.id === conv.id)?.model_id).toBe("e2e-echo");
+    expect(await ui.api.conversations.send(conv.id, "Is the delivery note ready?")).toEqual({ ok: true });
+  });
+
   it("search: finds the message through the backend", async () => {
     const hits = await ui.api.search("price list");
     expect(hits.map((h) => h.conversation_id)).toContain(conversationId);
@@ -264,6 +281,21 @@ describe("desktop app against the real backend", () => {
 
     ui.api.models.download("minicpm5-2b-q4_k_m-openbmb-gguf");
     await eventually(() => expect(lastToast()?.description).toMatch(/isn't available in this build yet/));
+  });
+
+  it("models: a file in the installer package is checked first; one that fails is removed (K-05)", async () => {
+    // What the installer leaves when a models folder sits next to Setup.exe (build/installer/installer.nsh).
+    const staged = path.join(data, "store", "models", "offline");
+    mkdirSync(staged, { recursive: true });
+    writeFileSync(path.join(staged, "not-a-model.gguf"), "GGUF fake");
+    expect(await ui.api.models.packageFiles()).toEqual([{ file_name: "not-a-model.gguf", size_bytes: 9, entry_id: null }]);
+
+    expect(await ui.api.models.installFromPackage("minicpm5-2b-q4_k_m-openbmb-gguf")).toBe(false);
+    expect(lastToast()).toMatchObject({ title: "not-a-model.gguf was not installed" });
+    expect(lastToast()?.description).toMatch(/size is different/);
+    expect(existsSync(path.join(staged, "not-a-model.gguf"))).toBe(false); // nothing unverified is kept
+    expect(await ui.api.models.packageFiles()).toEqual([]);
+    expect(store().installedModels).toEqual([]);
   });
 
   it("my secure knowledge: files and a folder from the dialogs are copied in, read and used in a question", async () => {
