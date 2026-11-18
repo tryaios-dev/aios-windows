@@ -24,6 +24,7 @@ PAUSE_S = 0.6  # silence that ends a phrase
 MIN_SPEECH_S = 0.25  # less speech than this is a cough or a click
 MAX_PHRASE_S = 20.0  # cut a phrase that runs on, near its quietest moment
 LEAD_S = 0.3  # silence kept before speech starts
+TAIL_S = 0.3  # silence kept after the last word when Done is pressed
 SPEECH_FLOOR = 350.0  # RMS on the int16 scale, about -39 dBFS: below this is never speech
 NOISE_RATIO = 3.0  # speech is at least this many times louder than the room
 
@@ -104,8 +105,15 @@ class Phrases:
         return out
 
     def flush(self) -> bytes | None:
-        """What is left, if it holds speech (Done was pressed)."""
-        phrase = self._take(len(self.levels)) if self._speech_frames(0, len(self.levels)) else None
+        """What is left, if it holds speech (Done was pressed). The silence between the last
+        word and Done is cut to TAIL_S: on a long silence Whisper tends to add words nobody said
+        (on the VM: "Ciao, come stai? Ciao, how are you?")."""
+        t = self.threshold()
+        spoken = [i for i, v in enumerate(self.levels) if v >= t]
+        phrase = None
+        if spoken:
+            end = min(len(self.levels), spoken[-1] + 1 + round(TAIL_S / FRAME_S))
+            phrase = self._take(end)
         self.pcm.clear()
         self.levels.clear()
         return phrase
