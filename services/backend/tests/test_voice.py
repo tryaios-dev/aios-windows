@@ -374,6 +374,8 @@ def test_a_new_session_ends_the_old_one(voice_client: tuple[TestClient, Starts])
 @pytest.mark.parametrize(
     "pcm",
     ["not base64!", "A" * 90_000],  # not base64; more than 2 s of audio in one call
+    # Short ids: pytest puts the id in an environment variable, which Windows caps at 32767.
+    ids=["not_base64", "too_long"],
 )
 def test_bad_audio_is_refused(voice_client: tuple[TestClient, Starts], pcm: str) -> None:
     c, _ = voice_client
