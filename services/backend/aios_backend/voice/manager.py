@@ -5,8 +5,9 @@ chat engine's (``aios_backend.engine.manager``) and simpler:
 * The Vulkan build when the chat engine found a GPU and Safe mode is off, else the CPU build. If
   the GPU build fails to start or crashes, the CPU build is used for the rest of the session.
 * Stopped after an idle period; the next dictation starts it again (about a second).
-* Started once, quietly, right after its model is downloaded (setup), so the first dictation
-  does not wait for the antivirus to scan the new program.
+* At every app start, ``whisper-server -h`` runs once in the background, and the engine is
+  started once right after its model is downloaded (setup): the first run of a new program
+  waits for the antivirus scan, and no dictation should.
 * Runs in the backend's kill-on-close Job Object (IPC-50); orphans from a crash are ended at
   start-up (IPC-52).
 """
@@ -21,7 +22,7 @@ from pathlib import Path
 
 from aios_backend.engine.job import ChildJob
 from aios_backend.engine.orphans import kill_orphans
-from aios_backend.voice.launcher import EXE, VoiceError, Whisper, start
+from aios_backend.voice.launcher import EXE, VoiceError, Whisper, prescan, start
 from aios_backend.voice.model import SIZE as MODEL_SIZE
 from aios_backend.voice.model import Fetch, ModelDownloader, fetch
 from aios_common.logging import get_logger, log_event
@@ -67,6 +68,7 @@ class VoiceManager:
         model_sha256: str = MODEL_SHA256,
         fetch_fn: Fetch = fetch,
         model_size: int | None = None,
+        prescan_fn: Callable[[Path, Path], bool] = prescan,
     ) -> None:
         self._root = voice_root  # holds cpu/ and vulkan/
         self._models_dir = models_dir
@@ -87,6 +89,8 @@ class VoiceManager:
         self._verified: tuple[int, float] | None = None  # (size, mtime) of the checked model
         self._watcher: asyncio.Task[None] | None = None
         self._warm_up = False  # the model just arrived: start once, in the background
+        self._prescan = prescan_fn
+        self._prescanning: asyncio.Task[None] | None = None
         self.downloader = ModelDownloader(
             self.model_path,
             model_sha256,
@@ -100,6 +104,15 @@ class VoiceManager:
     async def startup(self) -> None:
         await asyncio.to_thread(kill_orphans, self._root, None, 10.0, EXE)
         self._watcher = asyncio.create_task(self._watch())
+        self._prescanning = asyncio.create_task(self._prescan_builds())
+
+    async def _prescan_builds(self) -> None:
+        """Let the antivirus see whisper-server now, in the background (launcher.prescan)."""
+        for build in ("cpu", "vulkan"):
+            try:
+                await asyncio.to_thread(self._prescan, self._root / build, self._temp_dir)
+            except Exception as exc:  # never in the way of anything else
+                log_event(log, "voice_prescan_failed", error_code=type(exc).__name__)
 
     async def shutdown(self) -> None:
         if self._watcher is not None:
@@ -107,6 +120,10 @@ class VoiceManager:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._watcher
             self._watcher = None
+        if self._prescanning is not None:
+            self._prescanning.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._prescanning
         await asyncio.to_thread(self.downloader.stop)
         await self._stop()
 

@@ -43,10 +43,27 @@ def _safe_value(key: str, value: object) -> object:
     return value
 
 
+def _exception_fields(record: logging.LogRecord) -> dict[str, str]:
+    """For a record with an exception (uvicorn's "Exception in ASGI application"): its type and
+    where it was raised, as code names only (``TimeoutError``, ``service._work``). The message
+    is never included: it can hold content."""
+    if not record.exc_info or record.exc_info[0] is None:
+        return {}
+    exc_type, _, tb = record.exc_info
+    out = {"error_code": exc_type.__name__}
+    while tb is not None and tb.tb_next is not None:
+        tb = tb.tb_next
+    if tb is not None:
+        code = tb.tb_frame.f_code
+        out["component"] = f"{Path(code.co_filename).stem}.{code.co_name}"
+    return out
+
+
 class ContentFreeFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         fields = getattr(record, "fields", {}) or {}
         safe = {k: _safe_value(k, v) for k, v in fields.items() if k in ALLOWED_KEYS}
+        safe = {**_exception_fields(record), **safe}
         return json.dumps(
             {
                 "ts": self.formatTime(record),

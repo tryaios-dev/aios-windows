@@ -132,17 +132,31 @@ describe('speaking instead of typing (ADR 0016)', () => {
     expect(backend.voice.finish).not.toHaveBeenCalled()
   })
 
-  it('sound heard while the speech engine starts is kept', async () => {
+  it('listens as soon as the microphone is on, and keeps what is said while the engine starts', async () => {
     let ready: (v: { session_id: string }) => void = () => undefined
     const { hook, mic, backend } = setup()
     backend.voice.start.mockImplementationOnce(() => new Promise((r) => (ready = r)))
     act(() => hook.result.current.start())
     await waitFor(() => expect(mic.opened()).toBe(true))
+    // The engine has not answered yet, but the person sees "Listening" and can start talking.
+    await waitFor(() => expect(hook.result.current.phase).toBe('listening'))
     act(() => mic.speak(0.5))
     expect(backend.voice.audio).not.toHaveBeenCalled()
     await act(async () => ready({ session_id: SESSION }))
-    await waitFor(() => expect(hook.result.current.phase).toBe('listening'))
+    // Every byte said before the engine answered is sent, the first words included.
     await waitFor(() => expect(backend.sent()).toBeGreaterThanOrEqual(15_000))
+  })
+
+  it('a speech engine that fails while already listening stops and says so', async () => {
+    let fail: (e: Error) => void = () => undefined
+    const { hook, mic, backend } = setup()
+    backend.voice.start.mockImplementationOnce(() => new Promise((_r, j) => (fail = j)))
+    act(() => hook.result.current.start())
+    await waitFor(() => expect(hook.result.current.phase).toBe('listening'))
+    await act(async () => fail(new Error('voice_failed')))
+    await waitFor(() => expect(hook.result.current.phase).toBe('idle'))
+    expect(mic.stop).toHaveBeenCalled()
+    expect(useStore.getState().toasts.map((t) => t.title)).toContain('Voice stopped')
   })
 
   it('no microphone: the panel says so and the speech engine is let go', async () => {

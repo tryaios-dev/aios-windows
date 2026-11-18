@@ -16,8 +16,9 @@ import { Chunker, Downsampler, loudness } from './pcm'
  * message box.
  *
  * The steps a person sees:
- *   starting   the microphone is waking (the speech engine may take a second to start)
- *   listening  words appear as they are heard; a pause at the end finishes it
+ *   starting   the microphone is waking
+ *   listening  the microphone is on and everything is kept (the speech engine may still be
+ *              starting); words appear as they are heard; a pause at the end finishes it
  *   writing    the last words are turned into text and put into the message box
  *   no-mic     there is no microphone to listen to
  */
@@ -274,20 +275,12 @@ export function useDictation(onText: (text: string) => void, deps: DictationDeps
         r.mic.stop() // cancelled while the microphone was waking
         return
       }
-      try {
-        r.sessionId = await r.session
-      } catch (e) {
-        end(r)
-        say(errorCode(e))
-        setPhase('idle')
-        return
-      }
-      if (r.ended) return
+      // The microphone is on: everything from here is kept, even while the speech engine is
+      // still starting, so say "Listening" now rather than when the engine answers.
       const began = now()
       r.lastLoud = began
       r.timer = setInterval(() => setSeconds(Math.floor((depsNow.current.now() - began) / 1000)), 250)
       setPhase('listening')
-      void pump(r).catch(() => undefined)
       // A microphone that delivers nothing at all (blocked, or taken by something else) would
       // listen forever: say so instead.
       r.watchdog = setTimeout(() => {
@@ -297,6 +290,19 @@ export function useDictation(onText: (text: string) => void, deps: DictationDeps
         setPhase('no-mic')
         setWords(NOTHING_HEARD)
       }, depsNow.current.noSoundAfterMs ?? NO_SOUND_AFTER_MS)
+      try {
+        r.sessionId = await r.session
+      } catch (e) {
+        if (run.current !== r) return
+        end(r)
+        say(errorCode(e))
+        setPhase('idle')
+        setWords(NOTHING_HEARD)
+        setSeconds(0)
+        return
+      }
+      if (r.cancelled) return
+      void pump(r).catch(() => undefined) // what was heard while the engine started goes first
     })()
   }, [onAudio, end])
 
