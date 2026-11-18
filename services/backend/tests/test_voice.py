@@ -660,3 +660,37 @@ def test_setup_starts_the_download_and_sees_its_progress(
             "error": None,
         }
         assert c.post("/voice/model").json()["model"]["status"] == "ready"  # nothing to do
+
+
+def test_the_engine_is_started_once_after_the_model_download(tmp_path: Path) -> None:
+    """So the antivirus scans the new program during setup, not when the mic is first pressed."""
+    starts = Starts()
+    m = make_manager(
+        tmp_path,
+        starts,
+        model=None,
+        fetch_fn=FakeOrigin(MODEL_BYTES),
+        model_size=len(MODEL_BYTES),
+        idle_unload_s=0.3,
+    )
+
+    async def body() -> None:
+        await m.startup()
+        m.downloader.start()
+        for _ in range(200):
+            await asyncio.sleep(0.02)
+            if starts.started:
+                break
+        assert starts.started == ["cpu"]
+        warmed = starts.made[0]
+        for _ in range(200):  # and stopped again soon, since nobody is dictating
+            await asyncio.sleep(0.02)
+            if not warmed.alive():
+                break
+        assert not warmed.alive()
+        await m.shutdown()
+
+    try:
+        asyncio.run(body())
+    finally:
+        starts.cleanup()

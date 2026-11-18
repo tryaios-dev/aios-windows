@@ -5,6 +5,8 @@ chat engine's (``aios_backend.engine.manager``) and simpler:
 * The Vulkan build when the chat engine found a GPU and Safe mode is off, else the CPU build. If
   the GPU build fails to start or crashes, the CPU build is used for the rest of the session.
 * Stopped after an idle period; the next dictation starts it again (about a second).
+* Started once, quietly, right after its model is downloaded (setup), so the first dictation
+  does not wait for the antivirus to scan the new program.
 * Runs in the backend's kill-on-close Job Object (IPC-50); orphans from a crash are ended at
   start-up (IPC-52).
 """
@@ -29,6 +31,10 @@ from aios_common.logging import get_logger, log_event
 MODEL_FILE = "ggml-small-q5_1.bin"
 MODEL_SHA256 = "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb"
 IDLE_UNLOAD_S = 300.0
+# After the model download, the engine is started once and stopped again after this long unless
+# used: the first start of a new program is slow while the antivirus scans it (20-30 s on the
+# clean Windows 11 VM, about 1 s afterwards), so that happens during setup instead of at the mic.
+WARM_UP_KEEP_S = 30.0
 WATCH_INTERVAL_S = 5.0
 
 log = get_logger("voice")
@@ -80,6 +86,7 @@ class VoiceManager:
         self._last_used = 0.0
         self._verified: tuple[int, float] | None = None  # (size, mtime) of the checked model
         self._watcher: asyncio.Task[None] | None = None
+        self._warm_up = False  # the model just arrived: start once, in the background
         self.downloader = ModelDownloader(
             self.model_path,
             model_sha256,
@@ -169,6 +176,18 @@ class VoiceManager:
 
     def _forget_check(self) -> None:
         self._verified = None  # a new file: check it again before loading
+        self._warm_up = True  # called from the download thread; the watcher picks it up
+
+    async def _warm(self) -> None:
+        """Start once and let the idle stop end it soon, unless someone starts dictating."""
+        self._warm_up = False
+        try:
+            await self.ensure()
+        except VoiceError as exc:
+            log_event(log, "voice_warm_up_failed", error_code=str(exc))
+            return
+        self._last_used = time.monotonic() - max(0.0, self._idle_unload_s - WARM_UP_KEEP_S)
+        log_event(log, "voice_warmed_up")
 
     def _start(self, build: str) -> Whisper:
         return self._start_fn(
@@ -226,6 +245,9 @@ class VoiceManager:
         while True:
             await asyncio.sleep(self._watch_interval_s)
             if self._lock.locked():
+                continue
+            if self._warm_up:
+                await self._warm()
                 continue
             try:
                 async with self._lock:
