@@ -25,7 +25,9 @@ EXE = "whisper-server" + platforms.current().exe_suffix
 # IPC-36: the only flags besides model, port and threads. "-l auto": the text stays in the
 # language that was spoken (ADR 0016); upstream's default is English.
 FIXED_FLAGS = ("--host", "127.0.0.1", "--api-key-stdin", "-l", "auto", "-nt")
-START_TIMEOUT_S = 60.0  # a 190 MB model
+# The first start of a new program waits for the antivirus scan: over 60 s on the clean VM while
+# the AI model downloaded alongside (same limit as the chat engine).
+START_TIMEOUT_S = 180.0
 TRANSCRIBE_TIMEOUT_S = 120.0
 
 log = get_logger("voice")
@@ -85,6 +87,10 @@ class Whisper:
             {
                 "response_format": "json",
                 "temperature": "0.0",
+                # No retries at higher temperatures: on audio it cannot make sense of, those give
+                # random words in other scripts and take 10 s or more (seen on the VM). Upstream
+                # reads --no-fallback but never applies it; this is the setting it would change.
+                "temperature_inc": "0.0",
                 "audio_ctx": str(audio_ctx),
                 "no_timestamps": "true",
                 "language": language,

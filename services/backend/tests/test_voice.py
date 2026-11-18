@@ -215,7 +215,7 @@ def make_manager(
         start_fn=starts,
         model_sha256=MODEL_DIGEST,
         watch_interval_s=0.05,
-        **{"prime": False, **kw},
+        **kw,
     )
 
 
@@ -704,23 +704,3 @@ def test_done_cuts_the_silence_after_the_last_word() -> None:
     assert last is not None
     # lead-in 0.3 s + 1 s of speech + TAIL_S, not the whole 0.5 s of silence
     assert seconds(last) <= 0.3 + 1.0 + phrases.TAIL_S + 0.05
-
-
-def test_a_fresh_engine_is_primed_in_the_background(tmp_path: Path) -> None:
-    starts = Starts()
-    m = make_manager(tmp_path, starts, prime=True)
-
-    async def body() -> None:
-        FakeWhisper.calls = []
-        await m.ensure()
-        for _ in range(100):
-            await asyncio.sleep(0.01)
-            if FakeWhisper.calls:
-                break
-        assert FakeWhisper.calls == ["transcribe:en"]  # one second of silence, text discarded
-        await m.shutdown()
-
-    try:
-        asyncio.run(body())
-    finally:
-        starts.cleanup()

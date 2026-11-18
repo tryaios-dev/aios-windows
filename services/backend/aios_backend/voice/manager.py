@@ -21,7 +21,6 @@ from pathlib import Path
 
 from aios_backend.engine.job import ChildJob
 from aios_backend.engine.orphans import kill_orphans
-from aios_backend.voice import phrases
 from aios_backend.voice.launcher import EXE, VoiceError, Whisper, start
 from aios_backend.voice.model import SIZE as MODEL_SIZE
 from aios_backend.voice.model import Fetch, ModelDownloader, fetch
@@ -68,7 +67,6 @@ class VoiceManager:
         model_sha256: str = MODEL_SHA256,
         fetch_fn: Fetch = fetch,
         model_size: int | None = None,
-        prime: bool = True,
     ) -> None:
         self._root = voice_root  # holds cpu/ and vulkan/
         self._models_dir = models_dir
@@ -89,8 +87,6 @@ class VoiceManager:
         self._verified: tuple[int, float] | None = None  # (size, mtime) of the checked model
         self._watcher: asyncio.Task[None] | None = None
         self._warm_up = False  # the model just arrived: start once, in the background
-        self._prime = prime
-        self._priming: asyncio.Task[None] | None = None
         self.downloader = ModelDownloader(
             self.model_path,
             model_sha256,
@@ -162,8 +158,6 @@ class VoiceManager:
                     self._failed, self._state = True, VoiceState.FAILED
                     raise
             self._whisper, self._failed, self._state = whisper, False, VoiceState.READY
-            if self._prime:
-                self._priming = asyncio.create_task(self._prime_once(whisper))
             return whisper
 
     def touch(self) -> None:
@@ -183,18 +177,6 @@ class VoiceManager:
     def _forget_check(self) -> None:
         self._verified = None  # a new file: check it again before loading
         self._warm_up = True  # called from the download thread; the watcher picks it up
-
-    async def _prime_once(self, whisper: Whisper) -> None:
-        """Whisper's first job after a start is slow (3-8 s on the VM, then about 1 s): give it a
-        second of silence in the background, while the person is still speaking, so their first
-        phrase gets the quick path. Its text is thrown away."""
-        silence = bytes(phrases.RATE * phrases.BYTES_PER_SAMPLE)
-        try:
-            await asyncio.to_thread(
-                whisper.transcribe, phrases.wav(silence), phrases.audio_ctx(silence), "en"
-            )
-        except VoiceError:
-            pass  # a real problem shows on the person's own phrase
 
     async def _warm(self) -> None:
         """Start once and let the idle stop end it soon, unless someone starts dictating."""
