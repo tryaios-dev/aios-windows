@@ -54,7 +54,8 @@ AUTO_GROUP_MIN = 0.50
 INFORMATIONAL_GROUPS = {"honesty"}  # reported, not part of the pass threshold
 MANUAL_MEAN_MIN = 1.5
 
-GGUF_FILE_TYPE = {"Q4_K_M": 15, "Q8_0": 7}  # llama_ftype values
+# llama_ftype values. UD (Unsloth Dynamic) files mix types per tensor and are typed Q4_K_M.
+GGUF_FILE_TYPE = {"Q4_K_M": 15, "UD-Q4_K_M": 15, "Q8_0": 7}
 
 STOPWORDS = {
     "en": "the and is are of to in that it for with on this you be".split(),
@@ -402,7 +403,8 @@ def markdown(r: dict, prompts: dict) -> str:
         f"- Catalogue entry: `{r['model']['entry']}`",
         f"- File: `{r['model']['filename']}`",
         f"- Reference: `{r['reference']['filename']}` from `{r['reference']['repo']}` @ "
-        f"`{r['reference']['revision'][:12]}`, SHA-256 checked",
+        f"`{r['reference']['revision'][:12]}`, SHA-256 checked"
+        + (f". {r['reference']['note']}" if r["reference"].get("note") else ""),
         f"- Engine: llama.cpp {r['engine']['release']}; stage 3 on the shipped {r['engine']['build']} build",
         f"- Run: {r['run_at']} on {r['machine']}; prompt set v{r['prompt_set_version']}",
         "",
