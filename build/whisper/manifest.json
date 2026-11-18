@@ -1,0 +1,13 @@
+{
+  "_readme": "ADR 0016: whisper-server is built from this pinned source with the patches below (build/whisper/build.py). Changing the pin or a patch is a reviewed change (CODEOWNERS): update release, commit and the patch digests together, then re-run the voice engine tests. See build/whisper/README.md.",
+  "whisper_cpp_release": "v1.9.5",
+  "commit": "d1be6fde11ac6e0407606b4e42fe72d34add8037",
+  "repo": "https://github.com/ggml-org/whisper.cpp",
+  "patches": [
+    {
+      "name": "0001-api-key-stdin-and-routes.patch",
+      "sha256": "70f5a3d3928c23c549b9d64528b7d05511a1f91ec151a099450faf80133e5ce8"
+    }
+  ],
+  "vulkan_sdk": "1.4.357.0"
+}
