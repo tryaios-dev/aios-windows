@@ -137,39 +137,6 @@ class Whisper:
         return {"Authorization": f"Bearer {self.key}"}
 
 
-def prescan(voice_dir: Path, temp_dir: Path) -> bool:
-    """Run ``whisper-server -h`` once: it loads the program and every library it uses, then exits.
-    The first run of a new program waits for the antivirus to scan it (30-70 s on the clean VM);
-    doing this at the app's start, in the background, means no dictation waits for it. Nothing
-    is listened on and no key is involved. True if it ran."""
-    exe = voice_dir / EXE
-    if not exe.is_file():
-        return False
-    temp_dir.mkdir(parents=True, exist_ok=True)
-    began = time.monotonic()
-    try:
-        subprocess.run(  # noqa: S603 - fixed executable and arguments
-            [str(exe), "-h"],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            env=platforms.current().child_env(voice_dir, temp_dir),
-            cwd=temp_dir,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-            timeout=START_TIMEOUT_S,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-    log_event(
-        log,
-        "voice_prescanned",
-        component=voice_dir.name,
-        duration_ms=round((time.monotonic() - began) * 1000),
-    )
-    return True
-
-
 def start(
     voice_dir: Path, model: Path, temp_dir: Path, job: ChildJob, build: str = "cpu"
 ) -> Whisper:

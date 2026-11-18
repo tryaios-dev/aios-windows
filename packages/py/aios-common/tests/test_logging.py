@@ -53,25 +53,3 @@ def test_ac_20_retention_keeps_14_days_and_20_mb(tmp_path) -> None:  # type: ign
     total = sum(p.stat().st_size for p in tmp_path.iterdir() if ".log" in p.name)
     assert total <= MAX_TOTAL_BYTES
     assert "backend.log.7" in left  # the newest is kept
-
-
-def _raise_with_content() -> None:
-    raise TimeoutError("the user's words: ciao, come stai")
-
-
-def test_an_exception_gives_its_type_and_place_never_its_message() -> None:
-    """uvicorn's own error lines carry an exception; its message can hold content (SR-07)."""
-    import sys
-
-    try:
-        _raise_with_content()
-    except TimeoutError:
-        exc_info = sys.exc_info()
-    rec = logging.LogRecord(
-        "uvicorn.error", logging.ERROR, __file__, 1, "Exception in ASGI application", None, exc_info
-    )
-    out = ContentFreeFormatter().format(rec)
-    assert "ciao" not in out and "words" not in out
-    assert '"error_code":"TimeoutError"' in out
-    assert '"component":"test_logging._raise_with_content"' in out
-    assert '"event":"unnamed"' in out

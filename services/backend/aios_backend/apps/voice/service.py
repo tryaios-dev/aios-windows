@@ -21,15 +21,7 @@ from aios_backend.apps.voice.schemas import ModelStatus, VoiceStatus
 from aios_backend.errors import AppError
 from aios_backend.voice import VoiceError, VoiceManager, Whisper
 from aios_backend.voice import languages as langs
-from aios_backend.voice.phrases import (
-    BYTES_PER_SAMPLE,
-    RATE,
-    Phrases,
-    audio_ctx,
-    clean,
-    padded,
-    wav,
-)
+from aios_backend.voice.phrases import BYTES_PER_SAMPLE, RATE, Phrases, audio_ctx, clean, wav
 from aios_common.logging import get_logger, log_event
 from db import lookups
 
@@ -227,8 +219,7 @@ class Sessions:
 
     async def _in_language(self, whisper: Whisper, session: Session, phrase: bytes) -> str:
         """Turn the phrase into text in the right language (aios_backend.voice.languages)."""
-        sent = padded(phrase)
-        audio, ctx = wav(sent), audio_ctx(sent)
+        audio, ctx = wav(phrase), audio_ctx(phrase)
         language = session.settled
         if language is None and len(session.languages) == 1:
             language = session.languages[0]

@@ -215,7 +215,7 @@ def make_manager(
         start_fn=starts,
         model_sha256=MODEL_DIGEST,
         watch_interval_s=0.05,
-        **{"prescan_fn": lambda voice_dir, temp: False, **kw},
+        **kw,
     )
 
 
@@ -704,43 +704,3 @@ def test_done_cuts_the_silence_after_the_last_word() -> None:
     assert last is not None
     # lead-in 0.3 s + 1 s of speech + TAIL_S, not the whole 0.5 s of silence
     assert seconds(last) <= 0.3 + 1.0 + phrases.TAIL_S + 0.05
-
-
-def test_each_phrase_gets_silence_around_it() -> None:
-    """Speech at the very first instant of the audio often loses its first word in Whisper."""
-    pad = round(phrases.PAD_S * RATE) * 2
-    sent = phrases.padded(tone(1))
-    assert len(sent) == len(tone(1)) + 2 * pad
-    assert sent[:pad] == bytes(pad) and sent[-pad:] == bytes(pad)
-
-
-def test_both_builds_are_shown_to_the_antivirus_at_start(tmp_path: Path) -> None:
-    seen: list[str] = []
-    m = make_manager(
-        tmp_path,
-        Starts(),
-        built=("cpu", "vulkan"),
-        prescan_fn=lambda voice_dir, temp: seen.append(voice_dir.name) or True,
-    )
-
-    async def body() -> None:
-        await m.startup()
-        for _ in range(100):
-            await asyncio.sleep(0.01)
-            if len(seen) == 2:
-                break
-        await m.shutdown()
-
-    asyncio.run(body())
-    assert seen == ["cpu", "vulkan"]
-
-
-@real
-def test_real_prescan_runs_and_exits(tmp_path: Path) -> None:
-    assert SERVER
-    import time
-
-    began = time.monotonic()
-    assert launcher.prescan(Path(SERVER).parent, tmp_path / "t")
-    assert time.monotonic() - began < 30
-    assert not launcher.prescan(tmp_path / "nothing", tmp_path / "t")

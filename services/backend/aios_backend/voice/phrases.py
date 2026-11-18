@@ -25,7 +25,6 @@ MIN_SPEECH_S = 0.25  # less speech than this is a cough or a click
 MAX_PHRASE_S = 20.0  # cut a phrase that runs on, near its quietest moment
 LEAD_S = 0.3  # silence kept before speech starts
 TAIL_S = 0.3  # silence kept after the last word when Done is pressed
-PAD_S = 0.2  # silence added around each phrase sent to Whisper
 SPEECH_FLOOR = 350.0  # RMS on the int16 scale, about -39 dBFS: below this is never speech
 NOISE_RATIO = 3.0  # speech is at least this many times louder than the room
 
@@ -46,13 +45,6 @@ def frame_rms(pcm: bytes) -> list[float]:
         chunk = s[start : start + FRAME]
         out.append(math.sqrt(sum(v * v for v in chunk) / FRAME))
     return out
-
-
-def padded(pcm: bytes) -> bytes:
-    """The phrase with PAD_S of silence before and after: speech that starts at the very first
-    instant of the audio often loses its first word in Whisper."""
-    pad = bytes(round(PAD_S * RATE) * BYTES_PER_SAMPLE)
-    return pad + pcm + pad
 
 
 def wav(pcm: bytes) -> bytes:

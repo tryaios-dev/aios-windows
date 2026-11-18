@@ -8,12 +8,15 @@ import { END_PAUSE_MS, useDictation, type DictationDeps } from './useDictation'
 const RATE = 48_000
 const SESSION = '0123456789abcdef0123456789abcdef'
 
-/** A microphone the test speaks into. */
-function fakeMic() {
+/** A microphone the test speaks into. Like a real one, it sends a little room noise as soon as
+ * it is on; ``zeros: true`` is one that is on but delivers exact silence (the VM's first second,
+ * or a muted device). */
+function fakeMic({ zeros = false }: { zeros?: boolean } = {}) {
   let listener: ((s: Float32Array, rate: number) => void) | null = null
   const stop = vi.fn()
   const open: OpenMicrophone = async (onAudio) => {
     listener = onAudio
+    setTimeout(() => listener?.(zeros ? new Float32Array(2048) : Float32Array.from({ length: 2048 }, () => 0.001), RATE), 0)
     return { stop }
   }
   const speak = (seconds: number, amplitude = 0.4) => {
@@ -23,7 +26,10 @@ function fakeMic() {
       listener?.(piece, RATE)
     }
   }
-  return { open, stop, speak, opened: () => listener !== null }
+  const silence = (pieces: number) => {
+    for (let i = 0; i < pieces; i++) listener?.(new Float32Array(2048), RATE)
+  }
+  return { open, stop, speak, silence, opened: () => listener !== null }
 }
 
 /** The backend: each audio call adds a word once some sound has arrived. */
@@ -44,8 +50,8 @@ function fakeVoice(text = ['Hello', 'there']) {
   return { voice, sent: () => bytes }
 }
 
-function setup(over: Partial<DictationDeps> = {}) {
-  const mic = fakeMic()
+function setup(over: Partial<DictationDeps> = {}, micOptions: { zeros?: boolean } = {}) {
+  const mic = fakeMic(micOptions)
   const backend = fakeVoice()
   let clock = 0
   const deps: DictationDeps = { voice: () => backend.voice, openMicrophone: mic.open, now: () => clock, ...over }
@@ -109,14 +115,6 @@ describe('speaking instead of typing (ADR 0016)', () => {
     expect(onText).toHaveBeenCalledWith('Hello there')
   })
 
-  it('a microphone that delivers no sound at all says so instead of listening forever', async () => {
-    const { hook, mic, backend } = setup({ noSoundAfterMs: 50 })
-    act(() => hook.result.current.start())
-    await waitFor(() => expect(hook.result.current.phase).toBe('listening'))
-    await waitFor(() => expect(hook.result.current.phase).toBe('no-mic'))
-    expect(mic.stop).toHaveBeenCalled()
-    await waitFor(() => expect(backend.voice.cancel).toHaveBeenCalledWith(SESSION))
-  })
 
   it('Cancel throws it away and tells the backend', async () => {
     const { hook, mic, backend, onText } = setup()
@@ -132,31 +130,39 @@ describe('speaking instead of typing (ADR 0016)', () => {
     expect(backend.voice.finish).not.toHaveBeenCalled()
   })
 
-  it('listens as soon as the microphone is on, and keeps what is said while the engine starts', async () => {
+  it('sound heard while the speech engine starts is kept', async () => {
     let ready: (v: { session_id: string }) => void = () => undefined
     const { hook, mic, backend } = setup()
     backend.voice.start.mockImplementationOnce(() => new Promise((r) => (ready = r)))
     act(() => hook.result.current.start())
     await waitFor(() => expect(mic.opened()).toBe(true))
-    // The engine has not answered yet, but the person sees "Listening" and can start talking.
-    await waitFor(() => expect(hook.result.current.phase).toBe('listening'))
     act(() => mic.speak(0.5))
     expect(backend.voice.audio).not.toHaveBeenCalled()
     await act(async () => ready({ session_id: SESSION }))
-    // Every byte said before the engine answered is sent, the first words included.
+    await waitFor(() => expect(hook.result.current.phase).toBe('listening'))
     await waitFor(() => expect(backend.sent()).toBeGreaterThanOrEqual(15_000))
   })
 
-  it('a speech engine that fails while already listening stops and says so', async () => {
-    let fail: (e: Error) => void = () => undefined
-    const { hook, mic, backend } = setup()
-    backend.voice.start.mockImplementationOnce(() => new Promise((_r, j) => (fail = j)))
+  it('says it is starting until real sound arrives, then keeps everything from there', async () => {
+    const { hook, mic, backend } = setup({}, { zeros: true })
     act(() => hook.result.current.start())
+    await waitFor(() => expect(mic.opened()).toBe(true))
+    act(() => mic.silence(20)) // the VM's first second: the mic is on but sends exact zeros
+    expect(hook.result.current.phase).toBe('starting')
+    expect(backend.voice.audio).not.toHaveBeenCalled()
+    act(() => mic.speak(1.2))
     await waitFor(() => expect(hook.result.current.phase).toBe('listening'))
-    await act(async () => fail(new Error('voice_failed')))
-    await waitFor(() => expect(hook.result.current.phase).toBe('idle'))
+    // All of the speech is sent, from its first sample: 1.2 s at 16 kHz, 16-bit.
+    await waitFor(() => expect(backend.sent()).toBeGreaterThanOrEqual(32_000))
+    expect(backend.sent()).toBeLessThan(40_000) // and none of the zeros before it
+  })
+
+  it('a microphone that only ever sends silence says so instead of starting forever', async () => {
+    const { hook, mic, backend } = setup({ noSoundAfterMs: 50 }, { zeros: true })
+    act(() => hook.result.current.start())
+    await waitFor(() => expect(hook.result.current.phase).toBe('no-mic'))
     expect(mic.stop).toHaveBeenCalled()
-    expect(useStore.getState().toasts.map((t) => t.title)).toContain('Voice stopped')
+    await waitFor(() => expect(backend.voice.cancel).toHaveBeenCalledWith(SESSION))
   })
 
   it('no microphone: the panel says so and the speech engine is let go', async () => {
