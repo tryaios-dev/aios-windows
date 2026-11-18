@@ -100,9 +100,24 @@ def remove_tree(path: Path) -> None:
         shutil.rmtree(path, onexc=writable_then_retry)
 
 
+def use_visual_studio_clang() -> None:
+    """Windows: put Visual Studio's own Clang first on PATH. Some runner images also carry a
+    standalone LLVM (C:\\Program Files\\LLVM) that is older than the Visual Studio C++ library
+    accepts (STL1000: "expected Clang 22 or newer"); the toolchain file picks whichever
+    ``clang`` comes first."""
+    vc = os.environ.get("VCINSTALLDIR")
+    if not vc:
+        return
+    llvm = Path(vc) / "Tools" / "Llvm" / "x64" / "bin"
+    if (llvm / "clang.exe").is_file():
+        os.environ["PATH"] = f"{llvm}{os.pathsep}{os.environ.get('PATH', '')}"
+        print(f"using {llvm / 'clang.exe'}", flush=True)
+
+
 def build(src: Path, variant: str) -> Path:
     flags = list(COMMON_FLAGS)
     if WINDOWS:
+        use_visual_studio_clang()
         # Clang as upstream's Windows release (MSVC builds of the CPU kernels are slower).
         # Backend DLLs plus every x64 CPU variant, picked at runtime: one build for any CPU.
         flags += [
