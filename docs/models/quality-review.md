@@ -34,6 +34,9 @@ The reviewer records `pass` only if all four stages pass.
 - **Reference:** the publisher's Q8_0 file from the same repository and revision (listed with its
   SHA-256 in `tools/bench/quality_references.json`). Q8_0 is close to lossless, so any large
   difference comes from the shipped file.
+  Exception: when the Q8_0 file does not fit the review machine's memory, the publisher's Q6_K
+  file is used and its entry says so (Sage A1.5). Q6_K is also close to lossless; the measured
+  difference is then slightly smaller than against Q8_0.
 - **Text:** wikitext-2 test set (the standard llama.cpp measurement text, SHA-256 checked, not
   stored in the repo), first 100 chunks of 512 tokens.
 - **Why these limits:** a normal Q4_K_M file is usually at 0.02-0.08 mean KL divergence and
@@ -96,6 +99,11 @@ Run on 2026-11-12, Linux x86_64. Stage 3 on the shipped CPU build (llama.cpp b12
 | --- | --- | --- | --- | --- | --- |
 | `minicpm5-2b-q4_k_m-openbmb-gguf` | pass | pass: mean KLD 0.072, same top 86.7 % (PPL 16.05 vs 15.28) | pass: 26 / 29 (90 %) | pass: mean 1.50 (proposed by Andrea Rossetti) | pending reviewer |
 | `ornith-1.5-9b-q4_k_m-ornith-gguf` | pass | pass: mean KLD 0.041, same top 92.2 % (PPL 9.36 vs 9.25) | pass: 28 / 29 (97 %) | pass: mean 1.75 (proposed by Andrea Rossetti) | pending reviewer |
+| `qwen3.8-27b-ud-q4_k_m-unsloth-gguf` | pass | pass: mean KLD 0.008, same top 96.1 % (PPL 6.74 vs 6.74) | pass: 27 / 29 (93 %) | pass: mean 2.00 (proposed by Andrea Rossetti) | pending reviewer |
+| `sage-a1.5-q4_k_m-mradermacher-gguf` | pass | pass: mean KLD 0.038, same top 91.3 % (PPL 7.40 vs 7.14), against Q6_K | pass: 29 / 29 (100 %) | pass: mean 1.88 (proposed by Andrea Rossetti) | pending reviewer |
+
+Qwen and Sage were run on 2026-11-17 with the current engine settings (16,384-token context, q8_0
+cache, flash attention). Sage's stage 2 reference is Q6_K, not Q8_0 (see Stage 2).
 
 Both files pass every automatic stage. MiniCPM is closer to the stage 2 limit, as expected for a
 small model at Q4. Its remaining failures are ordinary model mistakes (wrong ordering, minutes in a
@@ -124,12 +132,10 @@ MiniCPM's mean is exactly on the limit (1.50).
 
 ## Notes
 
-- Stage 3 ran with the engine settings of 2026-11-12 (4,096-token context, default cache). Since
-  then `main` starts the engine with a 16,384-token context, a q8_0 cache and flash attention. The
-  file checks (stages 1 and 2) do not depend on this; stage 3 is run again with the new settings
-  together with the app's final system prompt.
-- `main` also added two large-tier third-party entries (`sage-a1.5-q4_k_m-mradermacher-gguf`,
-  `qwen3.8-27b-ud-q4_k_m-unsloth-gguf`) with `deviation_review: null`. They need this review too.
+- MiniCPM and Ornith stage 3 ran with the engine settings of 2026-11-12 (4,096-token context,
+  default cache). Since then `main` starts the engine with a 16,384-token context, a q8_0 cache and
+  flash attention. The file checks (stages 1 and 2) do not depend on this; stage 3 is run again
+  with the new settings together with the app's final system prompt.
 - The MiniCPM file's own metadata names the model "MiniCPM5 2.6B"; the catalogue calls it
   "MiniCPM5 2B". To align when the model choice is settled.
 

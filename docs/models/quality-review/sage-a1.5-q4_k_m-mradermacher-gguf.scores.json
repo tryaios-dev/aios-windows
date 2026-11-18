@@ -1,0 +1,15 @@
+{
+  "scorer": "Andrea Rossetti",
+  "date": "2026-11-17",
+  "status": "proposed, to be confirmed by the technical reviewer",
+  "items": {
+    "SU-1": {"score": 2, "note": "34 words; dates, second floor, 28 Feb, Termotec, contact all right. Says \"1st-floor meeting rooms\" without 1A/1B."},
+    "DR-1": {"score": 1, "note": "Invents a focus for the review (\"especially regarding the data analysis section\"); would need removing before sending."},
+    "DR-2": {"score": 2, "note": "Three sentences, no invented facts."},
+    "DR-3": {"score": 2, "note": "Mentions training materials \"on the intranet\", which the sender should check; otherwise plain and usable."},
+    "DR-4": {"score": 2, "note": ""},
+    "DR-5": {"score": 2, "note": ""},
+    "ML-1": {"score": 2, "note": "Correct Italian; adds a short lead-in line before the two sentences."},
+    "ML-3": {"score": 2, "note": "Correct German; covers encrypted storage, master password and autofill."}
+  }
+}
