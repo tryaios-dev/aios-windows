@@ -20,6 +20,9 @@ export class NoMicrophone extends Error {
 }
 
 export const openMicrophone: OpenMicrophone = async (onAudio) => {
+  // Made before anything is awaited, while the click that started it still counts: an audio
+  // context made later can start suspended and then hears nothing.
+  const context = new AudioContext()
   let stream: MediaStream
   try {
     stream = await navigator.mediaDevices.getUserMedia({
@@ -27,9 +30,9 @@ export const openMicrophone: OpenMicrophone = async (onAudio) => {
       video: false,
     })
   } catch {
+    void context.close()
     throw new NoMicrophone()
   }
-  const context = new AudioContext()
   try {
     await context.audioWorklet.addModule(workletUrl)
   } catch (e) {

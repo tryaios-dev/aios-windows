@@ -95,6 +95,29 @@ describe('speaking instead of typing (ADR 0016)', () => {
     expect(hook.result.current.phase).toBe('idle')
   })
 
+  it('a pause after speaking finishes even before the first words are back', async () => {
+    const { hook, mic, onText, tick } = setup()
+    act(() => hook.result.current.start())
+    await waitFor(() => expect(hook.result.current.phase).toBe('listening'))
+    act(() => mic.speak(0.3)) // too little sound for any words yet
+    expect(hook.result.current.words).toEqual([])
+    act(() => {
+      tick(END_PAUSE_MS + 100)
+      mic.speak(0.1, 0.001)
+    })
+    await waitFor(() => expect(hook.result.current.phase).toBe('idle'))
+    expect(onText).toHaveBeenCalledWith('Hello there')
+  })
+
+  it('a microphone that delivers no sound at all says so instead of listening forever', async () => {
+    const { hook, mic, backend } = setup({ noSoundAfterMs: 50 })
+    act(() => hook.result.current.start())
+    await waitFor(() => expect(hook.result.current.phase).toBe('listening'))
+    await waitFor(() => expect(hook.result.current.phase).toBe('no-mic'))
+    expect(mic.stop).toHaveBeenCalled()
+    await waitFor(() => expect(backend.voice.cancel).toHaveBeenCalledWith(SESSION))
+  })
+
   it('Cancel throws it away and tells the backend', async () => {
     const { hook, mic, backend, onText } = setup()
     act(() => hook.result.current.start())

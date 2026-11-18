@@ -200,7 +200,7 @@ export function VoicePanel({ dictation, className }: { dictation: Dictation; cla
           <Button size="sm" variant="ghost" disabled={writing} onClick={cancel} trailing={<Kbd>Esc</Kbd>}>
             Cancel
           </Button>
-          <Button ref={done} size="sm" variant="primary" disabled={writing || words.length === 0} onClick={finish} leading={<Check className="size-3.5" strokeWidth={2.5} />}>
+          <Button ref={done} size="sm" variant="primary" disabled={writing} onClick={finish} leading={<Check className="size-3.5" strokeWidth={2.5} />}>
             Done
           </Button>
         </div>

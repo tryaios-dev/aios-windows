@@ -43,9 +43,12 @@ export interface DictationDeps {
   voice: () => AiosBridge['voice']
   openMicrophone: OpenMicrophone
   now: () => number
+  /** No sound at all this long after listening starts: the microphone is not delivering. */
+  noSoundAfterMs?: number
 }
 
 const DEFAULT_DEPS: DictationDeps = { voice: () => bridge().voice, openMicrophone, now: () => performance.now() }
+const NO_SOUND_AFTER_MS = 3_000
 
 /** After words were heard, this long without speaking finishes by itself. */
 export const END_PAUSE_MS = 2_500
@@ -66,6 +69,9 @@ interface Run {
   sending: Promise<void> | null
   lastLoud: number
   heard: boolean
+  /** Any sound at all has arrived from the microphone (even silence). */
+  gotSound: boolean
+  watchdog: ReturnType<typeof setTimeout> | null
   words: number
   /** No more sound is taken (Done, a pause, or Cancel). */
   ended: boolean
@@ -113,6 +119,8 @@ export function useDictation(onText: (text: string) => void, deps: DictationDeps
   const stopListening = (r: Run) => {
     r.mic?.stop()
     r.mic = null
+    if (r.watchdog) clearTimeout(r.watchdog)
+    r.watchdog = null
     if (r.timer) clearInterval(r.timer)
     r.timer = null
     level.current = 0
@@ -193,6 +201,7 @@ export function useDictation(onText: (text: string) => void, deps: DictationDeps
   const onAudio = useCallback(
     (r: Run, samples: Float32Array, rate: number) => {
       if (r.ended) return
+      r.gotSound = true
       const now = depsNow.current.now()
       const loud = loudness(samples)
       level.current = loud
@@ -214,8 +223,8 @@ export function useDictation(onText: (text: string) => void, deps: DictationDeps
           cancel()
         }
       })
-      // A pause at the end finishes it.
-      if (r.heard && r.words > 0 && now - r.lastLoud >= END_PAUSE_MS) finish()
+      // A pause after speaking finishes it, even before the first words are back.
+      if (r.heard && now - r.lastLoud >= END_PAUSE_MS) finish()
     },
     [pump, finish, cancel],
   )
@@ -233,6 +242,8 @@ export function useDictation(onText: (text: string) => void, deps: DictationDeps
       sending: null,
       lastLoud: now(),
       heard: false,
+      gotSound: false,
+      watchdog: null,
       words: 0,
       ended: false,
       cancelled: false,
@@ -277,6 +288,15 @@ export function useDictation(onText: (text: string) => void, deps: DictationDeps
       r.timer = setInterval(() => setSeconds(Math.floor((depsNow.current.now() - began) / 1000)), 250)
       setPhase('listening')
       void pump(r).catch(() => undefined)
+      // A microphone that delivers nothing at all (blocked, or taken by something else) would
+      // listen forever: say so instead.
+      r.watchdog = setTimeout(() => {
+        if (r.gotSound || r.ended || run.current !== r) return
+        end(r)
+        void r.session.then((id) => (id ? depsNow.current.voice().cancel(id) : undefined)).catch(() => undefined)
+        setPhase('no-mic')
+        setWords(NOTHING_HEARD)
+      }, depsNow.current.noSoundAfterMs ?? NO_SOUND_AFTER_MS)
     })()
   }, [onAudio, end])
 
