@@ -5,8 +5,11 @@ local AI gateway (G-01) on loopback, presenting ``derive(T, "aios/ipc/v1/gateway
 is the only inference endpoint on the device (invariant 1, IPC-02). Two providers:
 
 * ``local``: the engine on this computer, always;
-* ``company``: the company's AI server (G-06), only while an operator switched it on. Whether a
-  conversation may move there is decided by chat, which asks first (PR-03).
+* ``company``: the company's AI server (G-06), only while one is configured (``operator.json`` or
+  ``company.json``). Whether a conversation may move there is decided by chat, which asks first
+  (PR-03).
+
+The request names its provider in the gateway's optional ``provider`` field.
 
 Model facts (context length, runtime, and how many tokens a text is, G-04) and the prompt each
 provider puts first (``prepare``, so the input commitment covers the bytes sent, G-03) come from
@@ -24,7 +27,7 @@ from aios_backend.apps.chat.answers import AnswerSource, ModelInfo
 from aios_backend.engine import NoModel
 from aios_backend.engine.client import Streamed
 from aios_backend.engine.launcher import EngineError
-from aios_backend.gateway.app import COMPANY_PREFIX, GATEWAY_PURPOSE
+from aios_backend.gateway.app import GATEWAY_PURPOSE
 from aios_common.handshake import derive
 
 LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost", "testserver"}
@@ -72,13 +75,14 @@ class ProviderRouter:
         """Answer text in chunks; ``usage`` holds the provider's token counts once it is done."""
         if provider not in self._sources:
             raise NoModel
-        name = model_id if provider == "local" else f"{COMPANY_PREFIX}{model_id}"
         out = Streamed()
-        out._chunks = self._chunks(name, messages, out)
+        out._chunks = self._chunks(provider, model_id, messages, out)
         return out
 
-    def _chunks(self, name: str, messages: list[dict[str, str]], out: Streamed) -> Iterator[str]:
-        body = {"model": name, "messages": messages, "stream": True}
+    def _chunks(
+        self, provider: str, model_id: str, messages: list[dict[str, str]], out: Streamed
+    ) -> Iterator[str]:
+        body = {"model": model_id, "messages": messages, "stream": True, "provider": provider}
         headers = {"Authorization": f"Bearer {derive(GATEWAY_PURPOSE)}"}
         client = self._shared() if self._shared else _new_client()
         try:

@@ -1,9 +1,10 @@
-"""The Company provider (G-06): answers from the company's AI server.
+"""The Company provider (G-06): answers from an OpenAI-compatible server the operator configures.
 
-The server is OpenAI-compatible (llama-server on the lab GPU host, or any server with the same
-``/v1/models`` and ``/v1/chat/completions``). An operator switches it on in the operator file
-(``config.company_from_file``) and stores its API key with ``aios-backend company-key``. The
-gateway calls this module for ``company/...`` models; nothing else does (invariant 1, PR-04).
+The server can be the lab GPU host (llama-server) or a hosted API such as DeepSeek: anything that
+serves ``/models`` and ``/chat/completions`` the OpenAI way. Where it is comes from
+``operator.json`` or ``company.json`` (``aios_backend.company_config``); its API key lives only in
+the OS key store and is stored with ``aios-backend company set`` or ``company key``. The gateway
+calls this module for ``company`` requests; nothing else does (invariant 1, PR-04).
 
 Every request:
 
@@ -12,8 +13,8 @@ Every request:
   is never logged, written anywhere else or returned;
 * logs only an event name and an error code, never message text (invariant 6).
 
-Whether the server can answer is checked with ``GET /v1/models`` and remembered for a short time,
-so the composer and Settings can ask often without loading the server. Moving a conversation to
+Whether the server can answer is checked with ``GET /models`` and remembered for a short time, so
+the composer and Settings can ask often without loading the server. Moving a conversation to
 Company asks the person first; that rule lives in the chat app (invariant 2, PR-03).
 
 Security-relevant path: every change here needs the technical reviewer (.github/CODEOWNERS, B-01).
@@ -24,14 +25,30 @@ import re
 import threading
 import time
 from collections.abc import Callable, Iterator
+from pathlib import Path
 from typing import Any
 
 from aios_backend import net
 from aios_backend.apps.chat.answers import ModelInfo
+from aios_backend.company_config import (
+    DEEPSEEK_MODEL,
+    DEEPSEEK_URL,
+    DEFAULT_CONTEXT,
+    FILE_NAME,
+    CompanyConfig,
+    api_root,
+    current,
+    load_config,
+    save_config,
+    server_url,
+    valid_model_name,
+    valid_url,
+)
 from aios_backend.config import Settings
 from aios_backend.engine.client import Streamed, ThinkFilter
+from aios_backend.engine.launcher import EngineError
 from aios_backend.prompting import with_system_prompt
-from aios_common import keystore
+from aios_common.keystore import delete_secret, get_secret, set_secret
 from aios_common.logging import get_logger, log_event
 
 PROVIDER = "company"
@@ -51,10 +68,26 @@ SYSTEM_PROMPT = (
     "you are."
 )
 
+# The CLI reads and writes the configuration, and stores and removes the key, through this module.
+__all__ = [
+    "DEEPSEEK_MODEL",
+    "DEEPSEEK_URL",
+    "DEFAULT_CONTEXT",
+    "FILE_NAME",
+    "CompanyConfig",
+    "delete_secret",
+    "load_config",
+    "save_config",
+    "server_url",
+    "set_secret",
+    "valid_model_name",
+    "valid_url",
+]
+
 log = get_logger("company")
 
 
-class CompanyError(Exception):
+class CompanyError(EngineError):
     """The company server could not answer. ``code`` is a short, content-free reason."""
 
     def __init__(self, code: str) -> None:
@@ -68,33 +101,48 @@ def valid_key(value: str) -> bool:
 
 def store_key(value: str) -> None:
     """Keep the API key in the OS key store, the only place it may live (invariant 3)."""
-    keystore.set_secret(KEY_NAME, value)
+    set_secret(KEY_NAME, value)
 
 
 def _stored_key() -> str | None:
-    return keystore.get_secret(KEY_NAME)
+    return get_secret(KEY_NAME)
 
 
-class CompanyModels:
+def configured(settings: Settings) -> CompanyConfig | None:
+    """The server ``settings`` point at now: ``company.json`` as it is now while the backend
+    follows that file, else what ``operator.json`` said at start. None while Company is off."""
+    if settings.company_file is not None:
+        return current(settings.company_file)
+    if settings.company_ai and settings.company_base_url and settings.company_model_name:
+        return CompanyConfig(
+            base_url=settings.company_base_url,
+            model_name=settings.company_model_name,
+            context_length=settings.company_context_tokens,
+        )
+    return None
+
+
+class CompanySource:
     """The chat ``AnswerSource`` for ``company``, used by the gateway.
 
-    ``secret`` returns the API key (tests pass their own); ``client`` holds extra arguments for the
-    HTTP client (tests pass a transport)."""
+    ``config`` returns the server to use now (None: Company is off); ``secret`` returns the API
+    key (tests pass their own); ``client`` holds extra arguments for the HTTP client (tests pass a
+    transport)."""
 
     def __init__(
         self,
-        settings: Settings,
+        config: Callable[[], CompanyConfig | None],
         secret: Callable[[], str | None] = _stored_key,
         clock: Callable[[], float] = time.monotonic,
         **client: Any,
     ) -> None:
-        self._settings = settings
+        self._config = config
         self._secret = secret
         self._clock = clock
-        self._client = client
+        self._client = {k: v for k, v in client.items() if v is not None}
         self._lock = threading.Lock()
-        self._checked_at: float | None = None
-        self._ok = False
+        # (the server checked, when, whether it answered): a new server is checked at once.
+        self._checked: tuple[CompanyConfig, float, bool] | None = None
         #: Why the last check or answer failed (``company_unreachable``, ``company_key_rejected``,
         #: ...), None after a success. For Settings and the operator's check command.
         self.last_error: str | None = None
@@ -103,14 +151,9 @@ class CompanyModels:
 
     @property
     def base_url(self) -> str | None:
-        """The configured server while the operator flag is on, else None."""
-        s = self._settings
-        if s.company_ai and s.company_base_url and s.company_model_name:
-            return s.company_base_url
-        return None
-
-    def _allowlist(self) -> net.Allowlist:
-        return net.Allowlist(company=lambda: self.base_url)
+        """The configured server's address while Company is on, else None."""
+        found = self._config()
+        return found.base_url if found else None
 
     def _key(self) -> str | None:
         try:
@@ -118,14 +161,16 @@ class CompanyModels:
         except Exception as exc:  # the key store cannot be used on this machine
             log_event(log, "company_key_unreadable", error_code=type(exc).__name__)
             return None
+        key = key.strip() if key else None
         return key if key and valid_key(key) else None
 
     def _headers(self, key: str) -> dict[str, str]:
         return {**HEADERS, "Authorization": f"Bearer {key}"}
 
-    def _failed(self, code: str) -> CompanyError:
+    def _failed(self, code: str, found: CompanyConfig | None = None) -> CompanyError:
         self.last_error = code
-        self._checked_at, self._ok = self._clock(), False
+        if found is not None:
+            self._checked = (found, self._clock(), False)
         log_event(log, "company_failed", error_code=code)
         return CompanyError(code)
 
@@ -133,14 +178,13 @@ class CompanyModels:
 
     def model(self, provider: str, model_id: str | None) -> ModelInfo | None:
         """The company model, or None while Company is off or its server cannot answer."""
-        if provider != PROVIDER or self.base_url is None:
+        found = self._config()
+        if provider != PROVIDER or found is None:
             return None
-        if not self._reachable():
+        if not self._reachable(found):
             return None
         return ModelInfo(
-            model_id=self._settings.company_model_name or "",
-            context_length=self._settings.company_context_tokens,
-            runtime=RUNTIME,
+            model_id=found.model_name, context_length=found.context_length, runtime=RUNTIME
         )
 
     def prepare(self, provider: str, messages: list[dict[str, str]]) -> list[dict[str, str]]:
@@ -159,61 +203,62 @@ class CompanyModels:
     def recheck(self) -> ModelInfo | None:
         """Ask the server now, whatever was remembered (the operator's check command)."""
         with self._lock:
-            self._checked_at = None
+            self._checked = None
         return self.model(PROVIDER, None)
 
-    def _reachable(self) -> bool:
+    def _reachable(self, found: CompanyConfig) -> bool:
         with self._lock:
-            if self._checked_at is not None:
-                ttl = OK_TTL_S if self._ok else FAILED_TTL_S
-                if self._clock() - self._checked_at < ttl:
-                    return self._ok
+            if self._checked is not None and self._checked[0] == found:
+                _, at, ok = self._checked
+                if self._clock() - at < (OK_TTL_S if ok else FAILED_TTL_S):
+                    return ok
+            was_ok = self._checked is not None and self._checked[2]
             try:
-                self._check()
+                self._check(found)
             except CompanyError:
                 return False
-            if not self._ok:
+            if not was_ok:
                 log_event(log, "company_reachable")
-            self._checked_at, self._ok, self.last_error = self._clock(), True, None
+            self._checked, self.last_error = (found, self._clock(), True), None
             return True
 
-    def _check(self) -> None:
-        base, key = self.base_url, self._key()
-        if base is None:
-            raise self._failed("company_provider_disabled")
+    def _check(self, found: CompanyConfig) -> None:
+        key = self._key()
         if key is None:
-            raise self._failed("company_key_missing")
+            raise self._failed("company_key_missing", found)
         try:
             with net.outbound_client(
-                self._allowlist(), timeout=net.Timeout(CHECK_TIMEOUT_S), **self._client
+                net.Allowlist(company=lambda: found.base_url),
+                timeout=net.Timeout(CHECK_TIMEOUT_S),
+                **self._client,
             ) as client:
-                resp = client.get(f"{base}/v1/models", headers=self._headers(key))
+                resp = client.get(f"{api_root(found.base_url)}/models", headers=self._headers(key))
                 if resp.status_code in (401, 403):
-                    raise self._failed("company_key_rejected")
+                    raise self._failed("company_key_rejected", found)
                 if resp.status_code != 200:
-                    raise self._failed("company_unreachable")
+                    raise self._failed("company_unreachable", found)
                 listed = resp.json().get("data", [])
         except CompanyError:
             raise
         except (net.HostNotAllowed, net.HTTPError, ValueError, AttributeError) as exc:
-            raise self._failed("company_unreachable") from exc
+            raise self._failed("company_unreachable", found) from exc
         names = {m.get("id") for m in listed if isinstance(m, dict)}
-        if self._settings.company_model_name not in names:
-            raise self._failed("company_model_not_listed")
+        if found.model_name not in names:
+            raise self._failed("company_model_not_listed", found)
 
     # ---- answers ------------------------------------------------------------------------------
 
     def _answer(
         self, provider: str, messages: list[dict[str, str]], out: Streamed
     ) -> Iterator[str]:
-        base = self.base_url
-        if provider != PROVIDER or base is None:
+        found = self._config()
+        if provider != PROVIDER or found is None:
             raise self._failed("company_provider_disabled")
         key = self._key()
         if key is None:
-            raise self._failed("company_key_missing")
+            raise self._failed("company_key_missing", found)
         body = {
-            "model": self._settings.company_model_name,
+            "model": found.model_name,
             "messages": messages,
             "stream": True,
             "stream_options": {"include_usage": True},  # a final chunk with the token counts
@@ -222,21 +267,24 @@ class CompanyModels:
         try:
             with (
                 net.outbound_client(
-                    self._allowlist(),
+                    net.Allowlist(company=lambda: found.base_url),
                     timeout=net.Timeout(ANSWER_TIMEOUT_S, connect=CHECK_TIMEOUT_S),
                     **self._client,
                 ) as client,
                 client.stream(
-                    "POST", f"{base}/v1/chat/completions", json=body, headers=self._headers(key)
+                    "POST",
+                    f"{api_root(found.base_url)}/chat/completions",
+                    json=body,
+                    headers=self._headers(key),
                 ) as resp,
             ):
                 if resp.status_code in (401, 403):
-                    raise self._failed("company_key_rejected")
+                    raise self._failed("company_key_rejected", found)
                 if resp.status_code != 200:
-                    raise self._failed("company_unreachable")
+                    raise self._failed("company_unreachable", found)
                 for event in _events(resp.iter_lines()):
                     if "error" in event:
-                        raise self._failed("company_answer_failed")
+                        raise self._failed("company_answer_failed", found)
                     out.usage = _usage(event) or out.usage
                     text = think.feed(_delta(event))
                     if text:
@@ -247,7 +295,46 @@ class CompanyModels:
         except CompanyError:
             raise
         except (net.HostNotAllowed, net.HTTPError) as exc:
-            raise self._failed("company_unreachable") from exc
+            raise self._failed("company_unreachable", found) from exc
+
+
+class CompanyModels(CompanySource):
+    """The company side the backend runs with: the server ``settings`` point at, followed live
+    while ``company.json`` decides (``configured``)."""
+
+    def __init__(
+        self,
+        settings: Settings,
+        secret: Callable[[], str | None] = _stored_key,
+        clock: Callable[[], float] = time.monotonic,
+        **client: Any,
+    ) -> None:
+        super().__init__(lambda: configured(settings), secret, clock, **client)
+
+
+class CompanyProvider(CompanySource):
+    """One fixed server (the CLI's check, tests)."""
+
+    def __init__(
+        self,
+        config: CompanyConfig,
+        secret: Callable[[], str | None] = _stored_key,
+        transport: net.Transport | None = None,
+    ) -> None:
+        super().__init__(lambda: config, secret, transport=transport)
+
+
+class ConfiguredCompany(CompanySource):
+    """Whatever ``path`` (a ``company.json``) says now: ``aios-backend company set`` takes effect
+    without restarting AIOS."""
+
+    def __init__(
+        self,
+        path: Path,
+        secret: Callable[[], str | None] = _stored_key,
+        transport: net.Transport | None = None,
+    ) -> None:
+        super().__init__(lambda: current(path), secret, transport=transport)
 
 
 # ------------------------------------------------------------------ the server's event stream

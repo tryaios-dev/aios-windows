@@ -11,25 +11,30 @@ Three profiles:
   without a token so you can check the backend in a browser.
 * ``test``    - pytest. Database in a temp folder, fixed test key.
 
-The Company AI server (G-06, lab only) is switched on by an operator file, ``operator.json``:
-machine-wide in the desktop profile (``paths.operator_file()``), in ``.dev/`` in the dev profile,
-never in tests. See ``company_from_file`` and docs/operations/company-server.md.
+The Company AI server (G-06) is switched on by an operator file, ``operator.json`` (machine-wide
+in the desktop profile, ``paths.operator_file()``; in ``.dev/`` in the dev profile), or else by
+``company.json``, which ``aios-backend company set`` writes in the data folder (``.dev/`` in the
+dev profile). Never in tests. See ``company_from_file``, ``with_company`` and
+docs/operations/company-server.md.
 
 The dev/test keys (database key and evidence signing seed) are not secrets: they only protect throw-away development data.
 """
 
-import ipaddress
 import json
 import os
-import re
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
 
+from aios_backend.company_config import (
+    FILE_NAME,
+    load_company_config,
+    server_url,
+    valid_model_name,
+)
 from aios_common import paths, platforms
 
 APP_VERSION = "0.1.0"  # also in pyproject.toml and apps/desktop/package.json
@@ -49,10 +54,6 @@ _OPERATOR_KEYS = {
     "company_model_name",
     "company_context_tokens",
 }
-# The model id is recorded in evidence, so it may only hold what an evidence body accepts
-# (db.outbox): no spaces and no "/" (serve vLLM models under such a name: --served-model-name).
-_MODEL_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:+-]{0,99}")
-_DNS_LABEL = re.compile(r"(?!-)[a-z0-9-]{1,63}(?<!-)")
 
 
 class Profile(StrEnum):
@@ -85,6 +86,9 @@ class Settings:
     company_model_name: str | None = None
     # How many tokens one conversation may use on the company server (its context per user).
     company_context_tokens: int = COMPANY_CONTEXT_TOKENS
+    # company.json, which ``aios-backend company set`` writes and the backend follows while it
+    # runs (G-06). None while operator.json decides, and in tests. Never holds a key.
+    company_file: Path | None = None
     # Paths reachable without the token. Empty in the shipped app.
     public_paths: frozenset[str] = frozenset()
     docs_enabled: bool = False
@@ -117,30 +121,9 @@ def _models_dir() -> Path:
 
 
 def company_base_url(value: object) -> str | None:
-    """The company server's address as the network allowlist accepts it (M-22, P-4): HTTPS, a
-    DNS name (no IP address, at least one dot), port 443, no credentials, path, query or
-    fragment. Returned as ``https://host``; None if the address is not acceptable."""
-    if not isinstance(value, str):
-        return None
-    try:
-        parts = urlsplit(value.strip())
-        port = parts.port
-    except ValueError:
-        return None
-    host = (parts.hostname or "").lower()
-    if parts.scheme != "https" or port not in (None, 443) or parts.username or parts.password:
-        return None
-    if parts.path not in ("", "/") or parts.query or parts.fragment:
-        return None
-    try:
-        ipaddress.ip_address(host)
-        return None  # an IP address, not a DNS name
-    except ValueError:
-        pass
-    labels = host.split(".")
-    if len(labels) < 2 or not all(_DNS_LABEL.fullmatch(label) for label in labels):
-        return None
-    return f"https://{host}"
+    """The address in ``operator.json``: what the network allowlist accepts (M-22, P-4), and no
+    path (AIOS adds ``/v1``). Returned as ``https://host``; None if not acceptable."""
+    return server_url(value, allow_path=False)
 
 
 def company_from_file(path: Path) -> dict[str, Any]:
@@ -150,7 +133,7 @@ def company_from_file(path: Path) -> dict[str, Any]:
     anything unexpected. A file with any other field, an API key in particular, is refused: the
     key lives only in the OS key store (invariant 3)."""
     try:
-        data = json.loads(path.read_text("utf-8"))
+        data = json.loads(path.read_text("utf-8-sig"))  # Windows editors may add a BOM
     except (OSError, ValueError):
         return {}
     if not isinstance(data, dict) or not set(data) <= _OPERATOR_KEYS:
@@ -160,7 +143,7 @@ def company_from_file(path: Path) -> dict[str, Any]:
     url = company_base_url(data.get("company_base_url"))
     name = data.get("company_model_name")
     tokens = data.get("company_context_tokens", COMPANY_CONTEXT_TOKENS)
-    if url is None or not isinstance(name, str) or not _MODEL_NAME.fullmatch(name):
+    if url is None or not valid_model_name(name):
         return {}
     if type(tokens) is not int or not 2048 <= tokens <= 1_048_576:
         return {}
@@ -172,6 +155,32 @@ def company_from_file(path: Path) -> dict[str, Any]:
     }
 
 
+def with_company(settings: Settings, path: Path | None) -> Settings:
+    """Turn the Company provider on from ``company.json`` (G-06), and follow that file while the
+    backend runs. When ``operator.json`` already switched Company on, the operator decides and
+    ``company.json`` is not read. No valid file: Company stays off."""
+    if settings.company_ai:
+        return settings
+    found = load_company_config(path)
+    return replace(
+        settings,
+        company_ai=found is not None,
+        company_base_url=found.base_url if found else None,
+        company_model_name=found.model_name if found else None,
+        company_context_tokens=found.context_length if found else COMPANY_CONTEXT_TOKENS,
+        company_file=path,
+    )
+
+
+def company_file(profile: Profile) -> Path | None:
+    """The file ``aios-backend company set`` writes for ``profile``; the test profile has none."""
+    if profile is Profile.DESKTOP:
+        return paths.data_dir() / FILE_NAME
+    if profile is Profile.DEV:
+        return DEV_DIR / FILE_NAME
+    return None
+
+
 def load(profile: Profile | str | None = None) -> Settings:
     """Settings for ``profile`` (default: $AIOS_ENV, else dev)."""
     chosen = Profile(profile or os.environ.get(PROFILE_ENV) or Profile.DEV)
@@ -179,35 +188,41 @@ def load(profile: Profile | str | None = None) -> Settings:
     if chosen is Profile.DESKTOP:
         platforms.require_shipped()  # Windows only, until another OS is ported
         paths.ensure_dirs()
-        return Settings(
-            profile=chosen,
-            chats_db=paths.chats_db(),
-            db_key=None,
-            log_file=paths.logs_dir() / "backend.log",
-            backups_dir=paths.data_dir() / "backups",
-            engine_root=_engine_root(),
-            voice_root=_voice_root(),
-            recovery_pkg=paths.recovery_pkg(),
-            models_dir=_models_dir(),
-            **company_from_file(paths.operator_file()),
+        return with_company(
+            Settings(
+                profile=chosen,
+                chats_db=paths.chats_db(),
+                db_key=None,
+                log_file=paths.logs_dir() / "backend.log",
+                backups_dir=paths.data_dir() / "backups",
+                engine_root=_engine_root(),
+                voice_root=_voice_root(),
+                recovery_pkg=paths.recovery_pkg(),
+                models_dir=_models_dir(),
+                **company_from_file(paths.operator_file()),
+            ),
+            company_file(chosen),
         )
 
     if chosen is Profile.DEV:
         DEV_DIR.mkdir(parents=True, exist_ok=True)
-        return Settings(
-            profile=chosen,
-            chats_db=DEV_DIR / "chats.db",
-            db_key=DEV_DB_KEY,
-            log_file=DEV_DIR / "backend.log",
-            backups_dir=DEV_DIR / "backups",
-            engine_root=_engine_root(),
-            voice_root=_voice_root(),
-            recovery_pkg=DEV_DIR / "recovery.pkg",
-            models_dir=DEV_DIR / "models",
-            signing_seed=DEV_SIGNING_SEED,
-            public_paths=frozenset({"/health", "/docs", "/openapi.json"}),
-            docs_enabled=True,
-            **company_from_file(DEV_DIR / OPERATOR_FILE),
+        return with_company(
+            Settings(
+                profile=chosen,
+                chats_db=DEV_DIR / "chats.db",
+                db_key=DEV_DB_KEY,
+                log_file=DEV_DIR / "backend.log",
+                backups_dir=DEV_DIR / "backups",
+                engine_root=_engine_root(),
+                voice_root=_voice_root(),
+                recovery_pkg=DEV_DIR / "recovery.pkg",
+                models_dir=DEV_DIR / "models",
+                signing_seed=DEV_SIGNING_SEED,
+                public_paths=frozenset({"/health", "/docs", "/openapi.json"}),
+                docs_enabled=True,
+                **company_from_file(DEV_DIR / OPERATOR_FILE),
+            ),
+            company_file(chosen),
         )
 
     tmp = Path(tempfile.gettempdir()) / "aios-test"

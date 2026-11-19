@@ -69,6 +69,15 @@ async def watch_parent(parent: psutil.Process, server: uvicorn.Server) -> None:
             server.should_exit = True
 
 
+def _company_side(settings: Settings) -> CompanyModels | None:
+    """The Company provider (G-06): the server operator.json names, or else the one company.json
+    names. It follows company.json while running, so a server set up with
+    ``aios-backend company set`` answers without restarting AIOS."""
+    if settings.company_ai or settings.company_file is not None:
+        return CompanyModels(settings)
+    return None
+
+
 async def serve(
     settings: Settings,
     db: Database,
@@ -99,14 +108,13 @@ async def serve(
     gateway_task: asyncio.Task[None] | None = None
     gateway_port: int | None = None
     engine_side = app.state.answers
+    company_side = _company_side(settings)
     if local and answers is None and engine_side is not None:
-        # G-06: the company's AI server joins the gateway only while the operator flag is on.
-        company = CompanyModels(settings) if settings.company_ai else None
         gateway_sock = bind_loopback(0)
         gateway_port = gateway_sock.getsockname()[1]
         gateway = uvicorn.Server(
             uvicorn.Config(
-                create_gateway_app(engine_side, company=company),
+                create_gateway_app(engine_side, company_side),
                 host="127.0.0.1",
                 log_config=None,
                 access_log=False,
@@ -122,7 +130,7 @@ async def serve(
                 return
             await asyncio.sleep(0.01)
         app.state.answers = ProviderRouter(
-            engine_side, f"http://127.0.0.1:{gateway_port}", company=company
+            engine_side, f"http://127.0.0.1:{gateway_port}", company=company_side
         )
 
     if gateway_port is None:

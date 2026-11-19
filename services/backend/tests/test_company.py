@@ -226,6 +226,82 @@ def test_g06_the_test_profile_never_reads_an_operator_file() -> None:
     assert config.load(Profile.TEST).company_ai is False
 
 
+# ------------------------------------------------------------------ operator.json and company.json
+def company_json(path: Path, base_url: str, model: str = "deepseek-chat") -> Path:
+    company.save_config(path, company.CompanyConfig(base_url, model, 65536))
+    return path
+
+
+def test_g06_the_operator_file_wins_over_company_json(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """An operator's machine-wide choice is not overridden by a per-user company.json."""
+    monkeypatch.setattr(config, "DEV_DIR", tmp_path)
+    write(tmp_path / config.OPERATOR_FILE, GOOD)
+    company_json(tmp_path / company.FILE_NAME, "https://api.deepseek.com")
+    settings = config.load(Profile.DEV)
+    assert settings.company_base_url == "https://llm.example.com"
+    assert settings.company_model_name == MODEL and settings.company_context_tokens == 16384
+    assert settings.company_file is None  # nothing follows company.json
+
+
+def test_g06_without_an_operator_file_company_json_decides(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(config, "DEV_DIR", tmp_path)
+    path = company_json(tmp_path / company.FILE_NAME, "https://api.deepseek.com")
+    settings = config.load(Profile.DEV)
+    assert settings.company_ai is True and settings.company_file == path
+    assert settings.company_base_url == "https://api.deepseek.com"
+    assert settings.company_model_name == "deepseek-chat"
+    assert settings.company_context_tokens == 65536
+
+
+@pytest.mark.parametrize(
+    ("base_url", "model"),
+    [
+        ("https://10.0.0.5", "m"),  # an IP address, not a DNS name
+        ("https://llm.example.com:8443", "m"),  # the allowlist allows port 443 only
+        ("https://llm.example.com/?x=1", "m"),
+        ("https://llm.example.com", "org/model"),  # evidence refuses "/" (db.outbox)
+        ("https://llm.example.com", "two words"),
+    ],
+)
+def test_g06_company_json_follows_the_same_address_and_model_rules(
+    tmp_path: Path, base_url: str, model: str
+) -> None:
+    path = tmp_path / company.FILE_NAME
+    path.write_text(json.dumps({"base_url": base_url, "model_name": model}), "utf-8")
+    assert company.load_config(path) is None
+
+
+def test_g06_api_root_adds_v1_only_to_an_address_without_a_path() -> None:
+    from aios_backend.company_config import api_root
+
+    assert api_root("https://gpu.example.com") == "https://gpu.example.com/v1"
+    assert api_root("https://gpu.example.com/v1") == "https://gpu.example.com/v1"
+    assert api_root("https://proxy.example.com/openai/v1/") == "https://proxy.example.com/openai/v1"
+
+
+def test_g06_the_backend_follows_a_new_server_in_company_json(
+    settings: Settings, tmp_path: Path
+) -> None:
+    """``aios-backend company set`` while AIOS runs: the next check goes to the new server."""
+    path = tmp_path / company.FILE_NAME
+    live = dataclasses.replace(settings, company_file=path)
+    server = FakeServer()
+    source = provider(live, server)
+    assert source.model("company", None) is None and server.requests == []
+    company_json(path, BASE, MODEL)
+    info = source.model("company", None)
+    assert info is not None and info.context_length == 65536
+    assert [str(r.url) for r in server.requests] == [f"{BASE}/v1/models"]
+    company_json(path, "https://other.company.test", MODEL)  # a longer file: a new stamp
+    assert source.model("company", None) is not None
+    # Not the remembered check of the old server: the new one was asked at once.
+    assert [r.url.host for r in server.requests] == ["ai.company.test", "other.company.test"]
+
+
 # ------------------------------------------------------------------ is the company model there?
 def test_g06_company_off_means_no_model_and_nothing_sent(settings: Settings) -> None:
     server = FakeServer()
@@ -390,15 +466,15 @@ def local() -> FakeAnswers:
 def gateway(
     company_settings: Settings, server: FakeServer, local: FakeAnswers
 ) -> Iterator[TestClient]:
-    app = create_gateway_app(local, company=provider(company_settings, server))
+    app = create_gateway_app(local, provider(company_settings, server))
     with TestClient(app, client=LOOPBACK) as c:
         yield c
 
 
-def test_g06_the_gateway_sends_company_models_to_the_company_provider(
+def test_g06_the_gateway_sends_company_requests_to_the_company_provider(
     gateway: TestClient, local: FakeAnswers
 ) -> None:
-    body = {"model": f"company/{MODEL}", "messages": HELLO, "stream": True}
+    body = {"model": MODEL, "messages": HELLO, "stream": True, "provider": "company"}
     resp = gateway.post(CHAT, json=body, headers=gateway_auth())
     assert resp.status_code == 200
     assert "".join(deltas(resp.text)) == "Words from the company server."
@@ -406,7 +482,7 @@ def test_g06_the_gateway_sends_company_models_to_the_company_provider(
 
 
 def test_g06_the_gateway_passes_the_token_counts_on(gateway: TestClient) -> None:
-    body = {"model": f"company/{MODEL}", "messages": HELLO, "stream": True}
+    body = {"model": MODEL, "messages": HELLO, "stream": True, "provider": "company"}
     resp = gateway.post(CHAT, json=body, headers=gateway_auth())
     usage = [
         json.loads(line[6:])["usage"]
@@ -423,11 +499,11 @@ def test_g06_local_models_still_go_to_the_engine(gateway: TestClient, local: Fak
     assert local.calls[0]["provider"] == "local"
 
 
-def test_g06_without_a_company_provider_the_gateway_refuses_company_models(
+def test_g06_without_a_company_provider_the_gateway_refuses_company_requests(
     local: FakeAnswers,
 ) -> None:
     with TestClient(create_gateway_app(local), client=LOOPBACK) as gw:
-        body = {"model": f"company/{MODEL}", "messages": HELLO, "stream": True}
+        body = {"model": MODEL, "messages": HELLO, "stream": True, "provider": "company"}
         resp = gw.post(CHAT, json=body, headers=gateway_auth())
     assert resp.status_code == 404 and resp.json() == {"error": "model_not_found"}
 
@@ -504,9 +580,9 @@ def test_g06_the_key_command_stores_the_key_in_the_key_store(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], piped: str
 ) -> None:
     stored: dict[str, str] = {}
-    monkeypatch.setattr(company.keystore, "set_secret", lambda n, v: stored.update({n: v}))
+    monkeypatch.setattr(company, "set_secret", lambda n, v: stored.update({n: v}))
     monkeypatch.setattr("sys.stdin", io.StringIO(piped))
-    assert cli.main(["company-key"]) == 0
+    assert cli.main(["company", "key"]) == 0
     assert stored == {KEY_NAME: KEY}
     assert KEY not in capsys.readouterr().out
 
@@ -516,9 +592,9 @@ def test_g06_the_key_command_refuses_a_key_that_cannot_be_right(
     monkeypatch: pytest.MonkeyPatch, value: str
 ) -> None:
     stored: dict[str, str] = {}
-    monkeypatch.setattr(company.keystore, "set_secret", lambda n, v: stored.update({n: v}))
+    monkeypatch.setattr(company, "set_secret", lambda n, v: stored.update({n: v}))
     monkeypatch.setattr("sys.stdin", io.StringIO(value + "\n"))
-    assert cli.main(["company-key"]) == 1
+    assert cli.main(["company", "key"]) == 1
     assert stored == {}
 
 
@@ -532,6 +608,6 @@ def test_g06_the_check_command_reports_the_server(
     monkeypatch.setattr(
         cli, "company_models", lambda settings: provider(settings, server), raising=False
     )
-    assert cli.main(["company-check"]) == 0
+    assert cli.main(["company", "check"]) == 0
     out = capsys.readouterr().out
     assert "reachable" in out and MODEL in out and KEY not in out

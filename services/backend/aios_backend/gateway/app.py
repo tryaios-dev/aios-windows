@@ -5,12 +5,13 @@ accepts only ``derive(T, "aios/ipc/v1/gateway")`` as bearer (Process and IPC v1,
 backend's provider router is its only caller. No docs, no other paths. Nothing here logs message
 text (SR-07).
 
-Behind it, by model:
+Behind it, by the request's optional ``provider`` field:
 
-* ``company/<name>``: the company's AI server (``aios_backend.company``, G-06), only when an
-  operator switched it on. Without a company provider such a model is not found.
-* anything else: the engine side (the local model module, ``aios_backend.local``), which starts
-  llama-server on demand and talks to it with the engine's own derived token.
+* ``local`` (the default, so older callers keep working): the engine side (the local model
+  module, ``aios_backend.local``), which starts llama-server on demand and talks to it with the
+  engine's own derived token;
+* ``company``: the company's AI server (``aios_backend.company``, G-06), only when one is
+  configured. Without a company side such a request is answered ``model_not_found``.
 
 When the provider reports its own token counts, the stream ends with one OpenAI-style usage chunk
 (empty ``choices``) before ``[DONE]``, so chat stores real counts instead of estimates (G-03).
@@ -33,7 +34,6 @@ from aios_common.asgi_auth import LoopbackTokenMiddleware
 from aios_common.handshake import derive
 
 GATEWAY_PURPOSE = "aios/ipc/v1/gateway"
-COMPANY_PREFIX = "company/"
 
 
 class ChatMessage(BaseModel):
@@ -42,16 +42,11 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    model: str = Field(min_length=1, max_length=120)
+    model: str = Field(min_length=1, max_length=100)
     messages: list[ChatMessage] = Field(min_length=1)
     stream: bool = True
-
-
-def route(model: str) -> tuple[str, str]:
-    """(provider, model id) for a gateway model name."""
-    if model.startswith(COMPANY_PREFIX):
-        return "company", model[len(COMPANY_PREFIX) :]
-    return "local", model
+    # Which side answers. Optional, default local: older callers keep working.
+    provider: Literal["local", "company"] = "local"
 
 
 def _chunk(completion_id: str, model: str, delta: dict[str, Any], finish: str | None = None) -> str:
@@ -71,19 +66,21 @@ def _usage(chunks: object) -> dict[str, int] | None:
     return None
 
 
-def create_gateway_app(engine_side: AnswerSource, company: AnswerSource | None = None) -> ASGIApp:
+def create_gateway_app(
+    engine_side: AnswerSource, company_side: AnswerSource | None = None
+) -> ASGIApp:
     """The gateway as an ASGI app, wrapped in the loopback and token check (IPC-21 to IPC-23).
-    ``company``: the company provider while the operator flag is on, else None."""
+    ``company_side``: the Company provider (G-06), or None when no server is configured."""
     app = FastAPI(title="AIOS gateway", docs_url=None, redoc_url=None, openapi_url=None)
     sources: dict[str, AnswerSource] = {"local": engine_side}
-    if company is not None:
-        sources["company"] = company
+    if company_side is not None:
+        sources["company"] = company_side
 
     @app.post("/v1/chat/completions", response_model=None)
     def chat_completions(body: ChatRequest) -> StreamingResponse | JSONResponse | dict[str, Any]:
-        provider, model_id = route(body.model)
+        provider = body.provider
         source = sources.get(provider)
-        info = source.model(provider, model_id) if source is not None else None
+        info = source.model(provider, body.model) if source is not None else None
         if source is None or info is None:
             return JSONResponse({"error": "model_not_found"}, status_code=404)
         messages = [m.model_dump() for m in body.messages]
