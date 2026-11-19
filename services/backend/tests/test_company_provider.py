@@ -50,6 +50,9 @@ class Server:
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
+        if request.method == "GET" and request.url.path.endswith("/models"):
+            # The provider checks the server lists the model before offering it (G-06).
+            return httpx.Response(self.status, json={"data": [{"id": CONFIG.model_name}]})
         return httpx.Response(self.status, content=self.body)
 
 
@@ -116,7 +119,8 @@ def test_g06_answer_streams_from_the_server_with_the_key() -> None:
     server = Server(body=sse("Hi", " there.", usage=True))
     assert "".join(provider(server).answer("company", "example-chat", HELLO)) == "Hi there."
     (request,) = server.requests
-    assert str(request.url) == "https://api.example-ai.com/chat/completions"
+    # An address without a path gets /v1, as every OpenAI-compatible server serves it.
+    assert str(request.url) == "https://api.example-ai.com/v1/chat/completions"
     assert request.headers["authorization"] == f"Bearer {KEY}"
     body = json.loads(request.content)
     assert body["model"] == "example-chat" and body["stream"] is True

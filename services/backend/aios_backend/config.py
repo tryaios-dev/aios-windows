@@ -11,17 +11,30 @@ Three profiles:
   without a token so you can check the backend in a browser.
 * ``test``    - pytest. Database in a temp folder, fixed test key.
 
+The Company AI server (G-06) is switched on by an operator file, ``operator.json`` (machine-wide
+in the desktop profile, ``paths.operator_file()``; in ``.dev/`` in the dev profile), or else by
+``company.json``, which ``aios-backend company set`` writes in the data folder (``.dev/`` in the
+dev profile). Never in tests. See ``company_from_file``, ``with_company`` and
+docs/operations/company-server.md.
+
 The dev/test keys (database key and evidence signing seed) are not secrets: they only protect throw-away development data.
 """
 
+import json
 import os
 import sys
 import tempfile
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 
-from aios_backend.company_config import FILE_NAME, load_company_config
+from aios_backend.company_config import (
+    FILE_NAME,
+    load_company_config,
+    server_url,
+    valid_model_name,
+)
 from aios_common import paths, platforms
 
 APP_VERSION = "0.1.0"  # also in pyproject.toml and apps/desktop/package.json
@@ -31,6 +44,16 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 DEV_DB_KEY = "de" * 32  # 256-bit hex; development data only
 TEST_DB_KEY = "00" * 32
 DEV_SIGNING_SEED = "5e" * 32  # Ed25519 seed for the dev/test evidence stream; not a secret
+# The Company AI server (G-06), set by an operator in a machine-wide file (desktop) or in the dev
+# folder (dev). Never in the environment, never with its key (that stays in the OS key store).
+OPERATOR_FILE = "operator.json"
+COMPANY_CONTEXT_TOKENS = 16384
+_OPERATOR_KEYS = {
+    "company_ai",
+    "company_base_url",
+    "company_model_name",
+    "company_context_tokens",
+}
 
 
 class Profile(StrEnum):
@@ -61,7 +84,10 @@ class Settings:
     # the API key is never here (it lives in the OS keystore, read only by the gateway).
     company_base_url: str | None = None
     company_model_name: str | None = None
-    # Where ``aios-backend company set`` writes the server address and model (G-06); no key.
+    # How many tokens one conversation may use on the company server (its context per user).
+    company_context_tokens: int = COMPANY_CONTEXT_TOKENS
+    # company.json, which ``aios-backend company set`` writes and the backend follows while it
+    # runs (G-06). None while operator.json decides, and in tests. Never holds a key.
     company_file: Path | None = None
     # Paths reachable without the token. Empty in the shipped app.
     public_paths: frozenset[str] = frozenset()
@@ -94,14 +120,54 @@ def _models_dir() -> Path:
     return paths.models_dir()
 
 
+def company_base_url(value: object) -> str | None:
+    """The address in ``operator.json``: what the network allowlist accepts (M-22, P-4), and no
+    path (AIOS adds ``/v1``). Returned as ``https://host``; None if not acceptable."""
+    return server_url(value, allow_path=False)
+
+
+def company_from_file(path: Path) -> dict[str, Any]:
+    """The Company provider settings an operator wrote in ``path`` (G-06), ready for ``Settings``.
+
+    Empty (Company stays off) when the file is missing, unreadable, switches Company off, or holds
+    anything unexpected. A file with any other field, an API key in particular, is refused: the
+    key lives only in the OS key store (invariant 3)."""
+    try:
+        data = json.loads(path.read_text("utf-8-sig"))  # Windows editors may add a BOM
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict) or not set(data) <= _OPERATOR_KEYS:
+        return {}
+    if data.get("company_ai") is not True:
+        return {}
+    url = company_base_url(data.get("company_base_url"))
+    name = data.get("company_model_name")
+    tokens = data.get("company_context_tokens", COMPANY_CONTEXT_TOKENS)
+    if url is None or not valid_model_name(name):
+        return {}
+    if type(tokens) is not int or not 2048 <= tokens <= 1_048_576:
+        return {}
+    return {
+        "company_ai": True,
+        "company_base_url": url,
+        "company_model_name": name,
+        "company_context_tokens": tokens,
+    }
+
+
 def with_company(settings: Settings, path: Path | None) -> Settings:
-    """Turn the Company provider on from ``company.json`` (G-06). No valid file: it stays off."""
+    """Turn the Company provider on from ``company.json`` (G-06), and follow that file while the
+    backend runs. When ``operator.json`` already switched Company on, the operator decides and
+    ``company.json`` is not read. No valid file: Company stays off."""
+    if settings.company_ai:
+        return settings
     found = load_company_config(path)
     return replace(
         settings,
         company_ai=found is not None,
         company_base_url=found.base_url if found else None,
         company_model_name=found.model_name if found else None,
+        company_context_tokens=found.context_length if found else COMPANY_CONTEXT_TOKENS,
         company_file=path,
     )
 
@@ -133,6 +199,7 @@ def load(profile: Profile | str | None = None) -> Settings:
                 voice_root=_voice_root(),
                 recovery_pkg=paths.recovery_pkg(),
                 models_dir=_models_dir(),
+                **company_from_file(paths.operator_file()),
             ),
             company_file(chosen),
         )
@@ -153,6 +220,7 @@ def load(profile: Profile | str | None = None) -> Settings:
                 signing_seed=DEV_SIGNING_SEED,
                 public_paths=frozenset({"/health", "/docs", "/openapi.json"}),
                 docs_enabled=True,
+                **company_from_file(DEV_DIR / OPERATOR_FILE),
             ),
             company_file(chosen),
         )

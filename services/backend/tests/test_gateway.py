@@ -129,11 +129,12 @@ def test_g04_the_router_passes_on_the_engine_token_count(
     assert router.count_tokens("company", "m1", "a b c") is None
 
 
-def test_the_router_has_no_company_provider_yet(
+def test_the_router_has_no_company_provider_while_company_is_off(
     gateway: TestClient, engine_side: FakeAnswers
 ) -> None:
     router = router_for(gateway, engine_side)
-    assert router.model("company", None) is None  # G-06 is not built: chat answers unreachable
+    # No operator flag, no company provider (G-06, tests/test_company.py): chat answers unreachable.
+    assert router.model("company", None) is None
 
 
 def test_ac_chat_answers_through_router_and_gateway(

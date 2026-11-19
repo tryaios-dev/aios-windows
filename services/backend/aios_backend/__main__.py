@@ -23,7 +23,7 @@ import psutil
 import uvicorn
 
 from aios_backend.apps.chat.answers import AnswerSource
-from aios_backend.company import ConfiguredCompany
+from aios_backend.company import CompanyModels
 from aios_backend.config import Profile, Settings, load
 from aios_backend.gateway.app import create_gateway_app
 from aios_backend.main import configure_logging, create_app
@@ -69,10 +69,13 @@ async def watch_parent(parent: psutil.Process, server: uvicorn.Server) -> None:
             server.should_exit = True
 
 
-def _company_side(settings: Settings) -> ConfiguredCompany | None:
-    """The Company provider (G-06). It follows company.json while running, so a server set up
-    with ``aios-backend company set`` answers without restarting AIOS."""
-    return ConfiguredCompany(settings.company_file) if settings.company_file else None
+def _company_side(settings: Settings) -> CompanyModels | None:
+    """The Company provider (G-06): the server operator.json names, or else the one company.json
+    names. It follows company.json while running, so a server set up with
+    ``aios-backend company set`` answers without restarting AIOS."""
+    if settings.company_ai or settings.company_file is not None:
+        return CompanyModels(settings)
+    return None
 
 
 async def serve(

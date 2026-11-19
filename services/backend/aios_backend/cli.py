@@ -7,7 +7,7 @@
     uv run aios-backend routes | openapi [--check]
     uv run aios-backend serve-e2e --data DIR      # end-to-end tests only (token over stdin)
     uv run aios-backend company set               # DeepSeek; asks for the key (--url, --model)
-    uv run aios-backend company check | clear     # Company provider (G-06)
+    uv run aios-backend company key | check | clear   # Company provider (G-06)
 
 Works on the dev profile (services/backend/.dev/) or the test profile, never on the desktop
 profile: real user data is only touched by backend.exe itself. The one exception is ``company``:
@@ -29,7 +29,7 @@ from sqlalchemy import text
 
 from aios_backend import company
 from aios_backend.apps.chat.answers import ModelInfo
-from aios_backend.config import Profile, company_file, load
+from aios_backend.config import Profile, Settings, company_file, load
 from db import migrate
 from db.session import Database
 
@@ -219,6 +219,7 @@ def cmd_routes(args: argparse.Namespace) -> int:
 
 
 # ------------------------------------------------------------------ parser
+# ------------------------------------------------------------------ Company AI server (G-06)
 def _company_file(profile: str) -> Path:
     path = company_file(Profile(profile))
     if path is None:
@@ -226,19 +227,40 @@ def _company_file(profile: str) -> Path:
     return path
 
 
+def company_models(settings: Settings) -> company.CompanyModels:
+    return company.CompanyModels(settings)
+
+
+def _typed_or_piped_key() -> str:
+    """The key from stdin, or typed without echo. Never an argument, an environment variable or
+    a file AIOS reads (invariant 3)."""
+    if sys.stdin.isatty():
+        value = getpass.getpass("API key of the Company AI server (not shown): ")
+    else:
+        value = sys.stdin.readline()
+    # Windows PowerShell 5.1 puts a byte-order mark in front of text it pipes to a program.
+    return value.strip().lstrip("\ufeff").strip()
+
+
 def cmd_company_set(args: argparse.Namespace) -> int:
-    """Configure the Company server (G-06). The key is typed, not shown, and goes to the key
-    store only: never an argument, an environment variable or a file (FR-30)."""
+    """Configure the Company server (G-06) in company.json. The key is typed, not shown, and goes
+    to the key store only: never an argument, an environment variable or a file (FR-30)."""
     if not company.valid_url(args.url):
-        print("The address must start with https:// and have no user name or password.")
+        print(
+            "The address must be https:// with a DNS name, port 443 and no user name or password."
+        )
         return 2
-    config = company.CompanyConfig(args.url, args.model.strip(), args.context)
+    model = args.model.strip()
+    if not company.valid_model_name(model):
+        print("The model name may hold letters, digits and . _ : + - only (no spaces or /).")
+        return 2
     key = getpass.getpass("API key (it is not shown while you type): ").strip()
-    if not key:
-        print("No key entered; nothing changed.")
+    if not company.valid_key(key):
+        print("No usable key entered (16-512 printable characters, no spaces); nothing changed.")
         return 2
-    company.set_secret(company.KEY_NAME, key)
+    company.store_key(key)
     path = _company_file(args.profile)
+    config = company.CompanyConfig(company.server_url(args.url) or args.url, model, args.context)
     company.save_config(path, config)
     print(f"Company server saved: {config.base_url} (model {config.model_name}).")
     # Enough to spot a key pasted twice or cut short, never the key itself.
@@ -249,29 +271,48 @@ def cmd_company_set(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_company_check(args: argparse.Namespace) -> int:
-    """One short request to the configured server, to see that the address and key work."""
-    found = company.load_config(_company_file(args.profile))
-    if found is None:
-        print(
-            "No Company server is configured. Run: aios-backend company set --url ... --model ..."
-        )
-        return 2
-    provider = company.CompanyProvider(found)
-    if provider.model(company.PROVIDER, None) is None:
-        print("No API key in the key store. Run: aios-backend company set ...")
-        return 2
-    try:
-        answer = "".join(
-            provider.answer(
-                company.PROVIDER, found.model_name, [{"role": "user", "content": "Reply with: ok"}]
-            )
-        )
-    except Exception as exc:  # EngineError: a short code, never the key or text
-        print(f"Failed: {exc} (http_401 = wrong key, http_402 = no balance)")
+def cmd_company_key(args: argparse.Namespace) -> int:
+    """Store the company server's API key in the OS key store (invariant 3). The key is read
+    from stdin or typed without echo, never taken as an argument, and never printed."""
+    value = _typed_or_piped_key()
+    if not company.valid_key(value):
+        print("refused: the key must be 16-512 printable characters, no spaces", file=sys.stderr)
         return 1
-    print(f"OK: {found.base_url} answered ({len(answer)} characters).")
-    print("AIOS uses it within a few seconds; turn on Company AI in a project's settings.")
+    company.store_key(value)
+    print(f"stored in the OS key store (service AIOS, entry {company.KEY_NAME})")
+    return 0
+
+
+HINTS = {
+    "company_key_missing": "no key in the key store: run aios-backend company key",
+    "company_key_rejected": "the server refused the key: store the current one again",
+    "company_model_not_listed": "the server does not offer this model name",
+    "company_unreachable": "no answer from the server (address, network or server down)",
+}
+
+
+def cmd_company_check(args: argparse.Namespace) -> int:
+    """Is the Company AI server set up and answering? Asks its model list (no answer is
+    generated, so it costs nothing) and prints the reason when it is not."""
+    settings = load(args.profile)
+    if not settings.company_ai:
+        print(
+            "Company AI is off: no valid operator.json or company.json "
+            "(run aios-backend company set, or see docs/operations/company-server.md)"
+        )
+        return 2
+    source = "company.json" if settings.company_file is not None else "operator.json"
+    models = company_models(settings)
+    info = models.recheck()
+    if info is None:
+        code = models.last_error or "company_unreachable"
+        hint = HINTS.get(code, "")
+        print(f"not reachable: {settings.company_base_url}  ({code}{': ' + hint if hint else ''})")
+        return 1
+    print(
+        f"reachable: {settings.company_base_url}  model {info.model_id}  "
+        f"context {info.context_length} tokens  (from {source})"
+    )
     return 0
 
 
@@ -280,7 +321,7 @@ def cmd_company_clear(args: argparse.Namespace) -> int:
     path.unlink(missing_ok=True)
     with contextlib.suppress(Exception):  # no key stored
         company.delete_secret(company.KEY_NAME)
-    print("Company server and key removed.")
+    print("Company server and key removed (operator.json, if any, is left as it is).")
     return 0
 
 
@@ -347,7 +388,9 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--profile", choices=profiles, default=Profile.DESKTOP.value)
     c.add_argument("--no-check", dest="check", action="store_false", help="do not test the server")
     c.set_defaults(func=cmd_company_set)
-    c = csub.add_parser("check", help="send one short request to the configured server")
+    c = csub.add_parser("key", help="store only the API key in the OS key store (stdin or typed)")
+    c.set_defaults(func=cmd_company_key)
+    c = csub.add_parser("check", help="check that the configured server answers (its model list)")
     c.add_argument("--profile", choices=profiles, default=Profile.DESKTOP.value)
     c.set_defaults(func=cmd_company_check)
     c = csub.add_parser("clear", help="remove the server address and the key")

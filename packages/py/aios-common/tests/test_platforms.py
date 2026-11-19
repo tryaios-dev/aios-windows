@@ -42,6 +42,22 @@ def test_windows_data_folder_is_under_local_app_data(
     assert WindowsPlatform().data_dir() == tmp_path / "AIOS"
 
 
+def test_windows_operator_folder_is_machine_wide(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """G-06: settings an operator sets for every user (the Company AI server) live outside the
+    per-user data folder, in the machine-wide program-data folder."""
+    monkeypatch.setenv("ProgramData", str(tmp_path))
+    assert WindowsPlatform().operator_dir() == tmp_path / "AIOS"
+
+
+def test_generic_operator_folder_is_the_config_home(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    assert GenericPlatform().operator_dir() == tmp_path / "AIOS"
+
+
 def test_hardware_of_this_machine(tmp_path: Path) -> None:
     hw = platforms.current().hardware(tmp_path / "models")
     assert hw.cores >= 1 and hw.ram_gb >= 0 and hw.free_disk_gb >= 0 and hw.cpu and hw.os

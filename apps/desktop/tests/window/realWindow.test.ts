@@ -44,14 +44,29 @@ export function outsideAddresses(log: string): string[] {
   return [...found].sort();
 }
 
+/** What Electron main and the backend printed (the backend's stderr is inherited by main), so a
+ * start that fails on a CI runner says why instead of only "did not open". */
+const output: string[] = [];
+const lastOutput = () => output.join("").split(/\r?\n/).filter(Boolean).slice(-40).join("\n");
+
+/** Longer than the app's own wait for the backend (BACKEND_START_TIMEOUT_MS, 120 s in
+ * src/main/backend/spawn.ts) plus opening the window, so a slow cold start on a CI runner is not
+ * cut short by the test before the app itself would have given up. */
+const MAIN_WINDOW_WAIT_MS = 180_000;
+
 /** The main window (the small "Starting AIOS…" window comes first and closes). */
 async function mainWindow(a: ElectronApplication): Promise<Page> {
-  for (let i = 0; i < 240; i++) {
+  const deadline = Date.now() + MAIN_WINDOW_WAIT_MS;
+  while (Date.now() < deadline) {
     const found = a.windows().find((w) => w.url().endsWith("index.html"));
     if (found) return found;
     await new Promise((r) => setTimeout(r, 500));
   }
-  throw new Error("the main window did not open");
+  const open = a.windows().map((w) => w.url().slice(0, 80));
+  throw new Error(
+    `the main window did not open within ${MAIN_WINDOW_WAIT_MS / 1000} s ` +
+      `(open windows: ${JSON.stringify(open)})\n--- app output ---\n${lastOutput()}`,
+  );
 }
 
 beforeAll(async () => {
@@ -64,12 +79,15 @@ beforeAll(async () => {
   // Chromium's own network log for the whole run (C-01, L-02): every connection the app's
   // Chromium side makes, read after the app has closed.
   args: [APP_DIR, `--user-data-dir=${path.join(data, "electron")}`, `--log-net-log=${netLog()}`], env, timeout: 180_000 });
+  for (const stream of [app.process().stdout, app.process().stderr]) {
+    stream?.on("data", (chunk: Buffer) => output.push(chunk.toString("utf8")));
+  }
   page = await mainWindow(app);
   page.on("console", (m) => {
     if (m.type() === "error" && m.text().startsWith("Refused to")) refused.push(m.text().slice(0, 120));
   });
   await page.waitForLoadState("domcontentloaded");
-}, 240_000);
+}, 400_000); // electron.launch (up to 180 s) + MAIN_WINDOW_WAIT_MS
 
 afterAll(async () => {
   await app?.close().catch(() => undefined);
