@@ -25,6 +25,11 @@ extraResources:
     to: llama/cpu
   - from: ../../build/out/llama/vulkan
     to: llama/vulkan
+  # whisper-server CPU + Vulkan (speech to text, ADR 0016), from build/whisper/manifest.json
+  - from: ../../build/out/whisper/cpu
+    to: whisper/cpu
+  - from: ../../build/out/whisper/vulkan
+    to: whisper/vulkan
   # licence texts for bundled binaries and models (licenses/README.md)
   - from: ../../licenses
     to: licenses

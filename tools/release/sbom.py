@@ -3,8 +3,8 @@
 Covers what ships in the installer:
 * Python runtime packages in backend.exe (from uv.lock, no dev tools)
 * Node production packages of the Electron app and UI (from pnpm-lock.yaml)
-* bundled binaries: Electron, SQLCipher (build/sqlcipher/pin.json), and llama.cpp built from
-  the source pinned in build/llama/manifest.json
+* bundled binaries: Electron, SQLCipher (build/sqlcipher/pin.json), and llama.cpp and
+  whisper.cpp built from the sources pinned in build/llama/ and build/whisper/manifest.json
 """
 
 import datetime
@@ -112,6 +112,19 @@ def binary_components() -> list[dict[str, object]]:
                 "version": rel,
                 "description": "llama-server built from source with the patches in build/llama/patches/",
                 "purl": f"pkg:github/ggml-org/llama.cpp@{rel}",
+            }
+        )
+    whisper = json.loads((ROOT / "build/whisper/manifest.json").read_text("utf-8"))
+    wrel = str(whisper.get("whisper_cpp_release", ""))
+    if re.fullmatch(r"v\d+\.\d+\.\d+", wrel):
+        comps.append(
+            {
+                "type": "application",
+                "name": "whisper.cpp",
+                "version": wrel,
+                "description": "whisper-server built from source with the patches in build/whisper/patches/",
+                "licenses": [{"license": {"id": "MIT"}}],
+                "purl": f"pkg:github/ggml-org/whisper.cpp@{wrel}",
             }
         )
     return comps

@@ -56,13 +56,16 @@ jobs:
           Add-Content $env:GITHUB_ENV "VULKAN_SDK=C:\VulkanSDK\$v"
           Add-Content $env:GITHUB_PATH "C:\VulkanSDK\$v\bin"
       - run: pnpm build:llama                      # patched llama-server, CPU + Vulkan (D-03)
+      - run: pnpm build:whisper                    # patched whisper-server, CPU + Vulkan (ADR 0016)
       - run: pnpm build:backend
-      - name: Sign backend.exe, evidence-writer.exe and both llama-server builds (+ their DLLs)
+      - name: Sign backend.exe, evidence-writer.exe, both llama-server and whisper-server builds (+ their DLLs)
         run: |
           powershell -File build/signing/sign.ps1 build/out/backend
           powershell -File build/signing/sign.ps1 build/out/evidence-writer
           powershell -File build/signing/sign.ps1 build/out/llama/cpu
           powershell -File build/signing/sign.ps1 build/out/llama/vulkan
+          powershell -File build/signing/sign.ps1 build/out/whisper/cpu
+          powershell -File build/signing/sign.ps1 build/out/whisper/vulkan
       - run: pnpm build
       - name: Package (azure-sign.js signs the Electron files and the NSIS installer)
         run: pnpm --filter @aios/desktop package
@@ -86,6 +89,7 @@ jobs:
             apps/desktop/release/latest.yml
             build/out/sbom/
             build/out/llama/manifest-*.json
+            build/out/whisper/manifest-*.json
           retention-days: 90
       - name: Draft GitHub release (keeps installer + SBOM beyond artefact retention)
         if: startsWith(github.ref, 'refs/tags/')

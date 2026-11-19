@@ -6,6 +6,8 @@ import { Kbd } from '@/components/ui/layout'
 import { Tooltip } from '@/components/ui/overlays'
 import type { Dictation } from './useDictation'
 import { platform } from '@/lib/platform'
+import { useNavigate } from 'react-router'
+import { useStore } from '@/lib/store'
 
 const BARS = 56
 
@@ -51,6 +53,9 @@ export function VoicePanel({ dictation, className }: { dictation: Dictation; cla
   const ringFar = useRef<HTMLSpanElement>(null)
   const done = useRef<HTMLButtonElement>(null)
   const listening = phase === 'listening'
+  // Without the languages spoken, short phrases can come out in the wrong one: say where to set them.
+  const noLanguages = useStore((s) => !s.settings.voice_languages?.length)
+  const navigate = useNavigate()
 
   // The sound, drawn straight onto the page each frame so React is not asked to redraw sixty times a second.
   useEffect(() => {
@@ -178,12 +183,24 @@ export function VoicePanel({ dictation, className }: { dictation: Dictation; cla
         <p className="flex min-w-0 items-center gap-1.5 text-xs leading-4.5 text-ink-50">
           <Lock className="size-3 shrink-0 text-green" strokeWidth={2.25} aria-hidden />
           <span className="truncate">Turned into text on this computer</span>
+          {noLanguages && (
+            <button
+              type="button"
+              onClick={() => {
+                cancel()
+                navigate('/settings/voice')
+              }}
+              className="shrink-0 rounded-sm font-medium text-green underline-offset-2 hover:underline"
+            >
+              Choose your languages
+            </button>
+          )}
         </p>
         <div className="flex shrink-0 items-center gap-1.5">
           <Button size="sm" variant="ghost" disabled={writing} onClick={cancel} trailing={<Kbd>Esc</Kbd>}>
             Cancel
           </Button>
-          <Button ref={done} size="sm" variant="primary" disabled={writing || words.length === 0} onClick={finish} leading={<Check className="size-3.5" strokeWidth={2.5} />}>
+          <Button ref={done} size="sm" variant="primary" disabled={writing} onClick={finish} leading={<Check className="size-3.5" strokeWidth={2.5} />}>
             Done
           </Button>
         </div>

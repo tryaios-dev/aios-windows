@@ -118,13 +118,24 @@ def _crash(backend: subprocess.Popen[bytes], writer: psutil.Process) -> None:
     on Windows the venv's python.exe is a launcher that runs the interpreter as its child, so
     there are launchers between the backend and the writer; they go too, as the installed app
     has none."""
-    for p in [psutil.Process(backend.pid), *psutil.Process(backend.pid).children(recursive=True)]:
-        if p.pid != writer.pid:
-            try:
-                p.kill()
-            except psutil.NoSuchProcess:
-                pass
+    killed = [
+        p
+        for p in [
+            psutil.Process(backend.pid),
+            *psutil.Process(backend.pid).children(recursive=True),
+        ]
+        if p.pid != writer.pid
+    ]
+    for p in killed:
+        try:
+            p.kill()
+        except psutil.NoSuchProcess:
+            pass
     backend.wait(10)
+    # A kill is not instant on Windows: wait until every one is gone, or the writer's real
+    # starter (a launcher's child) can still look alive and the new start says writer_locked.
+    _, alive = psutil.wait_procs(killed, timeout=10)
+    assert not alive, alive
 
 
 @pytest.fixture

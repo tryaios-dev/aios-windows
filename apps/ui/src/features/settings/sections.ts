@@ -1,7 +1,7 @@
 import { ART } from '@/assets/icons'
 
 /** Sections of /settings/:section, in navigation order. Named for what people come here to do. */
-export const SETTINGS_SECTIONS = ['general', 'backup', 'privacy', 'computer', 'troubleshooting', 'about'] as const
+export const SETTINGS_SECTIONS = ['general', 'backup', 'privacy', 'computer', 'voice', 'troubleshooting', 'about'] as const
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]
 
 export interface SectionMeta {
@@ -17,6 +17,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   backup: { label: 'Backup and recovery', description: 'Keep a copy of your work away from this computer, and know how to get it back.', icon: ART.vault },
   privacy: { label: 'Privacy and connections', description: 'What stays on this computer, and the few times AIOS goes online.', icon: ART.privacy },
   computer: { label: 'This computer', description: 'How fast AIOS answers here, and what this computer has.', icon: ART.computer },
+  voice: { label: 'Voice', description: 'Speak instead of typing: the languages you speak, and the speech model.', icon: ART.voice },
   troubleshooting: { label: 'Troubleshooting', description: 'Check that AIOS is working, and get help when it is not.', icon: ART.troubleshooting },
   about: { label: 'About', description: 'This version, what is in it, and who to ask.', icon: ART.about },
 }

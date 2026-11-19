@@ -1,0 +1,195 @@
+"""Start whisper-server and turn one phrase into text (ADR 0016; contract IPC-35 to IPC-38).
+
+The key is derive(T, voice), written as one line to whisper-server's stdin (``--api-key-stdin``,
+build/whisper/patches). Every route of the patched server needs it, /health included. The
+environment is built from scratch, as for the chat engine. Output is discarded: it is never
+logged (SR-07), and the server is never started with a flag that prints the text.
+"""
+
+import os
+import socket
+import subprocess
+import time
+from dataclasses import dataclass
+from pathlib import Path
+
+import httpx
+
+from aios_backend.engine.job import ChildJob
+from aios_common import platforms
+from aios_common.handshake import derive
+from aios_common.logging import get_logger, log_event
+
+VOICE_PURPOSE = "aios/ipc/v1/voice"
+EXE = "whisper-server" + platforms.current().exe_suffix
+# IPC-36: the only flags besides model, port and threads. "-l auto": the text stays in the
+# language that was spoken (ADR 0016); upstream's default is English.
+FIXED_FLAGS = ("--host", "127.0.0.1", "--api-key-stdin", "-l", "auto", "-nt")
+# The first start of a new program waits for the antivirus scan: over 60 s on the clean VM while
+# the AI model downloaded alongside (same limit as the chat engine).
+START_TIMEOUT_S = 180.0
+TRANSCRIBE_TIMEOUT_S = 120.0
+
+log = get_logger("voice")
+
+
+class VoiceError(Exception):
+    """Start-up or transcription failed. ``str(exc)`` is a short code, never server output."""
+
+
+def threads() -> int:
+    """All cores up to 8: the spike's 4-core machine used 4."""
+    return max(1, min(8, os.cpu_count() or 4))
+
+
+def _free_port() -> int:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return int(s.getsockname()[1])
+
+
+@dataclass
+class Whisper:
+    process: "subprocess.Popen[bytes]"
+    port: int
+    key: str
+    model: Path
+    build: str = "cpu"
+
+    @property
+    def base_url(self) -> str:
+        return f"http://127.0.0.1:{self.port}"
+
+    def alive(self) -> bool:
+        return self.process.poll() is None
+
+    def stop(self) -> None:
+        if self.alive():
+            self.process.terminate()
+            try:
+                self.process.wait(10)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+
+    def health(self) -> int | None:
+        try:
+            r = httpx.get(f"{self.base_url}/health", headers=self._auth(), timeout=2.0)
+            return r.status_code
+        except httpx.HTTPError:
+            return None
+
+    def transcribe(self, wav: bytes, language: str = "auto") -> str:
+        """The text of one phrase. ``language``: a Whisper code, or "auto" for Whisper's own
+        guess.
+
+        Whisper always looks at its full 30 s window. A window shortened to the phrase (the
+        spike's ``-ac``, faster) is not used: on the pinned whisper.cpp, the same phrase sent
+        twice came back right once, then as "... ... ..." or in English, depending on the
+        request before it (seen on the VM, measured locally)."""
+        body = self._post(
+            wav,
+            {
+                "response_format": "json",
+                "temperature": "0.0",
+                # No retries at higher temperatures: on audio it cannot make sense of, those give
+                # random words in other scripts and take 10 s or more (seen on the VM). Upstream
+                # reads --no-fallback but never applies it; this is the setting it would change.
+                "temperature_inc": "0.0",
+                "no_timestamps": "true",
+                "language": language,
+            },
+        )
+        text = body.get("text")
+        return text if isinstance(text, str) else ""
+
+    def detect(self, wav: bytes) -> dict[str, float]:
+        """Whisper's score per language code for this phrase, without turning it into text."""
+        body = self._post(
+            wav,
+            {
+                "response_format": "verbose_json",
+                "detect_language": "true",
+            },
+        )
+        scores = body.get("language_probabilities")
+        if not isinstance(scores, dict):
+            return {}
+        return {str(k): float(v) for k, v in scores.items() if isinstance(v, int | float)}
+
+    def _post(self, wav: bytes, data: dict[str, str]) -> dict[str, object]:
+        try:
+            r = httpx.post(
+                f"{self.base_url}/inference",
+                headers=self._auth(),
+                files={"file": ("phrase.wav", wav, "audio/wav")},
+                data=data,
+                timeout=TRANSCRIBE_TIMEOUT_S,
+            )
+        except httpx.HTTPError as exc:
+            raise VoiceError("voice_unreachable") from exc
+        if r.status_code != 200:
+            raise VoiceError(f"voice_http_{r.status_code}")
+        try:
+            body = r.json()
+        except ValueError as exc:
+            raise VoiceError("voice_bad_answer") from exc
+        return body if isinstance(body, dict) else {}
+
+    def _auth(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self.key}"}
+
+
+def start(
+    voice_dir: Path, model: Path, temp_dir: Path, job: ChildJob, build: str = "cpu"
+) -> Whisper:
+    """Start whisper-server and wait until it answers /health with the key."""
+    exe = voice_dir / EXE
+    if not exe.is_file():
+        raise VoiceError("voice_not_built")
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    key = derive(VOICE_PURPOSE)
+    for attempt in range(3):
+        port = _free_port()
+        began = time.monotonic()
+        proc = subprocess.Popen(  # noqa: S603 - fixed executable and arguments
+            [
+                str(exe),
+                "-m",
+                str(model),
+                "--port",
+                str(port),
+                "-t",
+                str(threads()),
+                *FIXED_FLAGS,
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env=platforms.current().child_env(voice_dir, temp_dir),
+            cwd=temp_dir,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        job.assign(proc)
+        assert proc.stdin is not None
+        proc.stdin.write(key.encode("ascii") + b"\n")
+        proc.stdin.close()
+
+        whisper = Whisper(proc, port, key, model, build)
+        while time.monotonic() - began < START_TIMEOUT_S:
+            if not whisper.alive():
+                break  # e.g. port taken in between: try another one
+            if whisper.health() == 200:
+                log_event(
+                    log,
+                    "voice_started",
+                    port=port,
+                    component=build,
+                    duration_ms=round((time.monotonic() - began) * 1000),
+                )
+                return whisper
+            time.sleep(0.1)
+        else:
+            whisper.stop()
+            raise VoiceError("voice_start_timeout")
+        log_event(log, "voice_exited_on_start", error_code=str(proc.returncode), status=attempt)
+    raise VoiceError("voice_exit_on_start")

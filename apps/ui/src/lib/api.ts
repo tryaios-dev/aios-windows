@@ -59,7 +59,7 @@ export type RestoreResult = { ok: true; epoch: number | null } | { ok: false; er
 export type ImportOutcome = { ok: true; result: ImportResult } | { ok: false; error: string }
 
 /** The settings a person can change; the rest are results of checks. */
-export type SettingsChange = Partial<Pick<Settings, 'update_check' | 'catalogue_check' | 'safe_mode_cpu' | 'default_model_id'>>
+export type SettingsChange = Partial<Pick<Settings, 'update_check' | 'catalogue_check' | 'safe_mode_cpu' | 'default_model_id' | 'voice_languages'>>
 
 /** Characters in a recovery key without hyphens: 9 groups of 4 (Recovery Package v1). */
 export const RECOVERY_KEY_LENGTH = 36
