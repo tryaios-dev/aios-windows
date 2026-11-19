@@ -23,6 +23,7 @@ import psutil
 import uvicorn
 
 from aios_backend.apps.chat.answers import AnswerSource
+from aios_backend.company import ConfiguredCompany
 from aios_backend.config import Profile, Settings, load
 from aios_backend.gateway.app import create_gateway_app
 from aios_backend.main import configure_logging, create_app
@@ -68,6 +69,12 @@ async def watch_parent(parent: psutil.Process, server: uvicorn.Server) -> None:
             server.should_exit = True
 
 
+def _company_side(settings: Settings) -> ConfiguredCompany | None:
+    """The Company provider (G-06). It follows company.json while running, so a server set up
+    with ``aios-backend company set`` answers without restarting AIOS."""
+    return ConfiguredCompany(settings.company_file) if settings.company_file else None
+
+
 async def serve(
     settings: Settings,
     db: Database,
@@ -98,12 +105,13 @@ async def serve(
     gateway_task: asyncio.Task[None] | None = None
     gateway_port: int | None = None
     engine_side = app.state.answers
+    company_side = _company_side(settings)
     if local and answers is None and engine_side is not None:
         gateway_sock = bind_loopback(0)
         gateway_port = gateway_sock.getsockname()[1]
         gateway = uvicorn.Server(
             uvicorn.Config(
-                create_gateway_app(engine_side),
+                create_gateway_app(engine_side, company_side),
                 host="127.0.0.1",
                 log_config=None,
                 access_log=False,
@@ -118,7 +126,9 @@ async def serve(
                 await gateway_task
                 return
             await asyncio.sleep(0.01)
-        app.state.answers = ProviderRouter(engine_side, f"http://127.0.0.1:{gateway_port}")
+        app.state.answers = ProviderRouter(
+            engine_side, f"http://127.0.0.1:{gateway_port}", company=company_side
+        )
 
     if gateway_port is None:
         on_ready(sock.getsockname()[1])
