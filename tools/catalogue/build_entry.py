@@ -17,9 +17,9 @@ The script downloads many gigabytes; run it on a build machine, not in CI.
 Example::
 
     uv run python tools/catalogue/build_entry.py --entry-id qwen3-4b-q4_k_m \\
-        --llama-cpp-dir C:/build/llama.cpp-b11960 \\
-        --quantize-bin C:/build/llama.cpp-b11960/bin/llama-quantize.exe \\
-        --llama-cpp-release b11960 --work-dir D:/model-build
+        --llama-cpp-dir C:/build/llama.cpp-b12111 \\
+        --quantize-bin C:/build/llama.cpp-b12111/bin/llama-quantize.exe \\
+        --llama-cpp-release b12111 --work-dir D:/model-build
 
 Set HF_TOKEN in the environment if the Hub rate-limits anonymous downloads.
 Standard library only.
@@ -212,7 +212,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument(
         "--llama-cpp-release",
         required=True,
-        help="release tag, e.g. b11960 (must match build/llama/manifest.json)",
+        help="release tag, e.g. b12111 (must match build/llama/manifest.json)",
     )
     p.add_argument(
         "--work-dir",

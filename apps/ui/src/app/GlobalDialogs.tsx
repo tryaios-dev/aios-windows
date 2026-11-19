@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
+import { api } from '@/lib/api'
 import { useStore } from '@/lib/store'
 import { modelLabel, sizeBlurb } from '@/lib/words'
 import { catalogueEntry } from '@/data/catalogue'
@@ -71,7 +72,7 @@ function ModelChoiceDialog() {
         if (!o) answer(null)
       }}
       title="Which AI model should carry on?"
-      description={`${removed} is no longer installed. Your message waits until you choose.`}
+      description={`${removed} is no longer installed. Your message stays in the box; send it once you choose.`}
       width="sm"
       footer={
         <>
@@ -79,7 +80,9 @@ function ModelChoiceDialog() {
           {installed.length === 0 ? (
             <Button variant="primary" onClick={() => { answer(null); navigate('/models') }}>Open AI models</Button>
           ) : (
-            <Button variant="primary" onClick={() => answer(selected)} disabled={!selected}>Use this AI model</Button>
+            <Button variant="primary" onClick={() => prompt && selected && void api.conversations.chooseModel(prompt.conversation_id, selected)} disabled={!selected}>
+              Use this AI model
+            </Button>
           )}
         </>
       }

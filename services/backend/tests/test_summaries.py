@@ -1,9 +1,11 @@
-"""Long conversations stay within the model's context (M-07): summaries of the earlier messages.
+"""Long conversations stay within the model's context (M-07, MVP 11.2): summaries of the earlier
+messages.
 
 Each request is rebuilt from the conversation: the latest summary, then the newest messages that
-fit. When the history no longer fits, the earlier part is summarised by the same model (through the
-provider router and the gateway, like any answer), stored in ``summaries`` and recorded as a
-content-free inference event.
+fit. After an answer, once the history after the summary takes more than half the budget, the
+earlier part is summarised in the background by the same model (through the provider router and
+the gateway, like any answer), stored in ``summaries`` and recorded as a content-free inference
+event.
 """
 
 import json
@@ -40,8 +42,10 @@ def conversation(api: TestClient) -> str:
 
 
 def send(api: TestClient, conv: str, text: str) -> dict:
+    """Send, then wait for the summary refresh that runs in the background after the answer."""
     resp = api.post(f"/conversations/{conv}/messages", json={"text": text})
     assert resp.status_code == 200, resp.text
+    api.app.state.generations.background.wait(10)  # type: ignore[attr-defined]
     return resp.json()
 
 

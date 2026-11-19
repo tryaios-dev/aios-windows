@@ -20,6 +20,21 @@
       "filename": "Ornith-1.5-9B-Q8_0.gguf",
       "size_bytes": 9786060384,
       "sha256": "22086870b009dbe9815ee752c48a82de930118a7c5ce5599590892ae03b8b010"
+    },
+    "sage-a1.5-q4_k_m-mradermacher-gguf": {
+      "repo": "mradermacher/Sage-A1.5-GGUF",
+      "revision": "fedd56b69117f706f48d0ac4ec565e9211d4407d",
+      "filename": "Sage-A1.5.Q6_K.gguf",
+      "size_bytes": 29208732672,
+      "sha256": "852dffdde471f41b15c264c35944e1ca8b380e68e823679ea816f3ca664b2fe4",
+      "note": "Q6_K instead of Q8_0: the Q8_0 file (37.8 GB) does not fit the review machine's 32 GB of RAM."
+    },
+    "qwen3.8-27b-ud-q4_k_m-unsloth-gguf": {
+      "repo": "unsloth/Qwen3.8-27B-GGUF",
+      "revision": "4af51b3542f775b0a8e4b310bfb3f17e01c306c9",
+      "filename": "Qwen3.8-27B-Q8_0.gguf",
+      "size_bytes": 29047086048,
+      "sha256": "a680f44a06920e5d689774823782006aa3acc8db95750323373b24139b67e348"
     }
   }
 }

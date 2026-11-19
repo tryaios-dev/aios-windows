@@ -19,7 +19,6 @@ import { RestoreScreen } from '@/features/setup/RestoreScreen'
 import { CannotOpenScreen } from '@/features/setup/CannotOpenScreen'
 import { GlobalDialogs } from '@/app/GlobalDialogs'
 import { Toaster } from '@/app/Toaster'
-import { SpikeScreen } from '@/features/spike' // SPIKE-D04
 
 /** Old links to the per-project record keep working under its new name. */
 function EvidenceRedirect() {
@@ -82,7 +81,6 @@ export default function App() {
           <Route path="skills" element={<SkillsView />} />
           <Route path="resources" element={<ResourcesView />} />
           <Route path="settings/:section?" element={<SettingsView />} />
-          <Route path="spike" element={<SpikeScreen />} /> {/* SPIKE-D04: temporary */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

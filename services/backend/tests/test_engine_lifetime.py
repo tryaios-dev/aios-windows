@@ -4,8 +4,6 @@ Skipped unless AIOS_LLAMA_SERVER (a built llama-server inside a ``cpu`` folder) 
 AIOS_TEST_MODEL (a small GGUF) are set, as in the CI engine jobs.
 """
 
-import dataclasses
-import os
 import shutil
 import subprocess
 import sys
@@ -17,31 +15,25 @@ from typing import Any
 import psutil
 import pytest
 from fastapi.testclient import TestClient
-from tests.conftest import LAUNCH_TOKEN, LOOPBACK
+from tests.engine_support import MODEL, SERVER, ask, client, local_app, needs_engine
 
 from aios_backend.config import Settings
-from aios_backend.main import create_app
 from db.session import Database
 
-SERVER = os.environ.get("AIOS_LLAMA_SERVER")
-MODEL = os.environ.get("AIOS_TEST_MODEL")
-pytestmark = pytest.mark.skipif(
-    not (SERVER and MODEL), reason="set AIOS_LLAMA_SERVER and AIOS_TEST_MODEL"
-)
-PROMPT = {"messages": [{"role": "user", "content": "Once upon a time"}], "max_tokens": 8}
+pytestmark = needs_engine
 
 
 def _answer(c: TestClient) -> None:
-    with c.stream("POST", "/spike/v1/chat/completions", json=PROMPT) as resp:
-        assert resp.status_code == 200
-        body = "".join(resp.iter_lines())
-    assert "error" not in body
+    assert ask(c).strip()
 
 
 def _wait_gone(pid: int, timeout: float = 15) -> bool:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        if not psutil.pid_exists(pid) or psutil.Process(pid).status() == psutil.STATUS_ZOMBIE:
+        try:
+            if psutil.Process(pid).status() == psutil.STATUS_ZOMBIE:
+                return True
+        except psutil.NoSuchProcess:  # it may exit between any two checks
             return True
         time.sleep(0.1)
     return False
@@ -59,20 +51,10 @@ def _wait_health(c: TestClient, done: Callable[[dict[str, Any]], bool], timeout:
 def test_idle_unload_frees_the_engine_and_the_next_message_restarts_it(
     settings: Settings, db: Database, tmp_path: Path
 ) -> None:
-    models = tmp_path / "models"
-    models.mkdir()
-    shutil.copy(str(MODEL), models / "test.gguf")
-    s = dataclasses.replace(
-        settings,
-        engine_root=Path(str(SERVER)).parent.parent,
-        models_dir=models,
-        engine_idle_unload_s=1.0,
-    )
-    headers = {"Authorization": f"Bearer {LAUNCH_TOKEN}"}
-    with TestClient(create_app(s, db), client=LOOPBACK, headers=headers) as c:
+    with client(local_app(settings, db, tmp_path, engine_idle_unload_s=1.0)) as c:
         _answer(c)
         health = c.get("/health").json()
-        assert health["engine"] == "ok" and health["engine_model"] == "test.gguf"
+        assert health["engine"] == "ok" and health["engine_model"] == Path(str(MODEL)).name
         proc = c.app.state.engine._engine.process  # type: ignore[attr-defined]
         assert proc.stdin.closed  # IPC-53: key written, pipe closed by the parent
         pid = proc.pid
@@ -99,16 +81,18 @@ def test_ac_09_gpu_engine_dying_still_answers_from_the_cpu_build(
     root = tmp_path / "llama"
     shutil.copytree(Path(str(SERVER)).parent, root / "cpu", symlinks=True)
     shutil.copytree(Path(str(SERVER)).parent, root / "vulkan", symlinks=True)
-    models = tmp_path / "models"
-    models.mkdir()
-    shutil.copy(str(MODEL), models / "test.gguf")
-    app = create_app(settings, db)
+    app = local_app(settings, db, tmp_path)
     components: Components = app.state.components
-    app.state.engine = EngineManager(
-        root, models, tmp_path / "engine-tmp", components, probe_fn=lambda d, t: ["Vulkan0"]
+    manager = EngineManager(
+        root,
+        tmp_path / "models",
+        tmp_path / "engine-tmp",
+        components,
+        probe_fn=lambda d, t: ["Vulkan0"],
     )
-    headers = {"Authorization": f"Bearer {LAUNCH_TOKEN}"}
-    with TestClient(app, client=LOOPBACK, headers=headers) as c:
+    app.state.engine = manager
+    app.state.answers._manager = manager  # the local model module asks this manager
+    with client(app) as c:
         _answer(c)
         assert c.get("/health").json()["engine_build"] == "vulkan"
         gpu = app.state.engine._engine.process

@@ -5,8 +5,8 @@ local AI gateway (G-01) on loopback, presenting ``derive(T, "aios/ipc/v1/gateway
 is the only inference endpoint on the device (invariant 1, IPC-02). Two providers: ``local`` and,
 when a server is configured, ``company`` (G-06), behind its confirmation rules (PR-03).
 
-Model facts (context length, runtime) come from the local model module directly: they are
-metadata about installed files, not inference.
+Model facts (context length, runtime, and how many tokens a text is, G-04) come from the local
+model module directly: they are facts about the installed model, not answers from it.
 """
 
 import json
@@ -49,6 +49,14 @@ class ProviderRouter:
         if provider != "local":
             return None
         return self._models.model(provider, model_id)
+
+    def count_tokens(self, provider: str, model_id: str, text: str) -> int | None:
+        """The loaded model's own token count, or None (chat then estimates)."""
+        count = getattr(self._models, "count_tokens", None)
+        if provider != "local" or not callable(count):
+            return None
+        result = count(provider, model_id, text)
+        return result if isinstance(result, int) else None
 
     def answer(self, provider: str, model_id: str, messages: list[dict[str, str]]) -> Iterator[str]:
         if provider not in ("local", "company") or (provider == "company" and not self._company):

@@ -118,6 +118,17 @@ def test_the_router_answers_through_the_gateway(
     assert router.model("local", "m1") == engine_side.model("local", "m1")
 
 
+def test_g04_the_router_passes_on_the_engine_token_count(
+    gateway: TestClient, engine_side: FakeAnswers
+) -> None:
+    """Token counts are model facts, like the context length: from the local model module."""
+    router = router_for(gateway, engine_side)
+    assert router.count_tokens("local", "m1", "a b c") is None  # the fake has no tokenizer
+    engine_side.count_tokens = lambda provider, model_id, text: len(text.split())  # type: ignore[attr-defined]
+    assert router.count_tokens("local", "m1", "a b c") == 3
+    assert router.count_tokens("company", "m1", "a b c") is None
+
+
 def test_the_router_has_no_company_provider_yet(
     gateway: TestClient, engine_side: FakeAnswers
 ) -> None:

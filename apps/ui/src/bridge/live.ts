@@ -113,6 +113,9 @@ const MESSAGES: Record<string, string> = {
   not_enough_disk: "Not enough free space on this computer for this AI model.",
   host_not_allowed: "The download was sent to a place AIOS does not allow, so it was stopped.",
   engine_failed: "The AI model could not answer. Try again; if it keeps failing, restart AIOS.",
+  busy: "AIOS is writing an answer. Wait for it to finish, or stop it, then try again.",
+  model_in_use: "AIOS is writing an answer with this AI model. Wait for it to finish, or stop it, then try again.",
+  package_file_not_found: "The AI model file from the installer package is no longer there.",
 };
 
 export function messageFor(err: unknown): string {
