@@ -49,6 +49,7 @@ HTTP_CLIENTS = {
     "aios_backend/evidence/client.py",
     "aios_backend/engine/launcher.py",  # loopback: polls the engine's /health (IPC-33)
     "aios_backend/engine/client.py",  # loopback: answers from the engine (G-02)
+    "aios_backend/voice/launcher.py",  # loopback: whisper-server health and phrases (ADR 0016)
     "aios_backend/providers.py",  # loopback: the provider router calls the gateway (G-01)
 }
 NETWORK_MODULES = {"httpx", "requests", "urllib.request", "http.client", "aiohttp", "socket"}

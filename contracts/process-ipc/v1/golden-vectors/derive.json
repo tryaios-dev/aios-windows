@@ -21,6 +21,12 @@
       "derived": "77158fdcf2ef60e1394194b23d18e51264e25da818c8922f6239bb5ee086405e"
     },
     {
+      "token": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "purpose": "voice",
+      "purpose_string": "aios/ipc/v1/voice",
+      "derived": "4e72a42d024a74cf619e06a1eb2e15e4a4048f1f8f548ffcb8b247a820083177"
+    },
+    {
       "token": "__79_Pv6-fj39vX08_Lx8O_u7ezr6uno5-bl5OPi4eA",
       "purpose": "gateway",
       "purpose_string": "aios/ipc/v1/gateway",
@@ -37,6 +43,12 @@
       "purpose": "engine",
       "purpose_string": "aios/ipc/v1/engine",
       "derived": "59de718ef1ef8cfc2c268241efc308d3427a267307459810275c608afbe2d293"
+    },
+    {
+      "token": "__79_Pv6-fj39vX08_Lx8O_u7ezr6uno5-bl5OPi4eA",
+      "purpose": "voice",
+      "purpose_string": "aios/ipc/v1/voice",
+      "derived": "2c18b9a640de2b5d18f9f4f81e6cb7bfa909e8871fc2c4c4f03b81866c4bb1ba"
     }
   ]
 }

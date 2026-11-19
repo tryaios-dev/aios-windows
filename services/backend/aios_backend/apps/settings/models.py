@@ -26,6 +26,9 @@ class UserSettings(Timestamps, Base):
     catalogue_check: Mapped[bool] = mapped_column(Boolean, default=True)
     safe_mode_cpu: Mapped[bool] = mapped_column(Boolean, default=False)
     default_model_id: Mapped[str | None] = mapped_column(String(100))
+    # Voice: the languages the person speaks, main first, as Whisper codes joined by commas
+    # ("it,en"). Null until chosen: the window then suggests the computer's languages.
+    voice_languages: Mapped[str | None] = mapped_column(String(32))
     # Results of the checks. Null until a check has run.
     last_update_check: Mapped[datetime | None] = mapped_column(UTCDateTime)
     update_available_version: Mapped[str | None] = mapped_column(String(32))

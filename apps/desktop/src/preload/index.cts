@@ -114,6 +114,14 @@ const bridge: AiosBridge = {
     engine: () => invoke("models.engine"),
     benchmark: () => invoke("models.benchmark"),
   },
+  voice: {
+    status: () => invoke("voice.status"),
+    downloadModel: () => invoke("voice.downloadModel"),
+    start: (languages) => invoke("voice.start", languages),
+    audio: (sessionId, pcm) => invoke("voice.audio", sessionId, pcm),
+    finish: (sessionId) => invoke("voice.finish", sessionId),
+    cancel: (sessionId) => invoke("voice.cancel", sessionId),
+  },
 };
 
 contextBridge.exposeInMainWorld("aios", bridge);

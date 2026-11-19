@@ -15,13 +15,27 @@ export const CSP = [
 ].join("; ");
 
 /**
- * The only permission the window gets: writing text to the clipboard (Copy buttons for the
- * recovery key, answers, code, paths). Reading the clipboard, camera, notifications and every
- * other permission stay denied.
+ * The permissions the window gets: writing text to the clipboard (Copy buttons for the recovery
+ * key, answers, code, paths), and the microphone, sound only, for speaking instead of typing (ADR
+ * 0016; the audio goes to the backend through window.aios). Reading the clipboard, the camera,
+ * screen capture, notifications and every other permission stay denied.
  */
 export const ALLOWED_PERMISSIONS: ReadonlySet<string> = new Set(["clipboard-sanitized-write"]);
 
-export const allowPermission = (permission: string): boolean => ALLOWED_PERMISSIONS.has(permission);
+/** What Electron says about a media request (`mediaTypes`) or check (`mediaType`). */
+export interface MediaDetails {
+  mediaTypes?: readonly string[];
+  mediaType?: string;
+}
+
+export const allowPermission = (permission: string, details?: MediaDetails): boolean => {
+  if (permission === "media") {
+    if (details?.mediaTypes !== undefined)
+      return details.mediaTypes.length > 0 && details.mediaTypes.every((t) => t === "audio");
+    return details?.mediaType === "audio";
+  }
+  return ALLOWED_PERMISSIONS.has(permission);
+};
 
 /** The installed app takes its window icon from the packaged app (electron-builder icon). When run
  * from source, Electron would show its own icon, so point it at the brand icon. */
@@ -57,8 +71,12 @@ export async function createMainWindow(): Promise<BrowserWindow> {
   win.webContents.on("will-navigate", (e) => e.preventDefault());
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   const session = win.webContents.session;
-  session.setPermissionRequestHandler((wc, perm, cb) => cb(wc === win.webContents && allowPermission(perm)));
-  session.setPermissionCheckHandler((wc, perm) => wc === win.webContents && allowPermission(perm));
+  session.setPermissionRequestHandler((wc, perm, cb, details) =>
+    cb(wc === win.webContents && allowPermission(perm, details as MediaDetails)),
+  );
+  session.setPermissionCheckHandler(
+    (wc, perm, _origin, details) => wc === win.webContents && allowPermission(perm, details as MediaDetails),
+  );
 
   const ui = app.isPackaged
     ? path.join(process.resourcesPath, "ui", "index.html")

@@ -113,9 +113,9 @@ def build(src: Path, variant: str) -> Path:
             # ggml source passes block pointers where a char pointer is declared (quants.c), which
             # older Clang only warns about. Same code is generated either way.
             "-DCMAKE_C_FLAGS=-Wno-error=incompatible-pointer-types",
-            # Runner images can pair a newer MSVC STL (14.52 wants Clang 22) with an older
-            # standalone LLVM (Clang 20), which stops the build with error STL1000. This is the
-            # STL's own switch to skip that version check; the generated code does not change.
+            # Some runner images have a Visual Studio C++ library newer than the LLVM on PATH
+            # accepts (STL1000: "expected Clang 22 or newer"). Microsoft's documented switch skips
+            # that version check only; the same Clang built and passed before the image update.
             "-DCMAKE_CXX_FLAGS=-D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH",
         ]
     if variant == "vulkan":

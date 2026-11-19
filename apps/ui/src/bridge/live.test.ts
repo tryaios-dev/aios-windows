@@ -21,6 +21,7 @@ const SETTINGS: Settings = {
   catalogue_check: true,
   safe_mode_cpu: false,
   default_model_id: null,
+  voice_languages: null,
   last_update_check: null,
   last_catalogue_check: null,
   update_available: null,
@@ -150,6 +151,7 @@ function fakeBridge() {
       installed: vi.fn(async () => []),
       hardware: vi.fn(async () => HARDWARE),
     },
+    voice: unused(),
   } as AiosBridge;
   return { bridge, state };
 }

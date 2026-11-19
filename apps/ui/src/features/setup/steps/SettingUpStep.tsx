@@ -2,6 +2,8 @@ import type * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Pause, Play, RotateCw } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
+import { bridge } from '@/bridge'
 import { api } from '@/lib/api'
 import { useStore } from '@/lib/store'
 import type { ModelTier } from '@/lib/types'
@@ -13,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Hash, KeyValue, Mono } from '@/components/ui/layout'
 import { DrawnTick, ProgressBar, timeLeftWords, useTransferStats } from '@/components/app/InstallProgress'
 import { Vignette } from '@/components/app/Vignettes'
+import { useVoiceStatus } from '@/features/voice/useVoiceModel'
 import { Disclosure, Plate, StepBody, StepFooter, StepHeading } from '../SetupFrame'
 import { GIB, WORKING_SPACE_BYTES, availableTiers, spaceNeededGb, tierEntry } from '../tiers'
 
@@ -64,6 +67,21 @@ export function SettingUpStep({ note, tier, skipped, onSkip, onUnskip, onBack, o
   const [shown, setShown] = useState(installed ? 100 : 0)
   const started = useRef(false)
   const stats = useTransferStats(download, entry.size_bytes)
+  const voice = useVoiceStatus()
+  const queryClient = useQueryClient()
+  const [voiceFailed, setVoiceFailed] = useState(false)
+
+  // Voice's speech model (190 MB) downloads alongside the AI model; it never holds setup up if it
+  // cannot: Settings > Voice offers it again.
+  const voiceStarted = useRef(false)
+  useEffect(() => {
+    if (voiceStarted.current) return
+    voiceStarted.current = true
+    bridge()
+      .voice.downloadModel()
+      .then((s) => queryClient.setQueryData(['voice-status'], s))
+      .catch(() => setVoiceFailed(true))
+  }, [queryClient])
 
   const needGb = spaceNeededGb(entry)
   const enoughSpace = installed || hw.free_disk_gb * GIB >= entry.size_bytes + WORKING_SPACE_BYTES
@@ -116,14 +134,32 @@ export function SettingUpStep({ note, tier, skipped, onSkip, onUnskip, onBack, o
     return () => clearInterval(t)
   }, [coasting])
 
-  const finished = (installed || skipped) && shown >= 100
+  // The Voice line: shown unless this build has no speech engine.
+  const voiceModel = voice?.model.status
+  const voiceShown = voiceFailed || (!!voice && voice.state !== 'not_built')
+  const voiceRow: { state: RowState; title: string; detail: string } | null = !voiceShown
+    ? null
+    : voiceModel === 'ready'
+      ? { state: 'done', title: 'Voice is ready', detail: 'Speak instead of typing, turned into text on this computer' }
+      : voiceFailed || voiceModel === 'failed'
+        ? { state: 'failed', title: 'Voice was not downloaded', detail: 'You can add it later in Settings, Voice' }
+        : voiceModel === 'verifying'
+          ? { state: 'current', title: 'Checking the speech model', detail: 'Making sure it is the genuine, unmodified file' }
+          : {
+              state: 'current',
+              title: 'Downloading speech for Voice',
+              detail: voice && voice.model.received_bytes > 0 ? `${formatBytes(voice.model.received_bytes)} of ${formatBytes(voice.model.total_bytes)}` : 'Starting',
+            }
+  const voiceSettled = !voiceRow || voiceRow.state !== 'current'
+
+  const finished = (installed || skipped) && shown >= 100 && voiceSettled
   const moving = downloading || coasting
   const others = AIOS_PARTS.filter((p) => p.id !== 'model')
   const modelPart = AIOS_PARTS.find((p) => p.id === 'model')!
   const done = (p: AiosPart) => shown >= p.at
   const current = others.find((p) => !done(p))
-  const readyCount = others.filter(done).length + (installed ? 1 : 0)
-  const total = AIOS_PARTS.length - (skipped ? 1 : 0)
+  const readyCount = others.filter(done).length + (installed ? 1 : 0) + (voiceRow?.state === 'done' ? 1 : 0)
+  const total = AIOS_PARTS.length - (skipped ? 1 : 0) + (voiceRow ? 1 : 0)
   // The drawing shows what is being added right now: the next small part, then the AI model itself.
   const featured: AiosPart = current ?? modelPart
   const percent = finished ? 100 : Math.min(99, Math.floor(shown))
@@ -234,6 +270,7 @@ export function SettingUpStep({ note, tier, skipped, onSkip, onUnskip, onBack, o
                 if (!isDone && !isCurrent) return null
                 return <Row key={p.id} state={isDone ? 'done' : moving ? 'current' : 'paused'} title={isDone ? p.ready : p.adding} detail={isDone ? p.detail : undefined} />
               })}
+              {voiceRow && <Row state={voiceRow.state} title={voiceRow.title} detail={voiceRow.detail} live={voiceRow.state === 'current'} />}
               <Row state={modelRowState} title={modelLine.title} detail={modelLine.detail} live={model === 'adding'} />
             </ol>
 

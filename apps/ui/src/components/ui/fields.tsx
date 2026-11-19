@@ -137,8 +137,9 @@ export function Select({ value, onValueChange, options, placeholder, className, 
         </RSelect.Icon>
       </RSelect.Trigger>
       <RSelect.Portal>
-        <RSelect.Content position="popper" sideOffset={4} className="z-50 min-w-(--radix-select-trigger-width) overflow-hidden rounded-lg border border-line bg-white p-1 shadow-pop data-[state=open]:animate-in data-[state=closed]:animate-out">
-          <RSelect.Viewport>
+        {/* Never taller than the room on screen (or 20rem): a long list scrolls instead of running off the window. */}
+        <RSelect.Content position="popper" sideOffset={4} className="z-50 flex max-h-[min(20rem,var(--radix-select-content-available-height))] min-w-(--radix-select-trigger-width) flex-col overflow-hidden rounded-lg border border-line bg-white p-1 shadow-pop data-[state=open]:animate-in data-[state=closed]:animate-out">
+          <RSelect.Viewport className="min-h-0 flex-1 overflow-y-auto">
             {options.map((o) => (
               <RSelect.Item
                 key={o.value}

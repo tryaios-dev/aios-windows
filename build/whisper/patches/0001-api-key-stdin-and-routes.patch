@@ -1,0 +1,270 @@
+Subject: [PATCH] server: --api-key-stdin on every route; no /load, page, static files or CORS
+
+AIOS patch for whisper.cpp v1.9.5 (ADR 0016, M-19/SR-08).
+
+Upstream whisper-server has no API key at all. This patch:
+- adds --api-key-stdin: one key from the first line of stdin at start-up, the
+  same way llama-server and backend.exe receive theirs. The flag carries no
+  secret. The server refuses to start without it.
+- checks "Authorization: Bearer <key>" on every route, /health included, and
+  answers 401 otherwise (constant-time compare).
+- removes POST /load (it loaded any model path it was given), the HTML page,
+  the CORS preflight route and headers, and static file serving (--public).
+
+Security-relevant: changes need the named technical reviewer.
+---
+diff --git a/examples/server/server.cpp b/examples/server/server.cpp
+index b745f4d..e862a08 100644
+--- a/examples/server/server.cpp
++++ b/examples/server/server.cpp
+@@ -19,6 +19,7 @@
+ #include <atomic>
+ #include <functional>
+ #include <cstdlib>
++#include <iostream>
+ #if defined (_WIN32)
+ #include <windows.h>
+ #endif
+@@ -67,8 +68,23 @@ struct server_params
+     int32_t write_timeout = 600;
+ 
+     bool ffmpeg_converter = false;
++
++    // AIOS: the one API key, read from stdin (--api-key-stdin). Required: no key, no start.
++    std::string api_key;
+ };
+ 
++// AIOS: compare without stopping at the first differing byte.
++static bool same_key(const std::string & a, const std::string & b) {
++    if (a.size() != b.size()) {
++        return false;
++    }
++    unsigned char diff = 0;
++    for (size_t i = 0; i < a.size(); i++) {
++        diff |= (unsigned char) (a[i] ^ b[i]);
++    }
++    return diff == 0;
++}
++
+ struct whisper_params {
+     int32_t n_threads     = std::min(4, (int32_t) std::thread::hardware_concurrency());
+     int32_t n_processors  = 1;
+@@ -175,6 +191,7 @@ void whisper_print_usage(int /*argc*/, char ** argv, const whisper_params & para
+     fprintf(stderr, "  --inference-path PATH,                 [%-7s] Inference path for all requests\n",                         sparams.inference_path.c_str());
+     fprintf(stderr, "  --convert,                             [%-7s] Convert audio to WAV, requires ffmpeg on the server\n",     sparams.ffmpeg_converter ? "true" : "false");
+     fprintf(stderr, "  --tmp-dir,                             [%-7s] Temporary directory for ffmpeg transcoded files\n",         sparams.tmp_dir.c_str());
++    fprintf(stderr, "  --api-key-stdin                        [required] read the API key from the first line of stdin\n");
+     fprintf(stderr, "  -sns,      --suppress-nst              [%-7s] suppress non-speech tokens\n",                              params.suppress_nst ? "true" : "false");
+     fprintf(stderr, "  -nth N,    --no-speech-thold N         [%-7.2f] no speech threshold\n",                                   params.no_speech_thold);
+     fprintf(stderr, "  -ng,       --no-gpu                    [%-7s] do not use gpu\n",                                          params.use_gpu ? "false" : "true");
+@@ -255,6 +272,21 @@ bool whisper_params_parse(int argc, char ** argv, whisper_params & params, serve
+         else if (                   arg == "--inference-path")  { sparams.inference_path = argv[++i]; }
+         else if (                   arg == "--convert")         { sparams.ffmpeg_converter     = true; }
+         else if (                   arg == "--tmp-dir")         { sparams.tmp_dir     = argv[++i]; }
++        else if (                   arg == "--api-key-stdin")   {
++            std::string key;
++            if (!std::getline(std::cin, key)) {
++                fprintf(stderr, "error: --api-key-stdin: no key on stdin\n");
++                exit(1);
++            }
++            if (!key.empty() && key.back() == '\r') {
++                key.pop_back();
++            }
++            if (key.empty()) {
++                fprintf(stderr, "error: --api-key-stdin: empty key on stdin\n");
++                exit(1);
++            }
++            sparams.api_key = key;
++        }
+ 
+         // Voice Activity Detection (VAD)
+         else if (                   arg == "--vad")                         { params.vad                         = true; }
+@@ -663,6 +695,11 @@ int main(int argc, char ** argv) {
+         exit(0);
+     }
+ 
++    if (sparams.api_key.empty()) {
++        fprintf(stderr, "error: --api-key-stdin is required\n");
++        return 1;
++    }
++
+     if (sparams.ffmpeg_converter) {
+         check_ffmpeg_availibility();
+     }
+@@ -735,93 +772,25 @@ int main(int argc, char ** argv) {
+     state.store(SERVER_STATE_READY);
+ 
+ 
+-    svr->set_default_headers({{"Server", "whisper.cpp"},
+-                             {"Access-Control-Allow-Origin", "*"},
+-                             {"Access-Control-Allow-Headers", "content-type, authorization"}});
++    // AIOS: no CORS headers; only the backend calls this server.
++    svr->set_default_headers({{"Server", "whisper.cpp"}});
+ 
+-    std::string const default_content = R"(
+-    <html>
+-    <head>
+-        <title>Whisper.cpp Server</title>
+-        <meta charset="utf-8">
+-        <meta name="viewport" content="width=device-width">
+-        <style>
+-        body {
+-            font-family: sans-serif;
+-        }
+-        form {
+-            display: flex;
+-            flex-direction: column;
+-            align-items: flex-start;
+-        }
+-        label {
+-            margin-bottom: 0.5rem;
+-        }
+-        input, select {
+-            margin-bottom: 1rem;
+-        }
+-        button {
+-            margin-top: 1rem;
++    // AIOS: every route needs the key, /health included.
++    svr->set_pre_routing_handler([&](const Request & req, Response & res) {
++        const std::string prefix = "Bearer ";
++        const std::string auth = req.get_header_value("Authorization");
++        if (auth.compare(0, prefix.size(), prefix) == 0 && same_key(auth.substr(prefix.size()), sparams.api_key)) {
++            return Server::HandlerResponse::Unhandled;
+         }
+-        </style>
+-    </head>
+-    <body>
+-        <h1>Whisper.cpp Server</h1>
+-
+-        <h2>)" + sparams.request_path + sparams.inference_path + R"(</h2>
+-        <pre>
+-    curl 127.0.0.1:)" + std::to_string(sparams.port) + sparams.request_path + sparams.inference_path + R"( \
+-    -H "Content-Type: multipart/form-data" \
+-    -F file="@&lt;file-path&gt;" \
+-    -F temperature="0.0" \
+-    -F temperature_inc="0.2" \
+-    -F no_speech_thold="0.6" \
+-    -F response_format="json"
+-        </pre>
+-
+-        <h2>/load</h2>
+-        <pre>
+-    curl 127.0.0.1:)" + std::to_string(sparams.port) + R"(/load \
+-    -H "Content-Type: multipart/form-data" \
+-    -F model="&lt;path-to-model-file&gt;"
+-        </pre>
+-
+-        <div>
+-            <h2>Try it out</h2>
+-            <form action=")" + sparams.request_path + sparams.inference_path + R"(" method="POST" enctype="multipart/form-data">
+-                <label for="file">Choose an audio file:</label>
+-                <input type="file" id="file" name="file" accept="audio/*" required><br>
+-
+-                <label for="temperature">Temperature:</label>
+-                <input type="number" id="temperature" name="temperature" value="0.0" step="0.01" placeholder="e.g., 0.0"><br>
+-
+-                <label for="response_format">Response Format:</label>
+-                <select id="response_format" name="response_format">
+-                    <option value="verbose_json">Verbose JSON</option>
+-                    <option value="json">JSON</option>
+-                    <option value="text">Text</option>
+-                    <option value="srt">SRT</option>
+-                    <option value="vtt">VTT</option>
+-                </select><br>
+-
+-                <button type="submit">Submit</button>
+-            </form>
+-        </div>
+-    </body>
+-    </html>
+-    )";
++        res.status = 401;
++        res.set_content("{\"error\":\"invalid api key\"}", "application/json");
++        return Server::HandlerResponse::Handled;
++    });
+ 
+     // store default params so we can reset after each inference request
+     whisper_params default_params = params;
+ 
+-    // this is only called if no index.html is found in the public --path
+-    svr->Get(sparams.request_path + "/", [&](const Request &, Response &res){
+-        res.set_content(default_content, "text/html");
+-        return false;
+-    });
+-
+-    svr->Options(sparams.request_path + sparams.inference_path, [&](const Request &, Response &){
+-    });
++    // AIOS: no HTML page and no CORS preflight route.
+ 
+     svr->Post(sparams.request_path + sparams.inference_path, [&](const Request &req, Response &res){
+         // acquire whisper model mutex lock
+@@ -1172,48 +1141,7 @@ int main(int argc, char ** argv) {
+                             "application/json");
+         }
+     });
+-    svr->Post(sparams.request_path + "/load", [&](const Request &req, Response &res){
+-        std::lock_guard<std::mutex> lock(whisper_mutex);
+-        state.store(SERVER_STATE_LOADING_MODEL);
+-        if (!req.has_file("model"))
+-        {
+-            fprintf(stderr, "error: no 'model' field in the request\n");
+-            const std::string error_resp = "{\"error\":\"no 'model' field in the request\"}";
+-            res.status = 400;
+-            res.set_content(error_resp, "application/json");
+-            return;
+-        }
+-        std::string model = req.get_file_value("model").content;
+-        if (!is_file_exist(model.c_str()))
+-        {
+-            fprintf(stderr, "error: 'model': %s not found!\n", model.c_str());
+-            const std::string error_resp = "{\"error\":\"model not found!\"}";
+-            res.status = 400;
+-            res.set_content(error_resp, "application/json");
+-            return;
+-        }
+-
+-        // clean up
+-        whisper_free(ctx);
+-
+-        // whisper init
+-        ctx = whisper_init_from_file_with_params(model.c_str(), cparams);
+-
+-        // TODO perhaps load prior model here instead of exit
+-        if (ctx == nullptr) {
+-            fprintf(stderr, "error: model init  failed, no model loaded must exit\n");
+-            exit(1);
+-        }
+-
+-        // initialize openvino encoder. this has no effect on whisper.cpp builds that don't have OpenVINO configured
+-        whisper_ctx_init_openvino_encoder(ctx, nullptr, params.openvino_encode_device.c_str(), nullptr);
+-
+-        state.store(SERVER_STATE_READY);
+-        const std::string success = "Load was successful!";
+-        res.set_content(success, "application/text");
+-
+-        // check if the model is in the file system
+-    });
++    // AIOS: no /load; the model is fixed at start-up (-m).
+ 
+     svr->Get(sparams.request_path + "/health", [&](const Request &, Response &res){
+         server_state current_state = state.load();
+@@ -1241,6 +1169,9 @@ int main(int argc, char ** argv) {
+     });
+ 
+     svr->set_error_handler([](const Request &req, Response &res) {
++        if (res.status == 401) {
++            return; // AIOS: keep the key check's answer
++        }
+         if (res.status == 400) {
+             res.set_content("Invalid request", "text/plain");
+         } else if (res.status != 500) {
+@@ -1260,8 +1191,7 @@ int main(int argc, char ** argv) {
+         return 1;
+     }
+ 
+-    // Set the base directory for serving static files
+-    svr->set_base_dir(sparams.public_path);
++    // AIOS: no static files (upstream serves --public, default examples/server/public).
+ 
+     // to make it ctrl+clickable:
+     printf("\nwhisper server listening at http://%s:%d\n\n", sparams.hostname.c_str(), sparams.port);
