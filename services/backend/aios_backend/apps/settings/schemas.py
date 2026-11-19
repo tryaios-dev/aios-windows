@@ -16,6 +16,8 @@ class SettingsOut(BaseModel):
     catalogue_check: bool
     safe_mode_cpu: bool
     default_model_id: str | None
+    # Voice: languages spoken, main first (Whisper codes); null until chosen.
+    voice_languages: list[str] | None
     # Results of the update check (Electron main) and catalogue check (models app); null until run.
     last_update_check: datetime | None
     last_catalogue_check: datetime | None
@@ -32,6 +34,8 @@ class SettingsPatch(BaseModel):
     catalogue_check: bool | None = None
     safe_mode_cpu: bool | None = None
     default_model_id: str | None = Field(default=None, min_length=1, max_length=100)
+    # Empty list or null: no choice (Whisper's own guess, or the computer's languages).
+    voice_languages: list[str] | None = Field(default=None, max_length=5)
 
 
 class UpdateCheckIn(BaseModel):

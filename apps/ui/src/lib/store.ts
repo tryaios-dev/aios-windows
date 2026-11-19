@@ -149,6 +149,7 @@ const EMPTY_SETTINGS: Settings = {
   catalogue_check: false,
   safe_mode_cpu: false,
   default_model_id: null,
+  voice_languages: null,
   last_update_check: null,
   last_catalogue_check: null,
   update_available: null,

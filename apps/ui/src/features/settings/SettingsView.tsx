@@ -10,6 +10,7 @@ import { GeneralSection } from './GeneralSection'
 import { BackupSection } from './BackupSection'
 import { PrivacySection } from './PrivacySection'
 import { ComputerSection } from './ComputerSection'
+import { VoiceSection } from './VoiceSection'
 import { TroubleshootingSection } from './TroubleshootingSection'
 import { AboutSection } from './AboutSection'
 
@@ -98,6 +99,7 @@ export function SettingsView() {
               {section === 'backup' && <BackupSection />}
               {section === 'privacy' && <PrivacySection />}
               {section === 'computer' && <ComputerSection />}
+              {section === 'voice' && <VoiceSection />}
               {section === 'troubleshooting' && <TroubleshootingSection />}
               {section === 'about' && <AboutSection />}
             </div>

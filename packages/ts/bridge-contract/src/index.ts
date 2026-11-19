@@ -238,6 +238,8 @@ export const Settings = z.object({
   catalogue_check: z.boolean(),
   safe_mode_cpu: z.boolean(),
   default_model_id: z.string().nullable(),
+  /** Voice: the languages the person speaks, main first (Whisper codes); null until chosen. */
+  voice_languages: z.array(z.string()).nullable(),
   last_update_check: z.string().nullable(),
   last_catalogue_check: z.string().nullable(),
   update_available: UpdateAvailable.nullable(),
@@ -253,6 +255,11 @@ export const SettingsPatch = z
     catalogue_check: z.boolean(),
     safe_mode_cpu: z.boolean(),
     default_model_id: z.string().min(1).max(100).nullable(),
+    /** Empty or null: no choice, the computer's languages are used. */
+    voice_languages: z
+      .array(z.string().regex(/^[a-z]{2,3}$/))
+      .max(5)
+      .nullable(),
   })
   .partial()
   .strict();
@@ -600,6 +607,43 @@ export const DownloadState = z.object({
 });
 export type DownloadState = z.infer<typeof DownloadState>;
 
+/* ------------------------------------------------------------------ voice (ADR 0016) */
+/** Whether speaking instead of typing can be used now (GET /voice/status). */
+/** The speech model: on this computer, or being downloaded (setup, Settings > Voice). */
+export const VoiceModel = z.object({
+  status: z.enum(["missing", "downloading", "verifying", "ready", "failed"]),
+  received_bytes: z.number().int(),
+  total_bytes: z.number().int(),
+  error: z.string().nullable(),
+});
+export type VoiceModel = z.infer<typeof VoiceModel>;
+
+export const VoiceStatus = z.object({
+  state: z.enum(["not_built", "no_model", "not_started", "starting", "ready", "failed"]),
+  build: z.enum(["cpu", "vulkan"]).nullable(),
+  model: VoiceModel,
+});
+export type VoiceStatus = z.infer<typeof VoiceStatus>;
+
+export const VoiceSessionId = z.string().regex(/^[0-9a-f]{32}$/);
+/** The computer's languages as the window sees them, main first: used while none are chosen. */
+export const VoiceLanguages = z.array(z.string().regex(/^[a-z]{2,3}$/)).max(5);
+export const VoiceSession = z.object({ session_id: VoiceSessionId });
+export type VoiceSession = z.infer<typeof VoiceSession>;
+
+/** 16 kHz, mono, 16-bit little-endian PCM from the microphone: at most 2 s per call. */
+export const VOICE_MAX_AUDIO_BYTES = 64_000;
+export const VoiceAudio = z
+  .instanceof(Uint8Array)
+  .refine((a) => a.byteLength % 2 === 0 && a.byteLength <= VOICE_MAX_AUDIO_BYTES, "voice_audio_invalid");
+
+/** The words heard so far; `pending`: a phrase is still being turned into text. */
+export const VoiceText = z.object({ text: z.string(), pending: z.boolean() });
+export type VoiceText = z.infer<typeof VoiceText>;
+
+export const VoiceFinished = z.object({ text: z.string() });
+export type VoiceFinished = z.infer<typeof VoiceFinished>;
+
 /* ------------------------------------------------------------------ bridge */
 export interface AiosBridge {
   system: {
@@ -733,6 +777,23 @@ export interface AiosBridge {
     engine(): Promise<EngineStatus>;
     /** Starts the engine with the default model if needed and times a short answer. */
     benchmark(): Promise<BenchmarkRun>;
+  };
+  /** Speak instead of typing: turned into text on this computer (ADR 0016). */
+  voice: {
+    status(): Promise<VoiceStatus>;
+    /** Downloads the speech model unless it is here or on its way (setup, Settings > Voice). */
+    downloadModel(): Promise<VoiceStatus>;
+    /**
+     * Starts the speech engine if needed. `languages`: the computer's, used while none are chosen
+     * in Settings. Fails with `voice_not_built`, `voice_no_model` or `voice_failed`.
+     */
+    start(languages?: string[]): Promise<VoiceSession>;
+    /** About 250 ms of audio; returns at once with the words so far. */
+    audio(sessionId: string, pcm: Uint8Array): Promise<VoiceText>;
+    /** Turns the rest into text and returns all of it. */
+    finish(sessionId: string): Promise<VoiceFinished>;
+    /** Throws away what was heard. */
+    cancel(sessionId: string): Promise<void>;
   };
 }
 
