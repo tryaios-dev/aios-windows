@@ -17,10 +17,11 @@ The dev/test keys (database key and evidence signing seed) are not secrets: they
 import os
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
 
+from aios_backend.company_config import FILE_NAME, load_company_config
 from aios_common import paths, platforms
 
 APP_VERSION = "0.1.0"  # also in pyproject.toml and apps/desktop/package.json
@@ -60,6 +61,8 @@ class Settings:
     # the API key is never here (it lives in the OS keystore, read only by the gateway).
     company_base_url: str | None = None
     company_model_name: str | None = None
+    # Where ``aios-backend company set`` writes the server address and model (G-06); no key.
+    company_file: Path | None = None
     # Paths reachable without the token. Empty in the shipped app.
     public_paths: frozenset[str] = frozenset()
     docs_enabled: bool = False
@@ -91,6 +94,27 @@ def _models_dir() -> Path:
     return paths.models_dir()
 
 
+def with_company(settings: Settings, path: Path | None) -> Settings:
+    """Turn the Company provider on from ``company.json`` (G-06). No valid file: it stays off."""
+    found = load_company_config(path)
+    return replace(
+        settings,
+        company_ai=found is not None,
+        company_base_url=found.base_url if found else None,
+        company_model_name=found.model_name if found else None,
+        company_file=path,
+    )
+
+
+def company_file(profile: Profile) -> Path | None:
+    """The file ``aios-backend company set`` writes for ``profile``; the test profile has none."""
+    if profile is Profile.DESKTOP:
+        return paths.data_dir() / FILE_NAME
+    if profile is Profile.DEV:
+        return DEV_DIR / FILE_NAME
+    return None
+
+
 def load(profile: Profile | str | None = None) -> Settings:
     """Settings for ``profile`` (default: $AIOS_ENV, else dev)."""
     chosen = Profile(profile or os.environ.get(PROFILE_ENV) or Profile.DEV)
@@ -98,33 +122,39 @@ def load(profile: Profile | str | None = None) -> Settings:
     if chosen is Profile.DESKTOP:
         platforms.require_shipped()  # Windows only, until another OS is ported
         paths.ensure_dirs()
-        return Settings(
-            profile=chosen,
-            chats_db=paths.chats_db(),
-            db_key=None,
-            log_file=paths.logs_dir() / "backend.log",
-            backups_dir=paths.data_dir() / "backups",
-            engine_root=_engine_root(),
-            voice_root=_voice_root(),
-            recovery_pkg=paths.recovery_pkg(),
-            models_dir=_models_dir(),
+        return with_company(
+            Settings(
+                profile=chosen,
+                chats_db=paths.chats_db(),
+                db_key=None,
+                log_file=paths.logs_dir() / "backend.log",
+                backups_dir=paths.data_dir() / "backups",
+                engine_root=_engine_root(),
+                voice_root=_voice_root(),
+                recovery_pkg=paths.recovery_pkg(),
+                models_dir=_models_dir(),
+            ),
+            company_file(chosen),
         )
 
     if chosen is Profile.DEV:
         DEV_DIR.mkdir(parents=True, exist_ok=True)
-        return Settings(
-            profile=chosen,
-            chats_db=DEV_DIR / "chats.db",
-            db_key=DEV_DB_KEY,
-            log_file=DEV_DIR / "backend.log",
-            backups_dir=DEV_DIR / "backups",
-            engine_root=_engine_root(),
-            voice_root=_voice_root(),
-            recovery_pkg=DEV_DIR / "recovery.pkg",
-            models_dir=DEV_DIR / "models",
-            signing_seed=DEV_SIGNING_SEED,
-            public_paths=frozenset({"/health", "/docs", "/openapi.json"}),
-            docs_enabled=True,
+        return with_company(
+            Settings(
+                profile=chosen,
+                chats_db=DEV_DIR / "chats.db",
+                db_key=DEV_DB_KEY,
+                log_file=DEV_DIR / "backend.log",
+                backups_dir=DEV_DIR / "backups",
+                engine_root=_engine_root(),
+                voice_root=_voice_root(),
+                recovery_pkg=DEV_DIR / "recovery.pkg",
+                models_dir=DEV_DIR / "models",
+                signing_seed=DEV_SIGNING_SEED,
+                public_paths=frozenset({"/health", "/docs", "/openapi.json"}),
+                docs_enabled=True,
+            ),
+            company_file(chosen),
         )
 
     tmp = Path(tempfile.gettempdir()) / "aios-test"

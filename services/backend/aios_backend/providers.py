@@ -2,8 +2,8 @@
 
 Chat asks the router for an answer; the router picks the provider and sends the request to the
 local AI gateway (G-01) on loopback, presenting ``derive(T, "aios/ipc/v1/gateway")``. The gateway
-is the only inference endpoint on the device (invariant 1, IPC-02). Phase 1a has the local
-provider only; the company provider (G-06) is added here, behind its confirmation rules (PR-03).
+is the only inference endpoint on the device (invariant 1, IPC-02). Two providers: ``local`` and,
+when a server is configured, ``company`` (G-06), behind its confirmation rules (PR-03).
 
 Model facts (context length, runtime, and how many tokens a text is, G-04) come from the local
 model module directly: they are facts about the installed model, not answers from it.
@@ -32,18 +32,22 @@ class ProviderRouter:
         models: AnswerSource,
         gateway_url: str,
         client: Callable[[], httpx.Client] | None = None,
+        company: AnswerSource | None = None,
     ) -> None:
         host = urlparse(gateway_url).hostname
         if host not in LOOPBACK_HOSTS:
             raise ValueError("the gateway is on loopback only (IPC-21)")
         self._models = models
+        self._company = company  # model facts only; its answers still go through the gateway
         self._url = gateway_url.rstrip("/") + "/v1/chat/completions"
         # A client handed in (tests) belongs to the caller; one made here is closed after use.
         self._shared = client
 
     def model(self, provider: str, model_id: str | None) -> ModelInfo | None:
+        if provider == "company":
+            return self._company.model(provider, model_id) if self._company else None
         if provider != "local":
-            return None  # G-06: no company provider in this build
+            return None
         return self._models.model(provider, model_id)
 
     def count_tokens(self, provider: str, model_id: str, text: str) -> int | None:
@@ -55,9 +59,9 @@ class ProviderRouter:
         return result if isinstance(result, int) else None
 
     def answer(self, provider: str, model_id: str, messages: list[dict[str, str]]) -> Iterator[str]:
-        if provider != "local":
+        if provider not in ("local", "company") or (provider == "company" and not self._company):
             raise NoModel
-        body = {"model": model_id, "messages": messages, "stream": True}
+        body = {"model": model_id, "messages": messages, "stream": True, "provider": provider}
         headers = {"Authorization": f"Bearer {derive(GATEWAY_PURPOSE)}"}
         client = self._shared() if self._shared else _new_client()
         try:

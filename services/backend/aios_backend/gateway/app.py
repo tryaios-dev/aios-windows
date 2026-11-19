@@ -24,7 +24,7 @@ from aios_common.asgi_auth import LoopbackTokenMiddleware
 from aios_common.handshake import derive
 
 GATEWAY_PURPOSE = "aios/ipc/v1/gateway"
-# Phase 1a: the gateway serves the local engine only. The company provider (G-06) joins here.
+# The local engine, and the company server (G-06, aios_backend.company) when one is configured.
 PROVIDER = "local"
 
 
@@ -37,6 +37,8 @@ class ChatRequest(BaseModel):
     model: str = Field(min_length=1, max_length=100)
     messages: list[ChatMessage] = Field(min_length=1)
     stream: bool = True
+    # Which side answers. Optional, default local: older callers keep working.
+    provider: Literal["local", "company"] = "local"
 
 
 def _chunk(completion_id: str, model: str, delta: dict[str, Any], finish: str | None = None) -> str:
@@ -49,20 +51,25 @@ def _chunk(completion_id: str, model: str, delta: dict[str, Any], finish: str | 
     return f"data: {json.dumps(body)}\n\n"
 
 
-def create_gateway_app(engine_side: AnswerSource) -> ASGIApp:
-    """The gateway as an ASGI app, wrapped in the loopback and token check (IPC-21 to IPC-23)."""
+def create_gateway_app(
+    engine_side: AnswerSource, company_side: AnswerSource | None = None
+) -> ASGIApp:
+    """The gateway as an ASGI app, wrapped in the loopback and token check (IPC-21 to IPC-23).
+    ``company_side``: the Company provider (G-06), or None when no server is configured."""
     app = FastAPI(title="AIOS gateway", docs_url=None, redoc_url=None, openapi_url=None)
 
     @app.post("/v1/chat/completions", response_model=None)
     def chat_completions(body: ChatRequest) -> StreamingResponse | JSONResponse | dict[str, Any]:
-        info = engine_side.model(PROVIDER, body.model)
-        if info is None:
+        provider = body.provider
+        side = company_side if provider == "company" else engine_side
+        info = side.model(provider, body.model) if side is not None else None
+        if side is None or info is None:
             return JSONResponse({"error": "model_not_found"}, status_code=404)
         messages = [m.model_dump() for m in body.messages]
         completion_id = f"chatcmpl-{uuid.uuid4().hex}"
 
         if not body.stream:
-            text = "".join(engine_side.answer(PROVIDER, info.model_id, messages))
+            text = "".join(side.answer(provider, info.model_id, messages))
             return {
                 "id": completion_id,
                 "object": "chat.completion",
@@ -77,7 +84,7 @@ def create_gateway_app(engine_side: AnswerSource) -> ASGIApp:
             }
 
         def events() -> Iterator[str]:
-            chunks = engine_side.answer(PROVIDER, info.model_id, messages)
+            chunks = side.answer(provider, info.model_id, messages)
             try:
                 yield _chunk(completion_id, info.model_id, {"role": "assistant"})
                 for text in chunks:

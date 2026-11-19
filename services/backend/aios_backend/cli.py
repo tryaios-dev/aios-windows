@@ -6,13 +6,19 @@
     uv run aios-backend sql "SELECT * FROM settings" | reset-db --yes
     uv run aios-backend routes | openapi [--check]
     uv run aios-backend serve-e2e --data DIR      # end-to-end tests only (token over stdin)
+    uv run aios-backend company set               # DeepSeek; asks for the key (--url, --model)
+    uv run aios-backend company check | clear     # Company provider (G-06)
 
 Works on the dev profile (services/backend/.dev/) or the test profile, never on the desktop
-profile: real user data is only touched by backend.exe itself.
+profile: real user data is only touched by backend.exe itself. The one exception is ``company``:
+it writes the Company server's address (company.json, no key) and puts the API key in the OS key
+store, for the profile the app uses (default desktop). It never opens chats.db.
 """
 
 import argparse
 import asyncio
+import contextlib
+import getpass
 import json
 import secrets
 import sys
@@ -21,8 +27,9 @@ from pathlib import Path
 
 from sqlalchemy import text
 
+from aios_backend import company
 from aios_backend.apps.chat.answers import ModelInfo
-from aios_backend.config import Profile, load
+from aios_backend.config import Profile, company_file, load
 from db import migrate
 from db.session import Database
 
@@ -212,6 +219,71 @@ def cmd_routes(args: argparse.Namespace) -> int:
 
 
 # ------------------------------------------------------------------ parser
+def _company_file(profile: str) -> Path:
+    path = company_file(Profile(profile))
+    if path is None:
+        raise SystemExit("the test profile has no Company provider")
+    return path
+
+
+def cmd_company_set(args: argparse.Namespace) -> int:
+    """Configure the Company server (G-06). The key is typed, not shown, and goes to the key
+    store only: never an argument, an environment variable or a file (FR-30)."""
+    if not company.valid_url(args.url):
+        print("The address must start with https:// and have no user name or password.")
+        return 2
+    config = company.CompanyConfig(args.url, args.model.strip(), args.context)
+    key = getpass.getpass("API key (it is not shown while you type): ").strip()
+    if not key:
+        print("No key entered; nothing changed.")
+        return 2
+    company.set_secret(company.KEY_NAME, key)
+    path = _company_file(args.profile)
+    company.save_config(path, config)
+    print(f"Company server saved: {config.base_url} (model {config.model_name}).")
+    # Enough to spot a key pasted twice or cut short, never the key itself.
+    print(f"Key saved in the key store of this computer: {len(key)} characters, ends ...{key[-4:]}")
+    if args.check:
+        return cmd_company_check(args)
+    print("AIOS uses it within a few seconds; turn on Company AI in a project's settings.")
+    return 0
+
+
+def cmd_company_check(args: argparse.Namespace) -> int:
+    """One short request to the configured server, to see that the address and key work."""
+    found = company.load_config(_company_file(args.profile))
+    if found is None:
+        print(
+            "No Company server is configured. Run: aios-backend company set --url ... --model ..."
+        )
+        return 2
+    provider = company.CompanyProvider(found)
+    if provider.model(company.PROVIDER, None) is None:
+        print("No API key in the key store. Run: aios-backend company set ...")
+        return 2
+    try:
+        answer = "".join(
+            provider.answer(
+                company.PROVIDER, found.model_name, [{"role": "user", "content": "Reply with: ok"}]
+            )
+        )
+    except Exception as exc:  # EngineError: a short code, never the key or text
+        print(f"Failed: {exc} (http_401 = wrong key, http_402 = no balance)")
+        return 1
+    print(f"OK: {found.base_url} answered ({len(answer)} characters).")
+    print("AIOS uses it within a few seconds; turn on Company AI in a project's settings.")
+    return 0
+
+
+def cmd_company_clear(args: argparse.Namespace) -> int:
+    path = _company_file(args.profile)
+    path.unlink(missing_ok=True)
+    with contextlib.suppress(Exception):  # no key stored
+        company.delete_secret(company.KEY_NAME)
+    print("Company server and key removed.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="aios-backend", description="Backend developer commands.")
     parser.add_argument(
@@ -264,6 +336,23 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_openapi)
 
     sub.add_parser("routes", help="list every route").set_defaults(func=cmd_routes)
+
+    p = sub.add_parser("company", help="Company provider (G-06): server address and API key")
+    csub = p.add_subparsers(dest="company_command", required=True)
+    profiles = [Profile.DESKTOP.value, Profile.DEV.value]
+    c = csub.add_parser("set", help="save the server address and model; asks for the key")
+    c.add_argument("--url", default=company.DEEPSEEK_URL, help="default: DeepSeek")
+    c.add_argument("--model", default=company.DEEPSEEK_MODEL, help="default: deepseek-chat")
+    c.add_argument("--context", type=int, default=company.DEFAULT_CONTEXT, help="tokens")
+    c.add_argument("--profile", choices=profiles, default=Profile.DESKTOP.value)
+    c.add_argument("--no-check", dest="check", action="store_false", help="do not test the server")
+    c.set_defaults(func=cmd_company_set)
+    c = csub.add_parser("check", help="send one short request to the configured server")
+    c.add_argument("--profile", choices=profiles, default=Profile.DESKTOP.value)
+    c.set_defaults(func=cmd_company_check)
+    c = csub.add_parser("clear", help="remove the server address and the key")
+    c.add_argument("--profile", choices=profiles, default=Profile.DESKTOP.value)
+    c.set_defaults(func=cmd_company_clear)
     sub.add_parser(
         "rebuild-search", help="rebuild the full-text search index from the messages (H-02)"
     ).set_defaults(func=cmd_rebuild_search)
