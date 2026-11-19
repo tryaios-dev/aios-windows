@@ -5,6 +5,7 @@ Add a line here when a new models module is created.
 
 from aios_backend.apps.chat import models as chat_models  # noqa: F401
 from aios_backend.apps.evidence import models as evidence_models  # noqa: F401
+from aios_backend.apps.media import models as media_models  # noqa: F401
 from aios_backend.apps.models import models as models_models  # noqa: F401
 from aios_backend.apps.projects import models as projects_models  # noqa: F401
 from aios_backend.apps.search import models as search_models  # noqa: F401

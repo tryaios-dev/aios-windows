@@ -28,6 +28,7 @@
 /services/backend/aios_backend/gateway/                  @tryaios-dev/security-reviewers
 /services/backend/aios_backend/company.py               @tryaios-dev/security-reviewers
 /services/backend/aios_backend/company_config.py        @tryaios-dev/security-reviewers
+/services/backend/aios_backend/media/                   @tryaios-dev/security-reviewers
 
 # evidence writer and verifier
 /services/evidence-writer/                                   @tryaios-dev/security-reviewers

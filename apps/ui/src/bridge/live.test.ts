@@ -152,6 +152,7 @@ function fakeBridge() {
       hardware: vi.fn(async () => HARDWARE),
     },
     voice: unused(),
+    media: unused(),
   } as AiosBridge;
   return { bridge, state };
 }

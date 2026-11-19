@@ -116,6 +116,27 @@ const MESSAGES: Record<string, string> = {
   busy: "AIOS is writing an answer. Wait for it to finish, or stop it, then try again.",
   model_in_use: "AIOS is writing an answer with this AI model. Wait for it to finish, or stop it, then try again.",
   package_file_not_found: "The AI model file from the installer package is no longer there.",
+  // Pictures and videos (R-7)
+  media_unavailable: "Pictures and videos can't be made right now. Try again in a moment.",
+  media_not_offered: "The company server doesn't make pictures or videos yet.",
+  media_unreachable: "The company server can't be reached. Check the connection and try again.",
+  media_busy: "The company server is busy with other pictures and videos. Try again in a few minutes.",
+  media_not_ready: "This picture or video isn't finished yet.",
+  media_not_found: "That picture or video no longer exists.",
+  media_bad_answer: "The company server sent something AIOS doesn't accept, so it was not kept.",
+  media_output_too_large: "The finished file was too large to keep.",
+  company_key_missing: "The company server's key isn't set up on this computer.",
+  company_key_rejected: "The company server refused this computer's key. Ask your administrator for the current key.",
+  project_archived: "This project is archived. Restore it first.",
+  unknown_model: "That model isn't on the company server.",
+  kind_mismatch: "That model makes a different kind of file.",
+  invalid_prompt: "Describe what to make (up to 2,000 characters).",
+  prompt_too_long: "The description is too long. Keep it under 2,000 characters.",
+  negative_prompt_too_long: "The “leave out” text is too long. Keep it under 1,000 characters.",
+  invalid_size: "That size isn't available for this kind of file.",
+  invalid_frames: "That video length isn't available.",
+  invalid_seed: "The variation number must be a whole number from 0 to 4,294,967,295.",
+  queue_full: "The company server is busy with other pictures and videos. Try again in a few minutes.",
 };
 
 export function messageFor(err: unknown): string {
