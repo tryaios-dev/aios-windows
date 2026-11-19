@@ -2,9 +2,18 @@
 
 An OpenAI-compatible ``POST /v1/chat/completions`` on its own loopback port inside backend.exe. It
 accepts only ``derive(T, "aios/ipc/v1/gateway")`` as bearer (Process and IPC v1, section 5); the
-backend's provider router is its only caller. Behind it, the engine side (the local model module,
-``aios_backend.local``) starts llama-server on demand and talks to it with the engine's own derived
-token. No docs, no other paths. Nothing here logs message text (SR-07).
+backend's provider router is its only caller. No docs, no other paths. Nothing here logs message
+text (SR-07).
+
+Behind it, by model:
+
+* ``company/<name>``: the company's AI server (``aios_backend.company``, G-06), only when an
+  operator switched it on. Without a company provider such a model is not found.
+* anything else: the engine side (the local model module, ``aios_backend.local``), which starts
+  llama-server on demand and talks to it with the engine's own derived token.
+
+When the provider reports its own token counts, the stream ends with one OpenAI-style usage chunk
+(empty ``choices``) before ``[DONE]``, so chat stores real counts instead of estimates (G-03).
 
 Security-relevant path: every change here needs the technical reviewer (.github/CODEOWNERS, B-01).
 """
@@ -24,8 +33,7 @@ from aios_common.asgi_auth import LoopbackTokenMiddleware
 from aios_common.handshake import derive
 
 GATEWAY_PURPOSE = "aios/ipc/v1/gateway"
-# Phase 1a: the gateway serves the local engine only. The company provider (G-06) joins here.
-PROVIDER = "local"
+COMPANY_PREFIX = "company/"
 
 
 class ChatMessage(BaseModel):
@@ -34,9 +42,16 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    model: str = Field(min_length=1, max_length=100)
+    model: str = Field(min_length=1, max_length=120)
     messages: list[ChatMessage] = Field(min_length=1)
     stream: bool = True
+
+
+def route(model: str) -> tuple[str, str]:
+    """(provider, model id) for a gateway model name."""
+    if model.startswith(COMPANY_PREFIX):
+        return "company", model[len(COMPANY_PREFIX) :]
+    return "local", model
 
 
 def _chunk(completion_id: str, model: str, delta: dict[str, Any], finish: str | None = None) -> str:
@@ -49,21 +64,35 @@ def _chunk(completion_id: str, model: str, delta: dict[str, Any], finish: str | 
     return f"data: {json.dumps(body)}\n\n"
 
 
-def create_gateway_app(engine_side: AnswerSource) -> ASGIApp:
-    """The gateway as an ASGI app, wrapped in the loopback and token check (IPC-21 to IPC-23)."""
+def _usage(chunks: object) -> dict[str, int] | None:
+    usage = getattr(chunks, "usage", None)
+    if isinstance(usage, tuple) and len(usage) == 2 and all(isinstance(n, int) for n in usage):
+        return {"prompt_tokens": usage[0], "completion_tokens": usage[1]}
+    return None
+
+
+def create_gateway_app(engine_side: AnswerSource, company: AnswerSource | None = None) -> ASGIApp:
+    """The gateway as an ASGI app, wrapped in the loopback and token check (IPC-21 to IPC-23).
+    ``company``: the company provider while the operator flag is on, else None."""
     app = FastAPI(title="AIOS gateway", docs_url=None, redoc_url=None, openapi_url=None)
+    sources: dict[str, AnswerSource] = {"local": engine_side}
+    if company is not None:
+        sources["company"] = company
 
     @app.post("/v1/chat/completions", response_model=None)
     def chat_completions(body: ChatRequest) -> StreamingResponse | JSONResponse | dict[str, Any]:
-        info = engine_side.model(PROVIDER, body.model)
-        if info is None:
+        provider, model_id = route(body.model)
+        source = sources.get(provider)
+        info = source.model(provider, model_id) if source is not None else None
+        if source is None or info is None:
             return JSONResponse({"error": "model_not_found"}, status_code=404)
         messages = [m.model_dump() for m in body.messages]
         completion_id = f"chatcmpl-{uuid.uuid4().hex}"
 
         if not body.stream:
-            text = "".join(engine_side.answer(PROVIDER, info.model_id, messages))
-            return {
+            chunks = source.answer(provider, info.model_id, messages)
+            text = "".join(chunks)
+            whole: dict[str, Any] = {
                 "id": completion_id,
                 "object": "chat.completion",
                 "model": info.model_id,
@@ -75,14 +104,28 @@ def create_gateway_app(engine_side: AnswerSource) -> ASGIApp:
                     }
                 ],
             }
+            usage = _usage(chunks)
+            if usage is not None:
+                whole["usage"] = usage
+            return whole
 
         def events() -> Iterator[str]:
-            chunks = engine_side.answer(PROVIDER, info.model_id, messages)
+            chunks = source.answer(provider, info.model_id, messages)
             try:
                 yield _chunk(completion_id, info.model_id, {"role": "assistant"})
                 for text in chunks:
                     yield _chunk(completion_id, info.model_id, {"content": text})
                 yield _chunk(completion_id, info.model_id, {}, finish="stop")
+                usage = _usage(chunks)
+                if usage is not None:
+                    tail = {
+                        "id": completion_id,
+                        "object": "chat.completion.chunk",
+                        "model": info.model_id,
+                        "choices": [],
+                        "usage": usage,
+                    }
+                    yield f"data: {json.dumps(tail)}\n\n"
                 yield "data: [DONE]\n\n"
             except Exception:
                 # The stream has started, so the status is already 200: say so in the stream.

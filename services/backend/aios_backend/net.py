@@ -109,8 +109,10 @@ ALLOWLIST: list[tuple[str, str, int, str, str]] = [
         "configured",
     ),
 ]
-# Callers set timeouts without importing an HTTP client themselves (layout rule, AC-21).
+# Callers set timeouts and catch transport failures without importing an HTTP client themselves
+# (layout rule, AC-21).
 Timeout = httpx.Timeout
+HTTPError = httpx.HTTPError
 
 FIXED = frozenset((host, port) for _, host, port, _, kind in ALLOWLIST if kind == "fixed")
 MAX_REDIRECTS = 3

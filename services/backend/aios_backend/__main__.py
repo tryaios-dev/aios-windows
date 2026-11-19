@@ -23,6 +23,7 @@ import psutil
 import uvicorn
 
 from aios_backend.apps.chat.answers import AnswerSource
+from aios_backend.company import CompanyModels
 from aios_backend.config import Profile, Settings, load
 from aios_backend.gateway.app import create_gateway_app
 from aios_backend.main import configure_logging, create_app
@@ -99,11 +100,13 @@ async def serve(
     gateway_port: int | None = None
     engine_side = app.state.answers
     if local and answers is None and engine_side is not None:
+        # G-06: the company's AI server joins the gateway only while the operator flag is on.
+        company = CompanyModels(settings) if settings.company_ai else None
         gateway_sock = bind_loopback(0)
         gateway_port = gateway_sock.getsockname()[1]
         gateway = uvicorn.Server(
             uvicorn.Config(
-                create_gateway_app(engine_side),
+                create_gateway_app(engine_side, company=company),
                 host="127.0.0.1",
                 log_config=None,
                 access_log=False,
@@ -118,7 +121,9 @@ async def serve(
                 await gateway_task
                 return
             await asyncio.sleep(0.01)
-        app.state.answers = ProviderRouter(engine_side, f"http://127.0.0.1:{gateway_port}")
+        app.state.answers = ProviderRouter(
+            engine_side, f"http://127.0.0.1:{gateway_port}", company=company
+        )
 
     if gateway_port is None:
         on_ready(sock.getsockname()[1])

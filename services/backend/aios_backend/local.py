@@ -9,8 +9,7 @@ call into the manager is handed to the loop (``bind`` gives it at start-up). A l
 the whole answer, so the engine is never unloaded mid-answer. If the GPU build dies before the
 first words, the same request goes once more to the CPU build (D-06).
 
-The Company provider is not built yet (G-06), so ``model("company", …)`` is None and chat answers
-``company_unreachable``.
+It answers for the ``local`` provider only; the company's server is ``aios_backend.company`` (G-06).
 """
 
 import asyncio
@@ -31,6 +30,7 @@ from aios_backend.engine import EngineBusy as ManagerBusy
 from aios_backend.engine import EngineManager, NoModel
 from aios_backend.engine import client as engine_client
 from aios_backend.engine.launcher import CONTEXT_TOKENS, EngineError
+from aios_backend.prompting import with_system_prompt
 from db.base import utcnow
 from db.lookups import default_model_id
 from db.session import Database
@@ -117,13 +117,7 @@ class LocalModels:
     def prepare(self, provider: str, messages: list[dict[str, str]]) -> list[dict[str, str]]:
         """The messages exactly as they go to the engine: the AIOS prompt first, once. Chat calls
         this before the input commitment, so evidence covers the bytes sent (G-03)."""
-        if not messages or messages[0].get("role") != "system":
-            return [{"role": "system", "content": SYSTEM_PROMPT}, *messages]
-        if messages[0]["content"].startswith(SYSTEM_PROMPT):
-            return list(messages)
-        # A note from chat (skills, documents, the summary of earlier messages) goes after it.
-        merged = f"{SYSTEM_PROMPT}\n\n{messages[0]['content']}"
-        return [{"role": "system", "content": merged}, *messages[1:]]
+        return with_system_prompt(SYSTEM_PROMPT, messages)
 
     def answer(
         self, provider: str, model_id: str, messages: list[dict[str, str]]

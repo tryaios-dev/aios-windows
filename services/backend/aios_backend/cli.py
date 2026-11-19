@@ -6,6 +6,7 @@
     uv run aios-backend sql "SELECT * FROM settings" | reset-db --yes
     uv run aios-backend routes | openapi [--check]
     uv run aios-backend serve-e2e --data DIR      # end-to-end tests only (token over stdin)
+    uv run aios-backend company-key | company-check   # Company AI server (G-06)
 
 Works on the dev profile (services/backend/.dev/) or the test profile, never on the desktop
 profile: real user data is only touched by backend.exe itself.
@@ -13,16 +14,21 @@ profile: real user data is only touched by backend.exe itself.
 
 import argparse
 import asyncio
+import getpass
 import json
 import secrets
 import sys
 from collections.abc import Iterator
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from sqlalchemy import text
 
 from aios_backend.apps.chat.answers import ModelInfo
-from aios_backend.config import Profile, load
+from aios_backend.config import Profile, Settings, load
+
+if TYPE_CHECKING:
+    from aios_backend.company import CompanyModels
 from db import migrate
 from db.session import Database
 
@@ -202,6 +208,50 @@ def cmd_openapi(args: argparse.Namespace) -> int:
     return 0
 
 
+# ------------------------------------------------------------------ Company AI server (G-06)
+def company_models(settings: Settings) -> "CompanyModels":
+    from aios_backend.company import CompanyModels
+
+    return CompanyModels(settings)
+
+
+def cmd_company_key(args: argparse.Namespace) -> int:
+    """Store the company server's API key in the OS key store (invariant 3). The key is read
+    from stdin or typed without echo, never taken as an argument, and never printed."""
+    from aios_backend import company
+
+    if sys.stdin.isatty():
+        value = getpass.getpass("API key of the Company AI server (not shown): ")
+    else:
+        value = sys.stdin.readline()
+    # Windows PowerShell 5.1 puts a byte-order mark in front of text it pipes to a program.
+    value = value.strip().lstrip("﻿").strip()
+    if not company.valid_key(value):
+        print("refused: the key must be 16-512 printable characters, no spaces", file=sys.stderr)
+        return 1
+    company.store_key(value)
+    print(f"stored in the OS key store (service AIOS, entry {company.KEY_NAME})")
+    return 0
+
+
+def cmd_company_check(args: argparse.Namespace) -> int:
+    """Is the Company AI server set up and answering? Prints the reason when it is not."""
+    settings = load(args.profile)
+    if not settings.company_ai:
+        print("Company AI is off: no valid operator.json (see docs/operations/company-server.md)")
+        return 1
+    source = company_models(settings)
+    info = source.recheck()
+    if info is None:
+        print(f"not reachable: {settings.company_base_url}  ({source.last_error})")
+        return 1
+    print(
+        f"reachable: {settings.company_base_url}  model {info.model_id}  "
+        f"context {info.context_length} tokens"
+    )
+    return 0
+
+
 def cmd_routes(args: argparse.Namespace) -> int:
     from aios_backend.main import create_app
 
@@ -264,6 +314,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_openapi)
 
     sub.add_parser("routes", help="list every route").set_defaults(func=cmd_routes)
+    sub.add_parser(
+        "company-key", help="store the Company AI server's API key in the OS key store (stdin)"
+    ).set_defaults(func=cmd_company_key)
+    sub.add_parser(
+        "company-check", help="check that the Company AI server is set up and answering"
+    ).set_defaults(func=cmd_company_check)
     sub.add_parser(
         "rebuild-search", help="rebuild the full-text search index from the messages (H-02)"
     ).set_defaults(func=cmd_rebuild_search)

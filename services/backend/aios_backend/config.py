@@ -11,15 +11,24 @@ Three profiles:
   without a token so you can check the backend in a browser.
 * ``test``    - pytest. Database in a temp folder, fixed test key.
 
+The Company AI server (G-06, lab only) is switched on by an operator file, ``operator.json``:
+machine-wide in the desktop profile (``paths.operator_file()``), in ``.dev/`` in the dev profile,
+never in tests. See ``company_from_file`` and docs/operations/company-server.md.
+
 The dev/test keys (database key and evidence signing seed) are not secrets: they only protect throw-away development data.
 """
 
+import ipaddress
+import json
 import os
+import re
 import sys
 import tempfile
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
+from urllib.parse import urlsplit
 
 from aios_common import paths, platforms
 
@@ -30,6 +39,20 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 DEV_DB_KEY = "de" * 32  # 256-bit hex; development data only
 TEST_DB_KEY = "00" * 32
 DEV_SIGNING_SEED = "5e" * 32  # Ed25519 seed for the dev/test evidence stream; not a secret
+# The Company AI server (G-06), set by an operator in a machine-wide file (desktop) or in the dev
+# folder (dev). Never in the environment, never with its key (that stays in the OS key store).
+OPERATOR_FILE = "operator.json"
+COMPANY_CONTEXT_TOKENS = 16384
+_OPERATOR_KEYS = {
+    "company_ai",
+    "company_base_url",
+    "company_model_name",
+    "company_context_tokens",
+}
+# The model id is recorded in evidence, so it may only hold what an evidence body accepts
+# (db.outbox): no spaces and no "/" (serve vLLM models under such a name: --served-model-name).
+_MODEL_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:+-]{0,99}")
+_DNS_LABEL = re.compile(r"(?!-)[a-z0-9-]{1,63}(?<!-)")
 
 
 class Profile(StrEnum):
@@ -58,6 +81,8 @@ class Settings:
     # the API key is never here (it lives in the OS keystore, read only by the gateway).
     company_base_url: str | None = None
     company_model_name: str | None = None
+    # How many tokens one conversation may use on the company server (its context per user).
+    company_context_tokens: int = COMPANY_CONTEXT_TOKENS
     # Paths reachable without the token. Empty in the shipped app.
     public_paths: frozenset[str] = frozenset()
     docs_enabled: bool = False
@@ -81,6 +106,62 @@ def _models_dir() -> Path:
     return paths.models_dir()
 
 
+def company_base_url(value: object) -> str | None:
+    """The company server's address as the network allowlist accepts it (M-22, P-4): HTTPS, a
+    DNS name (no IP address, at least one dot), port 443, no credentials, path, query or
+    fragment. Returned as ``https://host``; None if the address is not acceptable."""
+    if not isinstance(value, str):
+        return None
+    try:
+        parts = urlsplit(value.strip())
+        port = parts.port
+    except ValueError:
+        return None
+    host = (parts.hostname or "").lower()
+    if parts.scheme != "https" or port not in (None, 443) or parts.username or parts.password:
+        return None
+    if parts.path not in ("", "/") or parts.query or parts.fragment:
+        return None
+    try:
+        ipaddress.ip_address(host)
+        return None  # an IP address, not a DNS name
+    except ValueError:
+        pass
+    labels = host.split(".")
+    if len(labels) < 2 or not all(_DNS_LABEL.fullmatch(label) for label in labels):
+        return None
+    return f"https://{host}"
+
+
+def company_from_file(path: Path) -> dict[str, Any]:
+    """The Company provider settings an operator wrote in ``path`` (G-06), ready for ``Settings``.
+
+    Empty (Company stays off) when the file is missing, unreadable, switches Company off, or holds
+    anything unexpected. A file with any other field, an API key in particular, is refused: the
+    key lives only in the OS key store (invariant 3)."""
+    try:
+        data = json.loads(path.read_text("utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict) or not set(data) <= _OPERATOR_KEYS:
+        return {}
+    if data.get("company_ai") is not True:
+        return {}
+    url = company_base_url(data.get("company_base_url"))
+    name = data.get("company_model_name")
+    tokens = data.get("company_context_tokens", COMPANY_CONTEXT_TOKENS)
+    if url is None or not isinstance(name, str) or not _MODEL_NAME.fullmatch(name):
+        return {}
+    if type(tokens) is not int or not 2048 <= tokens <= 1_048_576:
+        return {}
+    return {
+        "company_ai": True,
+        "company_base_url": url,
+        "company_model_name": name,
+        "company_context_tokens": tokens,
+    }
+
+
 def load(profile: Profile | str | None = None) -> Settings:
     """Settings for ``profile`` (default: $AIOS_ENV, else dev)."""
     chosen = Profile(profile or os.environ.get(PROFILE_ENV) or Profile.DEV)
@@ -97,6 +178,7 @@ def load(profile: Profile | str | None = None) -> Settings:
             engine_root=_engine_root(),
             recovery_pkg=paths.recovery_pkg(),
             models_dir=_models_dir(),
+            **company_from_file(paths.operator_file()),
         )
 
     if chosen is Profile.DEV:
@@ -113,6 +195,7 @@ def load(profile: Profile | str | None = None) -> Settings:
             signing_seed=DEV_SIGNING_SEED,
             public_paths=frozenset({"/health", "/docs", "/openapi.json"}),
             docs_enabled=True,
+            **company_from_file(DEV_DIR / OPERATOR_FILE),
         )
 
     tmp = Path(tempfile.gettempdir()) / "aios-test"

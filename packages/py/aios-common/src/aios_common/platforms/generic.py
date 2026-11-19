@@ -24,6 +24,10 @@ class GenericPlatform(Platform):
         base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
         return Path(base) / "AIOS"
 
+    def operator_dir(self) -> Path:
+        base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+        return Path(base) / "AIOS"
+
     def child_env(self, bin_dir: Path, temp_dir: Path) -> dict[str, str]:
         return {
             "PATH": f"{bin_dir}:/usr/bin:/bin",

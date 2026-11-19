@@ -47,6 +47,12 @@ class WindowsPlatform(Platform):
             base = str(Path.home() / "AppData" / "Local")
         return Path(base) / "AIOS"
 
+    def operator_dir(self) -> Path:
+        base = os.environ.get("ProgramData")
+        if not base:
+            base = str(Path(os.environ.get("SystemDrive", "C:") + "\\") / "ProgramData")
+        return Path(base) / "AIOS"
+
     def child_env(self, bin_dir: Path, temp_dir: Path) -> dict[str, str]:
         root = os.environ["SystemRoot"]
         return {

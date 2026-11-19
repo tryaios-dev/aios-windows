@@ -54,6 +54,11 @@ class Platform(ABC):
         """Per-user folder for AIOS data (database, recovery package, models, logs)."""
 
     @abstractmethod
+    def operator_dir(self) -> Path:
+        """Machine-wide folder for settings an operator sets for every user of this computer
+        (the Company AI server, G-06). Never holds a secret: keys stay in the OS key store."""
+
+    @abstractmethod
     def hardware(self, disk: Path) -> Hardware:
         """This machine's hardware. ``disk``: a folder on the drive models are stored on."""
 

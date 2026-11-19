@@ -25,6 +25,11 @@ def logs_dir() -> Path:
     return data_dir() / "logs"
 
 
+def operator_file() -> Path:
+    """Machine-wide settings an operator sets (the Company AI server, G-06). Read-only to AIOS."""
+    return platforms.current().operator_dir() / "operator.json"
+
+
 def ensure_dirs() -> None:
     """Create the per-user data folders on first start."""
     for d in (data_dir() / "data", models_dir(), logs_dir(), data_dir() / "backups"):
