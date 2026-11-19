@@ -78,10 +78,14 @@ class Whisper:
         except httpx.HTTPError:
             return None
 
-    def transcribe(self, wav: bytes, audio_ctx: int, language: str = "auto") -> str:
-        """The text of one phrase. ``audio_ctx`` fits Whisper's 30 s window to the audio (the
-        spike's ``-ac``): about twice as fast on short phrases, same text. ``language``: a
-        Whisper code, or "auto" for Whisper's own guess."""
+    def transcribe(self, wav: bytes, language: str = "auto") -> str:
+        """The text of one phrase. ``language``: a Whisper code, or "auto" for Whisper's own
+        guess.
+
+        Whisper always looks at its full 30 s window. A window shortened to the phrase (the
+        spike's ``-ac``, faster) is not used: on the pinned whisper.cpp, the same phrase sent
+        twice came back right once, then as "... ... ..." or in English, depending on the
+        request before it (seen on the VM, measured locally)."""
         body = self._post(
             wav,
             {
@@ -91,7 +95,6 @@ class Whisper:
                 # random words in other scripts and take 10 s or more (seen on the VM). Upstream
                 # reads --no-fallback but never applies it; this is the setting it would change.
                 "temperature_inc": "0.0",
-                "audio_ctx": str(audio_ctx),
                 "no_timestamps": "true",
                 "language": language,
             },
@@ -99,14 +102,13 @@ class Whisper:
         text = body.get("text")
         return text if isinstance(text, str) else ""
 
-    def detect(self, wav: bytes, audio_ctx: int) -> dict[str, float]:
+    def detect(self, wav: bytes) -> dict[str, float]:
         """Whisper's score per language code for this phrase, without turning it into text."""
         body = self._post(
             wav,
             {
                 "response_format": "verbose_json",
                 "detect_language": "true",
-                "audio_ctx": str(audio_ctx),
             },
         )
         scores = body.get("language_probabilities")

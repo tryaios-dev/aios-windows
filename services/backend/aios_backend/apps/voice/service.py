@@ -21,7 +21,7 @@ from aios_backend.apps.voice.schemas import ModelStatus, VoiceStatus
 from aios_backend.errors import AppError
 from aios_backend.voice import VoiceError, VoiceManager, Whisper
 from aios_backend.voice import languages as langs
-from aios_backend.voice.phrases import BYTES_PER_SAMPLE, RATE, Phrases, audio_ctx, clean, wav
+from aios_backend.voice.phrases import BYTES_PER_SAMPLE, RATE, Phrases, clean, wav
 from aios_common.logging import get_logger, log_event
 from db import lookups
 
@@ -219,13 +219,13 @@ class Sessions:
 
     async def _in_language(self, whisper: Whisper, session: Session, phrase: bytes) -> str:
         """Turn the phrase into text in the right language (aios_backend.voice.languages)."""
-        audio, ctx = wav(phrase), audio_ctx(phrase)
+        audio = wav(phrase)
         language = session.settled
         if language is None and len(session.languages) == 1:
             language = session.languages[0]
         elif language is None and session.languages:
-            scores = await asyncio.to_thread(whisper.detect, audio, ctx)
+            scores = await asyncio.to_thread(whisper.detect, audio)
             language, clear = langs.choose(scores, session.languages)
             if clear and len(phrase) / (RATE * BYTES_PER_SAMPLE) >= langs.SETTLE_S:
                 session.settled = language
-        return await asyncio.to_thread(whisper.transcribe, audio, ctx, language or "auto")
+        return await asyncio.to_thread(whisper.transcribe, audio, language or "auto")

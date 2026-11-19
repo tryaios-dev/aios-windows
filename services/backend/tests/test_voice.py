@@ -124,11 +124,6 @@ def test_whisper_markers_are_not_words() -> None:
     assert phrases.clean(" Hello (music) world. ") == "Hello world."
 
 
-def test_the_window_is_fitted_to_the_audio() -> None:
-    assert phrases.audio_ctx(tone(2)) == 2 * 50 + 64
-    assert phrases.audio_ctx(tone(40)) == 1500
-
-
 def test_a_phrase_is_a_16_khz_mono_wav() -> None:
     import io
 
@@ -149,13 +144,13 @@ class FakeWhisper(Whisper):
     scores: dict[str, float] = {}
     calls: list[str] = []
 
-    def transcribe(self, wav: bytes, audio_ctx: int, language: str = "auto") -> str:
+    def transcribe(self, wav: bytes, language: str = "auto") -> str:
         if not self.alive():
             raise VoiceError("voice_unreachable")
         FakeWhisper.calls.append(f"transcribe:{language}")
-        return f"phrase{audio_ctx}-{language}"
+        return f"phrase{len(wav)}-{language}"
 
-    def detect(self, wav: bytes, audio_ctx: int) -> dict[str, float]:
+    def detect(self, wav: bytes) -> dict[str, float]:
         FakeWhisper.calls.append("detect")
         return dict(FakeWhisper.scores)
 
@@ -485,6 +480,26 @@ def test_real_dictation_of_the_sample(tmp_path: Path) -> None:
     text = asyncio.run(run())
     words = " ".join("".join(ch for ch in text.lower() if ch.isalnum() or ch.isspace()).split())
     assert "ask not what your country can do for you" in words
+
+
+@real
+def test_real_same_phrase_gives_the_same_text_every_time(tmp_path: Path) -> None:
+    """With a window shortened to the phrase, whisper.cpp gave the same phrase back right once,
+    then as "... ... ..." or in English (seen on the VM). The full window gives the same text."""
+    m = _real_manager(tmp_path)
+    # A short phrase, as people dictate them.
+    pcm = _sample_pcm()[: RATE * phrases.BYTES_PER_SAMPLE * 4]
+
+    async def run() -> list[str]:
+        try:
+            whisper = await m.ensure()
+            return [whisper.transcribe(phrases.wav(pcm)) for _ in range(4)]
+        finally:
+            await m.shutdown()
+
+    texts = asyncio.run(run())
+    assert texts[0].strip()
+    assert texts == [texts[0]] * 4
 
 
 @real

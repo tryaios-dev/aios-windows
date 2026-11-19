@@ -70,7 +70,9 @@ whisper-server -m <ggml-small-q5_1.bin> --host 127.0.0.1 --port <random> --api-k
 
 Never passed: `--convert` (runs `ffmpeg` through the shell), `--public`, `--tmp-dir`,
 `-pr`/`--print-realtime` (prints the text), `-debug`, `-tr`/`--translate`, `--dtw`, `-oved`.
-The audio window (`audio_ctx`, the spike's `-ac`) is sent per request, fitted to the audio.
+The audio window (`audio_ctx`, the spike's `-ac`) is never set: Whisper always uses its full
+30 s window. A window fitted to the phrase made the pinned build's text depend on the request
+before it (the same phrase came back right, then as "... ... ..." or in English).
 
 ## Environment
 

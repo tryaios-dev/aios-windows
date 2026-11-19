@@ -58,13 +58,6 @@ def wav(pcm: bytes) -> bytes:
     return buf.getvalue()
 
 
-def audio_ctx(pcm: bytes) -> int:
-    """Whisper's window fitted to the audio (50 encoder frames per second, plus a margin), as
-    measured in the spike; 1500 is the full 30 s window."""
-    seconds = len(pcm) / (RATE * BYTES_PER_SAMPLE)
-    return min(1500, math.ceil(seconds * 50) + 64)
-
-
 def clean(text: str) -> str:
     """Whisper's own markers for non-speech ("[BLANK_AUDIO]", "(music)") are not words."""
     words = []
