@@ -123,6 +123,33 @@ The same reasons are written to the backend log as `company_failed` events (no c
 - If the server stops answering, sending in a Company conversation answers `company_unreachable`;
   the person can move the conversation back to Local.
 
+## Pictures and videos (R-7)
+
+When the company server also runs the media service (ComfyUI behind a small adapter), AIOS makes
+pictures and short videos there. The project's **Images & video** tab shows it whenever a company
+server is set up.
+
+- **Same address and key.** The service answers under `/v1/media/` on the company server's host
+  (`https://<host>/v1/media/...`, whatever path the chat address has). Its proxy route must allow
+  the `/v1/media/` prefix. There is nothing else to configure in AIOS.
+- **What the service must offer:** `GET /v1/media/models`, `POST /v1/media/jobs`,
+  `GET /v1/media/jobs/{id}`, `GET /v1/media/jobs/{id}/outputs/{index}` and
+  `DELETE /v1/media/jobs/{id}`, with the API key as bearer. A job id looks like `job_…`. Files are
+  PNG, JPEG or WebP pictures, or MP4 or WebM videos, up to 60 MB.
+- **Path:** media app → provider router → gateway → `aios_backend/media/company.py` → the server,
+  through the network allowlist (only the configured host).
+- **It asks first.** The description leaves the computer: the first picture or video in a project
+  that does not use the company server asks for confirmation, and Activity records it
+  (`disclosure_confirmed` with `purpose: media`, then `media_requested` and `media_completed`).
+  Evidence and logs never hold the description or the file.
+- **Kept encrypted.** A finished file is fetched and kept in chats.db (encrypted). The server
+  deletes its copy an hour after the job ends; a job AIOS did not fetch by then shows as expired.
+- **Limits** (checked in AIOS before anything is sent): description up to 2,000 characters;
+  picture sizes 1024×1024, 1216×832, 832×1216, 1344×768, 768×1344 (also 1152×896, 896×1152,
+  512×512); videos 832×480 or 480×832, 17 to 81 frames (about 1 to 5 seconds).
+
+If the server has no media service, the tab says so (`media_not_offered`) and chat is not affected.
+
 ## Switching it off
 
 `uv run aios-backend company clear` removes `company.json` and the key. Delete `operator.json` (as

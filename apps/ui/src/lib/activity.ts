@@ -121,7 +121,26 @@ export function describeEvent(e: EvidenceEvent, l: ActivityLookups): ActivityLin
     case 'conversation_deleted':
       return { ...base, kind: 'projects', what: 'Deleted a conversation', about: project }
     case 'disclosure_confirmed':
+      if (p.purpose === 'media') return { ...base, kind: 'sharing', what: 'Agreed to send a description to the company server to make a picture or video', about: project }
       return { ...base, kind: 'sharing', what: 'Agreed to send a conversation to the company server', about: conversation }
+    case 'media_requested': {
+      const thing = p.kind === 'video' ? 'a video' : 'a picture'
+      return { ...base, kind: 'sharing', what: `Asked the company server to make ${thing}. The description was sent there`, about: project, where: 'The company server', left: true }
+    }
+    case 'media_completed': {
+      const thing = p.kind === 'video' ? 'video' : 'picture'
+      const what =
+        p.status === 'done'
+          ? `The ${thing} was made and kept encrypted in the project`
+          : p.status === 'cancelled'
+            ? `Stopped making the ${thing}`
+            : `The ${thing} could not be made`
+      return { ...base, kind: 'sharing', who: p.status === 'cancelled' ? 'You' : 'AIOS', what, about: project }
+    }
+    case 'media_exported':
+      return { ...base, kind: 'sharing', what: `Saved a copy of a ${p.kind === 'video' ? 'video' : 'picture'} outside AIOS`, about: typeof p.size_bytes === 'number' ? formatBytes(p.size_bytes) : project }
+    case 'media_deleted':
+      return { ...base, kind: 'projects', what: `Deleted a ${p.kind === 'video' ? 'video' : 'picture'}`, about: project }
     case 'model_installed':
       return { ...base, kind: 'models', what: `Installed ${model ? `the AI model ${model}` : 'an AI model'}. AIOS checked it is the genuine, unmodified file`, about: typeof p.size_bytes === 'number' ? formatBytes(p.size_bytes) : undefined }
     case 'model_deleted':

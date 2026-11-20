@@ -15,6 +15,7 @@ from aios_backend.apps.chat.answers import AnswerSource
 from aios_backend.apps.chat.router import router as chat_router
 from aios_backend.apps.evidence.router import router as evidence_router
 from aios_backend.apps.knowledge.router import router as knowledge_router
+from aios_backend.apps.media.router import router as media_router
 from aios_backend.apps.models.downloads import Downloads
 from aios_backend.apps.models.engine import LocalEngine
 from aios_backend.apps.models.mirror import ModelMirror
@@ -36,6 +37,7 @@ from aios_backend.evidence import process as writer_process
 from aios_backend.evidence import pump
 from aios_backend.evidence.client import WriterClient
 from aios_backend.local import LocalModels
+from aios_backend.media import MediaSource
 from aios_backend.origin import HuggingFaceOrigin
 from aios_backend.routes import VERSION
 from aios_backend.routes import router as system_router
@@ -109,6 +111,7 @@ def create_app(
     start_writer: bool = False,
     signing_seed: Callable[[], bytes] | None = None,
     local: bool = False,
+    media: MediaSource | None = None,
 ) -> FastAPI:
     """The seams below are None until their modules exist; the endpoints then answer 409/503.
 
@@ -118,6 +121,8 @@ def create_app(
     ``writer``: the evidence writer's API (tests pass one); ``start_writer`` starts
     evidence-writer as a child process instead (backend.exe, ``aios-backend serve``).
     Without either, evidence stays queued in the outbox (pending) and export answers 503.
+    ``media``: what makes pictures and videos (R-7): the provider router in front of the company
+    server's media service (backend.exe), or a fake in tests. None: ``media_unavailable``.
     ``local``: answer with the installed model through the engine and download models from
     their origin (backend.exe, ``aios-backend serve``); seams passed explicitly still win.
     """
@@ -201,6 +206,7 @@ def create_app(
     app.state.voice_sessions = VoiceSessions(voice)
     app.state.answers = answers
     app.state.resource_check = linked.check  # a key is checked before it is stored
+    app.state.media = media
     app.state.generations = Generations()
     app.state.local_engine = local_engine
     app.state.mirror = mirror
@@ -220,6 +226,7 @@ def create_app(
         settings_router,
         models_router,
         knowledge_router,
+        media_router,
         skills_router,
         resources_router,
         voice_router,

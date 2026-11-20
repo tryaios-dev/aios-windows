@@ -8,6 +8,7 @@ import { HomeView } from '@/features/home/HomeView'
 import { ConversationsView } from '@/features/chat/ConversationsView'
 import { ActivityView } from '@/features/activity/ActivityView'
 import { ProjectSettingsView } from '@/features/projects/ProjectSettingsView'
+import { MediaView } from '@/features/media/MediaView'
 import { SearchView } from '@/features/search/SearchView'
 import { ModelsView } from '@/features/models/ModelsView'
 import { KnowledgeView } from '@/features/knowledge/KnowledgeView'
@@ -72,6 +73,7 @@ export default function App() {
             <Route index element={<ConversationsView />} />
             <Route path="c/:conversationId" element={<ConversationsView />} />
             <Route path="activity" element={<ActivityView />} />
+            <Route path="media" element={<MediaView />} />
             <Route path="evidence" element={<EvidenceRedirect />} />
             <Route path="settings" element={<ProjectSettingsView />} />
           </Route>

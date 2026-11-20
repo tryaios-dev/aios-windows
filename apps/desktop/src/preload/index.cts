@@ -127,6 +127,16 @@ const bridge: AiosBridge = {
     finish: (sessionId) => invoke("voice.finish", sessionId),
     cancel: (sessionId) => invoke("voice.cancel", sessionId),
   },
+  media: {
+    status: () => invoke("media.status"),
+    list: (projectId) => invoke("media.list", projectId),
+    create: (projectId, input) => invoke("media.create", projectId, input),
+    get: (id) => invoke("media.get", id),
+    content: (id) => invoke("media.content", id),
+    cancel: (id) => invoke("media.cancel", id),
+    save: (id) => invoke("media.save", id),
+    remove: (id) => invoke("media.remove", id),
+  },
 };
 
 contextBridge.exposeInMainWorld("aios", bridge);

@@ -658,6 +658,73 @@ export type VoiceText = z.infer<typeof VoiceText>;
 export const VoiceFinished = z.object({ text: z.string() });
 export type VoiceFinished = z.infer<typeof VoiceFinished>;
 
+/* ------------------------------------------------------------------ pictures and videos (R-7) */
+/** Made on the company's GPU server; the description leaves this computer, so the UI asks first. */
+export const MediaKind = z.enum(["image", "video"]);
+export type MediaKind = z.infer<typeof MediaKind>;
+
+export const MediaModel = z.object({ id: z.string(), kind: MediaKind });
+export type MediaModel = z.infer<typeof MediaModel>;
+
+/** GET /media/status. `reason` when not available, e.g. `company_provider_disabled`, `media_not_offered`. */
+export const MediaStatus = z.object({
+  available: z.boolean(),
+  reason: z.string().nullable(),
+  models: z.array(MediaModel),
+});
+export type MediaStatus = z.infer<typeof MediaStatus>;
+
+export const MediaItem = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  kind: MediaKind,
+  model: z.string(),
+  prompt: z.string(),
+  negative_prompt: z.string().nullable(),
+  width: z.number().int(),
+  height: z.number().int(),
+  frames: z.number().int().nullable(),
+  seed: z.number().int(),
+  status: z.enum(["queued", "running", "done", "failed", "cancelled"]),
+  /** 0 to 1. */
+  progress: z.number(),
+  /** Jobs ahead of this one on the server. */
+  position: z.number().int().nullable(),
+  error_code: z.string().nullable(),
+  mime: z.string().nullable(),
+  size_bytes: z.number().int().nullable(),
+  created_at: z.string(),
+  finished_at: z.string().nullable(),
+});
+export type MediaItem = z.infer<typeof MediaItem>;
+
+/** What to make. `confirmed`: the person agreed in the dialog that the description goes to the company server. */
+export const MediaCreate = z
+  .object({
+    kind: MediaKind,
+    model: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:+-]{0,63}$/),
+    prompt: z.string().min(1).max(2000),
+    negative_prompt: z.string().max(1000).nullable().optional(),
+    width: z.number().int().min(64).max(4096),
+    height: z.number().int().min(64).max(4096),
+    frames: z.number().int().min(1).max(1000).nullable().optional(),
+    seed: z.number().int().min(0).max(4294967295).nullable().optional(),
+    confirmed: z.boolean(),
+  })
+  .strict();
+export type MediaCreate = z.infer<typeof MediaCreate>;
+
+/** The finished file, to show in the window. */
+export const MediaContent = z.object({
+  id: z.string(),
+  mime: z.enum(["image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"]),
+  data_base64: z.string(),
+});
+export type MediaContent = z.infer<typeof MediaContent>;
+
+export const MediaSaved = z.object({ path: z.string(), size_bytes: z.number().int() });
+export type MediaSaved = z.infer<typeof MediaSaved>;
+
 /* ------------------------------------------------------------------ bridge */
 export interface AiosBridge {
   system: {
@@ -816,6 +883,20 @@ export interface AiosBridge {
     finish(sessionId: string): Promise<VoiceFinished>;
     /** Throws away what was heard. */
     cancel(sessionId: string): Promise<void>;
+  };
+  /** Pictures and short videos made on the company's GPU server (R-7), kept per project. */
+  media: {
+    status(): Promise<MediaStatus>;
+    /** Newest first; jobs still running are checked with the server. */
+    list(projectId: string): Promise<MediaItem[]>;
+    /** Fails with `confirmation_required` unless confirmed (or the project uses the company server). */
+    create(projectId: string, input: MediaCreate): Promise<MediaItem>;
+    get(id: string): Promise<MediaItem>;
+    content(id: string): Promise<MediaContent>;
+    cancel(id: string): Promise<MediaItem>;
+    /** System save dialog, then the backend writes a copy there. Null when cancelled. */
+    save(id: string): Promise<MediaSaved | null>;
+    remove(id: string): Promise<void>;
   };
 }
 

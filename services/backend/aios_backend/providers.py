@@ -11,6 +11,9 @@ is the only inference endpoint on the device (invariant 1, IPC-02). Two provider
 
 The request names its provider in the gateway's optional ``provider`` field.
 
+Pictures and short videos (R-7) take the same way: the router is the media app's ``MediaSource``
+and sends each request to the gateway's ``/v1/media/...``.
+
 Model facts (context length, runtime, and how many tokens a text is, G-04) and the prompt each
 provider puts first (``prepare``, so the input commitment covers the bytes sent, G-03) come from
 the providers directly: they are facts about the model and wording, not answers from it. Only the
@@ -19,6 +22,7 @@ local engine counts tokens; for Company, chat estimates.
 
 import json
 from collections.abc import Callable, Iterator
+from typing import Any
 from urllib.parse import urlparse
 
 import httpx
@@ -28,6 +32,14 @@ from aios_backend.engine import NoModel
 from aios_backend.engine.client import Streamed
 from aios_backend.engine.launcher import EngineError
 from aios_backend.gateway.app import GATEWAY_PURPOSE
+from aios_backend.media import (
+    MediaError,
+    MediaJob,
+    MediaModel,
+    RemoteJob,
+    check_job_id,
+    safe_code,
+)
 from aios_common.handshake import derive
 
 LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost", "testserver"}
@@ -52,7 +64,8 @@ class ProviderRouter:
             self._sources["company"] = company
         if resource is not None:
             self._sources["resource"] = resource
-        self._url = gateway_url.rstrip("/") + "/v1/chat/completions"
+        self._base = gateway_url.rstrip("/")
+        self._url = self._base + "/v1/chat/completions"
         # A client handed in (tests) belongs to the caller; one made here is closed after use.
         self._shared = client
 
@@ -118,6 +131,46 @@ class ProviderRouter:
         finally:
             if self._shared is None:
                 client.close()
+
+    # ---- pictures and videos (R-7): a MediaSource, through the gateway like every model request
+
+    def _media(self, method: str, path: str, body: dict[str, Any] | None = None) -> httpx.Response:
+        headers = {"Authorization": f"Bearer {derive(GATEWAY_PURPOSE)}"}
+        client = self._shared() if self._shared else _new_client()
+        try:
+            resp = client.request(
+                method, f"{self._base}/v1/media{path}", json=body, headers=headers
+            )
+            resp.read()
+        except httpx.HTTPError as exc:
+            raise MediaError("media_unavailable", 503) from exc
+        finally:
+            if self._shared is None:
+                client.close()
+        if resp.status_code >= 400:
+            try:
+                code = resp.json().get("error")
+            except (ValueError, AttributeError):
+                code = None
+            raise MediaError(safe_code(code, "media_unavailable"), resp.status_code)
+        return resp
+
+    def media_models(self) -> list[MediaModel]:
+        listed = self._media("GET", "/models").json().get("data", [])
+        return [MediaModel(id=m["id"], kind=m["kind"]) for m in listed]
+
+    def media_submit(self, job: MediaJob) -> RemoteJob:
+        return RemoteJob.from_json(self._media("POST", "/jobs", job.body()).json())
+
+    def media_job(self, job_id: str) -> RemoteJob:
+        return RemoteJob.from_json(self._media("GET", f"/jobs/{check_job_id(job_id)}").json())
+
+    def media_output(self, job_id: str, index: int) -> tuple[bytes, str]:
+        resp = self._media("GET", f"/jobs/{check_job_id(job_id)}/outputs/{int(index)}")
+        return resp.content, resp.headers.get("content-type", "").split(";")[0].strip()
+
+    def media_cancel(self, job_id: str) -> None:
+        self._media("DELETE", f"/jobs/{check_job_id(job_id)}")
 
 
 def _new_client() -> httpx.Client:

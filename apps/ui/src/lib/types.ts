@@ -210,6 +210,11 @@ export type EventType =
   | 'resource_linked'
   | 'resource_unlinked'
   | 'disclosure'
+  /* Pictures and videos made on the company server (R-7). Proposed, like the ones above. */
+  | 'media_requested'
+  | 'media_completed'
+  | 'media_exported'
+  | 'media_deleted'
 
 export interface EvidenceEvent {
   seq: number

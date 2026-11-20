@@ -64,6 +64,10 @@ export const EVENT_META: Record<EventType, EventMeta> = {
   resource_linked: { label: 'Resource linked', icon: ArrowRightLeft },
   resource_unlinked: { label: 'Resource unlinked', icon: ArrowRightLeft },
   disclosure: { label: 'Disclosure', icon: ShieldAlert },
+  media_requested: { label: 'Media requested', icon: ArrowRightLeft },
+  media_completed: { label: 'Media completed', icon: Download },
+  media_exported: { label: 'Media exported', icon: Download },
+  media_deleted: { label: 'Media deleted', icon: Trash2 },
 }
 
 export const ACTOR_LABEL: Record<EvidenceEvent['actor'], string> = {
@@ -196,6 +200,16 @@ export function eventContext(e: EvidenceEvent, lookups: ContextLookups): string 
       return `${[str(p.resource) ?? 'Resource', str(p.provider)].filter(Boolean).join(' · ')} · unlinked`
     case 'disclosure':
       return `${conv ? `${conv} · ` : ''}${str(p.what) ?? 'content'} → ${[str(p.resource), str(p.provider)].filter(Boolean).join(' · ') || 'linked resource'} · allowed by the user`
+    case 'media_requested':
+      return [str(p.kind), str(p.model), num(p.width) && num(p.height) ? `${num(p.width)}×${num(p.height)}` : undefined, num(p.frames) ? `${num(p.frames)} frames` : undefined, 'company server']
+        .filter(Boolean)
+        .join(' · ')
+    case 'media_completed':
+      return [str(p.kind), str(p.status), str(p.error_code), num(p.size_bytes) ? formatBytes(num(p.size_bytes)!) : undefined].filter(Boolean).join(' · ')
+    case 'media_exported':
+      return [str(p.kind), 'copy saved outside the encrypted store', num(p.size_bytes) ? formatBytes(num(p.size_bytes)!) : undefined].filter(Boolean).join(' · ')
+    case 'media_deleted':
+      return `${str(p.kind) ?? 'media'} · deleted`
     default:
       return ''
   }

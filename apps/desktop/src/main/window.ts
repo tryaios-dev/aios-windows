@@ -7,6 +7,9 @@ export const CSP = [
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
+  // Videos made on the company server (R-7) play from a blob the window builds from the backend's
+  // copy; nothing is ever loaded from a remote address.
+  "media-src blob:",
   "font-src 'self'",
   "connect-src 'none'",
   "frame-ancestors 'none'",
