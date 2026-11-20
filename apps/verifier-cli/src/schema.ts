@@ -75,7 +75,7 @@ const anyObject: Check = (v, path, out) => {
 const uuid = str(UUID);
 const digest = str(DIGEST);
 const classification = oneOf("restricted", "internal", "public");
-const provider = oneOf("local", "company");
+const provider = oneOf("local", "company", "resource");
 const position = obj({ seq: int(), event_hash: digest });
 
 /** Body checks per v1 event type (spec section 5, event.schema.json). */

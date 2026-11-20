@@ -16,6 +16,7 @@ from aios_backend.apps.chat.schemas import (
     MessageOut,
     ProviderChange,
     ProvidersStatus,
+    RegenerateIn,
     SendIn,
     SummaryOut,
 )
@@ -103,7 +104,14 @@ def send(
     generations: GenerationsDep,
 ) -> Exchange:
     return service.send(
-        session, settings, answers, generations, conversation_id, body.text, body.knowledge_ids
+        session,
+        settings,
+        answers,
+        generations,
+        conversation_id,
+        body.text,
+        body.knowledge_ids,
+        allowed=body.allowed,
     )
 
 
@@ -122,7 +130,14 @@ def send_stream(
     generations: GenerationsDep,
 ) -> StreamingResponse:
     frames = service.stream_send(
-        db, settings, answers, generations, conversation_id, body.text, body.knowledge_ids
+        db,
+        settings,
+        answers,
+        generations,
+        conversation_id,
+        body.text,
+        body.knowledge_ids,
+        allowed=body.allowed,
     )
     return StreamingResponse(frames, media_type="text/event-stream", headers=SSE_HEADERS)
 
@@ -136,8 +151,12 @@ def regenerate(
     settings: AppSettings,
     answers: Answers,
     generations: GenerationsDep,
+    body: RegenerateIn | None = None,
 ) -> Exchange:
-    return service.regenerate(session, settings, answers, generations, conversation_id)
+    allowed = body.allowed if body else False
+    return service.regenerate(
+        session, settings, answers, generations, conversation_id, allowed=allowed
+    )
 
 
 @router.post(
@@ -152,8 +171,12 @@ def regenerate_stream(
     settings: AppSettings,
     answers: Answers,
     generations: GenerationsDep,
+    body: RegenerateIn | None = None,
 ) -> StreamingResponse:
-    frames = service.stream_regenerate(db, settings, answers, generations, conversation_id)
+    allowed = body.allowed if body else False
+    frames = service.stream_regenerate(
+        db, settings, answers, generations, conversation_id, allowed=allowed
+    )
     return StreamingResponse(frames, media_type="text/event-stream", headers=SSE_HEADERS)
 
 

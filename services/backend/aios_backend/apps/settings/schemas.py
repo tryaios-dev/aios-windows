@@ -53,7 +53,7 @@ class AllowlistEntry(BaseModel):
     host: str
     port: int
     purpose: str
-    kind: Literal["fixed", "configured"]
+    kind: Literal["fixed", "configured", "linked"]
     enabled: bool
 
 

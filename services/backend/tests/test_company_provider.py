@@ -291,7 +291,7 @@ def test_g06_cli_set_defaults_to_deepseek(tmp_path: Path, monkeypatch: pytest.Mo
     assert cli.main(["company", "set", "--no-check"]) == 0
     found = company.load_config(path)
     assert found is not None
-    assert found.base_url == "https://api.deepseek.com" and found.model_name == "deepseek-chat"
+    assert found.base_url == "https://api.deepseek.com" and found.model_name == "deepseek-flash"
 
 
 def test_g06_the_company_side_picks_up_a_new_file_while_running(tmp_path: Path) -> None:

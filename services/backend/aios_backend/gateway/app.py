@@ -59,7 +59,7 @@ class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1)
     stream: bool = True
     # Which side answers. Optional, default local: older callers keep working.
-    provider: Literal["local", "company"] = "local"
+    provider: Literal["local", "company", "resource"] = "local"
 
 
 class MediaJobIn(BaseModel):
@@ -102,15 +102,19 @@ def create_gateway_app(
     engine_side: AnswerSource,
     company_side: AnswerSource | None = None,
     media_side: MediaSource | None = None,
+    resource_side: AnswerSource | None = None,
 ) -> ASGIApp:
     """The gateway as an ASGI app, wrapped in the loopback and token check (IPC-21 to IPC-23).
     ``company_side``: the Company provider (G-06), or None when no server is configured.
-    ``media_side``: the company server's media service (R-7), or None."""
+    ``media_side``: the company server's media service (R-7), or None.
+    ``resource_side``: the linked resources (``aios_backend.linked``), or None."""
     app = FastAPI(title="AIOS gateway", docs_url=None, redoc_url=None, openapi_url=None)
     _media_routes(app, media_side)
     sources: dict[str, AnswerSource] = {"local": engine_side}
     if company_side is not None:
         sources["company"] = company_side
+    if resource_side is not None:
+        sources["resource"] = resource_side
 
     @app.post("/v1/chat/completions", response_model=None)
     def chat_completions(body: ChatRequest) -> StreamingResponse | JSONResponse | dict[str, Any]:

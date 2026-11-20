@@ -54,6 +54,7 @@ class ProviderRouter:
         gateway_url: str,
         client: Callable[[], httpx.Client] | None = None,
         company: AnswerSource | None = None,
+        resource: AnswerSource | None = None,
     ) -> None:
         host = urlparse(gateway_url).hostname
         if host not in LOOPBACK_HOSTS:
@@ -61,6 +62,8 @@ class ProviderRouter:
         self._sources: dict[str, AnswerSource] = {"local": models}
         if company is not None:
             self._sources["company"] = company
+        if resource is not None:
+            self._sources["resource"] = resource
         self._base = gateway_url.rstrip("/")
         self._url = self._base + "/v1/chat/completions"
         # A client handed in (tests) belongs to the caller; one made here is closed after use.

@@ -6,6 +6,7 @@ import { knowledgeHandlers } from "./knowledge.js";
 import { mediaHandlers } from "./media.js";
 import { modelsHandlers } from "./models.js";
 import { projectsHandlers } from "./projects.js";
+import { resourcesHandlers } from "./resources.js";
 import { settingsHandlers } from "./settings.js";
 import { setupHandlers } from "./setup.js";
 import { skillsHandlers } from "./skills.js";
@@ -25,6 +26,7 @@ export const handlers: Record<string, Handler> = {
   ...evidenceHandlers,
   ...knowledgeHandlers,
   ...skillsHandlers,
+  ...resourcesHandlers,
   ...modelsHandlers,
   ...voiceHandlers,
   ...mediaHandlers,

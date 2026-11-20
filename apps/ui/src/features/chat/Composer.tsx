@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
-import { ArrowUp, Building2, ChevronDown, Cpu, Lock, MonitorSmartphone, Square } from 'lucide-react'
+import { ArrowUp, Building2, ChevronDown, Cloud, Cpu, Lock, MonitorSmartphone, Square } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useExtras } from '@/lib/extras'
 import { selectCompanyModelName, useStore } from '@/lib/store'
@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Callout } from '@/components/ui/feedback'
 import { Kbd } from '@/components/ui/layout'
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuRadioGroup, MenuRadioItem, MenuSeparator, MenuTrigger, Tooltip } from '@/components/ui/overlays'
-import { MoveToCompanyDialog } from './ChatDialogs'
+import { MoveToCompanyDialog, MoveToResourceDialog } from './ChatDialogs'
 import { KnowledgeButton, KnowledgeChips } from './KnowledgePicker'
 import { documentNamedIn, useChosenDocuments, useKnowledgeUse } from './knowledgeUse'
 import { lowerFirst } from './Starters'
@@ -30,6 +30,7 @@ export function Composer({ conversation, disabled }: { conversation: Conversatio
   const [text, setText] = useState('')
   const [tooLong, setTooLong] = useState(false)
   const [moveOpen, setMoveOpen] = useState(false)
+  const [resourceOpen, setResourceOpen] = useState(false)
   /** The starter whose example is in the box. The "sample text" line shows while the text is still exactly that example. */
   const [sampleId, setSampleId] = useState<string | null>(null)
   /** The words in the box came from speaking. The note above the box shows until they are sent or cleared. */
@@ -52,10 +53,21 @@ export function Composer({ conversation, disabled }: { conversation: Conversatio
   const pendingText = useStore((s) => s.continueLocally?.pending_text ?? s.modelChoice?.pending_text)
   const busy = !!generation && generation.conversation_id === conversation.id
   const otherBusy = !!generation && generation.conversation_id !== conversation.id
-  const isCompany = conversation.current_provider === 'company'
+  // A cloud AI model linked on the Resources page (DeepSeek V4 first): offered next to the Company server.
+  const resource = useExtras((s) => s.linkedResources[0])
+  const resourceName = resource?.name ?? 'Linked AI model'
+  const isResource = conversation.current_provider === 'resource'
+  // Company or a linked resource: the answer comes from outside this computer.
+  const isCompany = conversation.current_provider === 'company' || isResource
   const currentModel = installed.find((m) => m.id === conversation.model_id)
   const companyModel = useStore(selectCompanyModelName)
-  const currentLabel = isCompany ? `Company server · ${companyModel}` : currentModel ? modelLabel(currentModel) : 'Choose an AI model'
+  const currentLabel = isResource
+    ? `${resourceName} · ${resource?.model_id ?? 'cloud'}`
+    : isCompany
+      ? `Company server · ${companyModel}`
+      : currentModel
+        ? modelLabel(currentModel)
+        : 'Choose an AI model'
 
   // Documents from My secure knowledge this conversation is using. This is kept in the interface only:
   // nothing is added to the message text. Once a message is in the conversation, the names are noted against it.
@@ -197,7 +209,7 @@ export function Composer({ conversation, disabled }: { conversation: Conversatio
 
   const sample = sampleId ? STARTERS.find((x) => x.id === sampleId && x.example === text) : undefined
   const canSend = !!text.trim() && !busy && !otherBusy && !disabled
-  const placeholder = disabled ? 'This project is archived' : isCompany ? 'Write a message for the company server' : currentModel ? 'Ask a question, or paste text to work on' : 'Choose an AI model to start'
+  const placeholder = disabled ? 'This project is archived' : isResource ? `Write a message for ${resourceName}` : isCompany ? 'Write a message for the company server' : currentModel ? 'Ask a question, or paste text to work on' : 'Choose an AI model to start'
 
   return (
     // The gutter matches the scrolling thread above, so the box and the messages share one centre line.
@@ -302,30 +314,39 @@ export function Composer({ conversation, disabled }: { conversation: Conversatio
 
                   <span className="h-4 w-px shrink-0 bg-line-soft" />
 
-                  {/* Where it runs. The choice exists only in lab builds; otherwise it is a statement. */}
-                  {companyFlag ? (
+                  {/* Where it runs. A choice while the Company server (lab builds) or a linked resource is there; otherwise it is a statement. */}
+                  {companyFlag || resource || isCompany ? (
                     <Menu>
                       <MenuTrigger asChild>
-                        <button className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-ink-soft transition-colors hover:bg-ink-6 hover:text-ink disabled:opacity-60" disabled={busy || disabled} aria-label={`Where this conversation runs: ${isCompany ? 'Company server' : 'This computer'}`}>
-                          {isCompany ? <Building2 className="size-3.5" /> : <MonitorSmartphone className="size-3.5" />}
-                          <span>{isCompany ? 'Company server' : 'This computer'}</span>
+                        <button className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-ink-soft transition-colors hover:bg-ink-6 hover:text-ink disabled:opacity-60" disabled={busy || disabled} aria-label={`Where this conversation runs: ${isResource ? resourceName : isCompany ? 'Company server' : 'This computer'}`}>
+                          {isResource ? <Cloud className="size-3.5" /> : isCompany ? <Building2 className="size-3.5" /> : <MonitorSmartphone className="size-3.5" />}
+                          <span>{isResource ? resourceName : isCompany ? 'Company server' : 'This computer'}</span>
                           <ChevronDown className="size-3 text-ink-50" />
                         </button>
                       </MenuTrigger>
                       <MenuContent align="start" className="w-80">
                         <MenuLabel>Where this conversation runs</MenuLabel>
-                        {isCompany ? (
+                        {isCompany && (
                           <MenuItem icon={<MonitorSmartphone />} onSelect={() => api.conversations.setProvider(conversation.id, 'local', true)}>
                             <span className="flex flex-col">
                               <span>Move back to this computer</span>
                               <span className="text-xs text-ink-50">Never asks. Nothing is sent.</span>
                             </span>
                           </MenuItem>
-                        ) : (
+                        )}
+                        {companyFlag && conversation.current_provider !== 'company' && (
                           <MenuItem icon={<Building2 />} onSelect={() => setMoveOpen(true)} disabled={!company.reachable}>
                             <span className="flex flex-col">
                               <span>Move to the company server…</span>
                               <span className="text-xs text-ink-50">{company.reachable ? 'Asks first. The conversation so far is sent there.' : 'The company server cannot be reached right now.'}</span>
+                            </span>
+                          </MenuItem>
+                        )}
+                        {resource && !isResource && (
+                          <MenuItem icon={<Cloud />} onSelect={() => setResourceOpen(true)}>
+                            <span className="flex flex-col">
+                              <span>Move to {resourceName}…</span>
+                              <span className="text-xs text-ink-50">Linked on Add resources to my AI. Asks first. The conversation so far is sent there.</span>
                             </span>
                           </MenuItem>
                         )}
@@ -393,6 +414,7 @@ export function Composer({ conversation, disabled }: { conversation: Conversatio
         </div>
       </div>
       <MoveToCompanyDialog open={moveOpen} onOpenChange={setMoveOpen} conversation={conversation} />
+      {resource && <MoveToResourceDialog open={resourceOpen} onOpenChange={setResourceOpen} conversation={conversation} name={resourceName} modelId={resource.model_id ?? ''} />}
     </div>
   )
 }

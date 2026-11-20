@@ -27,7 +27,8 @@ import truststore
 
 from aios_common.logging import get_logger, log_event
 
-# (id, host, port, purpose, kind). The hostnames are placeholders until B-06 records the real
+# (id, host, port, purpose, kind). A "linked" host is not in FIXED: only the linked resource's
+# own client allows it (aios_backend.linked), and only while it is linked. The hostnames are placeholders until B-06 records the real
 # ones; this list, Settings > Network and contracts/network-allowlist/v1/allowlist.json agree
 # (a test keeps them equal).
 ALLOWLIST: list[tuple[str, str, int, str, str]] = [
@@ -107,6 +108,13 @@ ALLOWLIST: list[tuple[str, str, int, str, str]] = [
         443,
         "Company AI server (only while the provider flag is on)",
         "configured",
+    ),
+    (
+        "linked-deepseek-v4",
+        "api.deepseek.com",
+        443,
+        "DeepSeek V4, a linked resource (only after you link it and allow each send)",
+        "linked",
     ),
 ]
 # Callers set timeouts, catch errors and (tests) pass a transport without importing an HTTP

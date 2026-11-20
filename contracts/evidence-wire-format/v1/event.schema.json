@@ -338,7 +338,8 @@
     "provider": {
       "enum": [
         "local",
-        "company"
+        "company",
+        "resource"
       ]
     },
     "position": {

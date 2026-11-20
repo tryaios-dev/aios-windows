@@ -1,5 +1,6 @@
 import * as React from 'react'
-import { Building2, Globe, Lock, MonitorSmartphone } from 'lucide-react'
+import { Building2, Cloud, Globe, Lock, MonitorSmartphone } from 'lucide-react'
+import { useExtras } from '@/lib/extras'
 import { cn } from '@/lib/cn'
 import type { Classification, ProviderType } from '@/lib/types'
 
@@ -76,6 +77,9 @@ export function ClassChip({ value, size = 'sm', className, labelled = true }: { 
 
 export function ProviderBadge({ provider, model, size = 'sm', className, muted }: { provider: ProviderType; model?: string; size?: 'sm' | 'md'; className?: string; muted?: boolean }) {
   const isLocal = provider === 'local'
+  const isResource = provider === 'resource'
+  const linkedName = useExtras((s) => s.linkedResources[0]?.name)
+  const label = isLocal ? 'This computer' : isResource ? (linkedName ?? 'Linked AI model') : 'Company server'
   return (
     <span
       className={cn(
@@ -85,10 +89,10 @@ export function ProviderBadge({ provider, model, size = 'sm', className, muted }
         muted && 'opacity-80',
         className,
       )}
-      title={isLocal ? 'Where it ran: this computer' : 'Where it ran: the company server'}
+      title={isLocal ? 'Where it ran: this computer' : isResource ? 'Where it ran: a cloud AI model you linked' : 'Where it ran: the company server'}
     >
-      {isLocal ? <MonitorSmartphone className="size-3" aria-hidden /> : <Building2 className="size-3" aria-hidden />}
-      <span>{isLocal ? 'This computer' : 'Company server'}</span>
+      {isLocal ? <MonitorSmartphone className="size-3" aria-hidden /> : isResource ? <Cloud className="size-3" aria-hidden /> : <Building2 className="size-3" aria-hidden />}
+      <span>{label}</span>
       {model && (
         <>
           <span className="opacity-40">·</span>

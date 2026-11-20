@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Lock } from 'lucide-react'
 import { notInThisBuild } from '@/bridge/live'
+import { api } from '@/lib/api'
+import { useStore } from '@/lib/store'
 import { useExtras } from '@/lib/extras'
 import type { ResourceEntry } from '@/lib/types'
 import { RESOURCES } from '@/data/resources'
@@ -18,9 +20,13 @@ const EASE: [number, number, number, number] = [0.2, 0.7, 0.2, 1]
 const MODELS = RESOURCES.filter((r) => r.kind === 'model')
 const COMPUTE = RESOURCES.filter((r) => r.kind === 'compute')
 
+/** Resources the backend can link today (aios_backend/linked_config.py RESOURCES). */
+export const LINKABLE: ReadonlySet<string> = new Set(['deepseek-v4'])
+
 /**
- * Add resources to my AI. The list is the design's demonstration data (src/data/resources.ts):
- * there are no provider agreements yet, so linking says it is not in this build. The page starts from the job: the guide works out
+ * Add resources to my AI. The list is the design's data (src/data/resources.ts). DeepSeek V4 can
+ * be linked with the person's own API key (LINKABLE); the others say linking is not in this build
+ * yet. The page starts from the job: the guide works out
  * whether this computer can already do it and, only if it cannot, what to
  * add. Below it is everything that can be linked, with the provider's usual
  * price beside the AIOS price. Linking sends nothing, and the dialog that
@@ -30,20 +36,33 @@ export function ResourcesView() {
   const linked = useExtras((s) => s.linkedResources)
   const linkedIds = useMemo(() => new Set(linked.map((l) => l.id)), [linked])
   // Linked on this visit: their ticks draw themselves. Ticks for older links are already there.
-  const [linkedHere] = useState<ReadonlySet<string>>(() => new Set())
+  const [linkedHere, setLinkedHere] = useState<ReadonlySet<string>>(() => new Set())
   const linking = useSubject<ResourceEntry>()
   const unlinking = useSubject<ResourceEntry>()
 
-  // Linking needs reseller agreements with each provider, which do not exist yet: the page and its
-  // dialogs are as designed, and the last step says linking is not in this build. Nothing is linked.
-  const link = (_resource: ResourceEntry, _monthlyLimit: number | null) => {
-    notInThisBuild('Linking a resource')
+  // A linkable resource is linked with the API key the person copied (read by Electron main, never
+  // by this window); the others still say linking is not in this build.
+  const link = async (resource: ResourceEntry, monthlyLimit: number | null) => {
+    if (!LINKABLE.has(resource.id)) {
+      notInThisBuild('Linking a resource')
+      linking.setOpen(false)
+      return
+    }
+    const done = await api.resources.link(resource.id, monthlyLimit)
+    if (!done) return // the reason is shown; the dialog stays open to try again
     linking.setOpen(false)
+    setLinkedHere((s) => new Set(s).add(resource.id))
+    useStore.getState().toast({ kind: 'success', title: `${resource.name} is linked`, description: 'Pick it in a conversation. AIOS asks before anything is sent.' })
   }
 
   const unlink = () => {
-    notInThisBuild('Unlinking a resource')
+    const resource = unlinking.subject
     unlinking.setOpen(false)
+    if (!resource || !LINKABLE.has(resource.id)) {
+      notInThisBuild('Unlinking a resource')
+      return
+    }
+    void api.resources.unlink(resource.id)
   }
 
   return (

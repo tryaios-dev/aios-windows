@@ -100,7 +100,8 @@ describe("desktop app against the real backend", () => {
     expect(store().settings.schema_version).toBeGreaterThanOrEqual(4);
     const ids = store().live?.allowlist.map((e) => e.id) ?? [];
     expect(ids.slice(0, 3)).toEqual(["model-mirror", "update-feed", "model-origin"]); // Hugging Face
-    expect(ids.at(-1)).toBe("company-server");
+    // The Company server, then the linked resources (only reachable while linked).
+    expect(ids.slice(-2)).toEqual(["company-server", "linked-deepseek-v4"]);
   });
 
   it("setup: creates the store, shows the recovery key once, finishes with the default project", async () => {

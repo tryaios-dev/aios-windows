@@ -85,8 +85,8 @@ the bytes it received (`E_NONCANONICAL`).
 | `continuation` | see section 6 |
 | `project_created` | `project_id`, `classification` |
 | `conversation_created` | `conversation_id`, `project_id`, `classification` |
-| `inference_completed` | `conversation_id`, `message_id`, `provider` (`local`\|`company`), `model_id`, `input_commitment`, `output_commitment`, `tokens_in`, `tokens_out`, `status` (`ok`\|`cancelled`\|`error`) |
-| `disclosure_confirmed` | `conversation_id`, `provider`, `classification` (explicit user confirmation before a Company call) |
+| `inference_completed` | `conversation_id`, `message_id`, `provider` (`local`\|`company`\|`resource`), `model_id`, `input_commitment`, `output_commitment`, `tokens_in`, `tokens_out`, `status` (`ok`\|`cancelled`\|`error`) |
+| `disclosure_confirmed` | `conversation_id`, `provider`, `classification` (explicit user confirmation before a Company or linked-resource call; `resource` is a cloud model the user linked on the Resources page) |
 | `model_installed` | `model_id`, `artefact_sha256`, `catalogue_issued_at` |
 | `project_exported` / `project_imported` | `project_id`, `package_id`, `manifest_digest` |
 | `evidence_exported` | `export_id`, `to_seq`, `tip_hash`, `manifest_digest`?, `scope`? (`project`\|`range`) |

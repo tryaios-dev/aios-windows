@@ -500,6 +500,13 @@ export const simBridge: AiosBridge = {
     stop: async () => fail("not_generating"),
   },
 
+  // The preview has no key store: linking says it needs the desktop app.
+  resources: {
+    list: async () => [],
+    link: async () => fail("resource_key_missing"),
+    unlink: async () => undefined,
+  },
+
   skills: {
     list: async () => ({ catalogue: SIM_SKILLS, installed: state.skills }),
     install: async (id) => {

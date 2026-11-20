@@ -86,6 +86,9 @@ def test_the_proxy_does_not_change_what_is_checked() -> None:
 
 def test_the_allowlist_has_the_contract_flows() -> None:
     ids = [flow[0] for flow in ALLOWLIST]
-    assert ids[:2] == ["model-mirror", "update-feed"] and ids[-1] == "company-server"
-    assert all(i.startswith("model-origin") for i in ids[2:-1])  # Hugging Face and its CDN hosts
+    linked = [i for i in ids if i.startswith("linked-")]  # linked resources come last
+    assert ids[:2] == ["model-mirror", "update-feed"] and ids[-1 - len(linked)] == "company-server"
+    assert ids[len(ids) - len(linked) :] == linked == ["linked-deepseek-v4"]
+    end = -1 - len(linked)
+    assert all(i.startswith("model-origin") for i in ids[2:end])  # Hugging Face and its CDN hosts
     assert len(set(ids)) == len(ids)

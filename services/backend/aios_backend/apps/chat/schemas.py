@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 Classification = Literal["restricted", "internal", "public"]
 ClassificationSource = Literal["project", "import", "review"]
-Provider = Literal["local", "company"]
+Provider = Literal["local", "company", "resource"]
 
 
 class ProviderMoveOut(BaseModel):
@@ -69,6 +69,13 @@ class SendIn(BaseModel):
     text: str = Field(min_length=1, max_length=200_000)
     # Documents from My secure knowledge to answer from; their text goes with the question.
     knowledge_ids: list[str] = Field(default_factory=list, max_length=50)
+    # "Allow once": the person allowed this send to a linked resource (asked every time).
+    allowed: bool = False
+
+
+class RegenerateIn(BaseModel):
+    # "Allow once" for asking a linked resource again.
+    allowed: bool = False
 
 
 class Exchange(BaseModel):

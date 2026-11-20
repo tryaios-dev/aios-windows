@@ -26,6 +26,7 @@ from aios_backend.apps.chat.answers import AnswerSource
 from aios_backend.company import CompanyModels
 from aios_backend.config import Profile, Settings, load
 from aios_backend.gateway.app import create_gateway_app
+from aios_backend.linked import LinkedResources
 from aios_backend.main import configure_logging, create_app
 from aios_backend.media.company import CompanyMedia
 from aios_backend.providers import ProviderRouter
@@ -110,6 +111,7 @@ async def serve(
     gateway_port: int | None = None
     engine_side = app.state.answers
     company_side = _company_side(settings)
+    resource_side = LinkedResources()  # answers only while a resource is linked
     # R-7: pictures and videos come from the same company server's media service.
     media_side = CompanyMedia.from_settings(settings) if company_side is not None else None
     if local and answers is None and engine_side is not None:
@@ -117,7 +119,9 @@ async def serve(
         gateway_port = gateway_sock.getsockname()[1]
         gateway = uvicorn.Server(
             uvicorn.Config(
-                create_gateway_app(engine_side, company_side, media_side),
+                create_gateway_app(
+                    engine_side, company_side, media_side, resource_side=resource_side
+                ),
                 host="127.0.0.1",
                 log_config=None,
                 access_log=False,
@@ -133,7 +137,10 @@ async def serve(
                 return
             await asyncio.sleep(0.01)
         router = ProviderRouter(
-            engine_side, f"http://127.0.0.1:{gateway_port}", company=company_side
+            engine_side,
+            f"http://127.0.0.1:{gateway_port}",
+            company=company_side,
+            resource=resource_side,
         )
         app.state.answers = router
         # The media app asks the router too: every model request goes through the gateway.

@@ -53,8 +53,8 @@ const bridge: AiosBridge = {
     remove: (id) => invoke("conversations.remove", id),
     setProvider: (id, to, confirmed) => invoke("conversations.setProvider", id, to, confirmed),
     messages: (id) => invoke("conversations.messages", id),
-    send: (id, text, knowledgeIds) => invoke("conversations.send", id, text, knowledgeIds),
-    regenerate: (id) => invoke("conversations.regenerate", id),
+    send: (id, text, knowledgeIds, allowed) => invoke("conversations.send", id, text, knowledgeIds, allowed),
+    regenerate: (id, allowed) => invoke("conversations.regenerate", id, allowed),
     generation: (id) => invoke("conversations.generation", id),
     stop: (id) => invoke("conversations.stop", id),
     summary: (id) => invoke("conversations.summary", id),
@@ -62,6 +62,11 @@ const bridge: AiosBridge = {
   },
   search: {
     query: (q) => invoke("search.query", q),
+  },
+  resources: {
+    list: () => invoke("resources.list"),
+    link: (id, monthlyLimit) => invoke("resources.link", id, monthlyLimit),
+    unlink: (id) => invoke("resources.unlink", id),
   },
   skills: {
     list: () => invoke("skills.list"),
