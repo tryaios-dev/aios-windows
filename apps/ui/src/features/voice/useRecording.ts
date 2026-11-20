@@ -98,7 +98,7 @@ export function useRecording(
         try {
           const { pcm, seconds } = await decodeRecording(file, decode)
           if (r.halted) return
-          let p = await voice().recordingStart(seconds, [...navigator.languages])
+          let p = await voice().recordingStart(seconds, [])
           r.id = p.recording_id
           if (r.halted) return void voice().recordingDiscard(p.recording_id).catch(() => undefined)
           setProgress(p)

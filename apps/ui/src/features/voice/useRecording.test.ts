@@ -77,7 +77,7 @@ describe('a recording into text (the Voice notes skill)', () => {
     expect(hook.result.current.phase).toBe('reading')
     await waitFor(() => expect(hook.result.current.phase).toBe('ready'))
 
-    expect(backend.calls.recordingStart).toHaveBeenCalledWith(95, expect.any(Array))
+    expect(backend.calls.recordingStart).toHaveBeenCalledWith(95, []) // the languages come from Settings > Voice, as for dictation
     const sizes = backend.calls.recordingAudio.mock.calls.map(([, pcm]) => pcm.byteLength)
     expect(sizes).toEqual([960_000, 960_000, 960_000, 160_000]) // 30 + 30 + 30 + 5 s, 16-bit
     expect(backend.calls.recordingEnd).toHaveBeenCalledOnce()
