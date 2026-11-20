@@ -19,12 +19,12 @@ function clock(seconds: number): string {
 export function RecordingButton({ job, disabled }: { job: RecordingJob; disabled?: boolean }) {
   const input = useRef<HTMLInputElement>(null)
   return (
-    <Tooltip content="Turn a recording into text">
+    <Tooltip content={job.elsewhere ? 'Another conversation is turning a recording into text' : 'Turn a recording into text'}>
       <span>
         <button
           type="button"
           aria-label="Turn a recording into text"
-          disabled={disabled || job.phase !== 'idle'}
+          disabled={disabled || job.elsewhere || job.phase !== 'idle'}
           onClick={() => input.current?.click()}
           className="inline-flex size-8 items-center justify-center rounded-md text-ink-soft transition-[background-color,color,transform] duration-(--duration-micro) ease-(--ease-out) hover:bg-green-wash hover:text-green active:scale-95 disabled:cursor-not-allowed disabled:text-ink-30 disabled:hover:bg-transparent"
         >

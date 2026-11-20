@@ -170,9 +170,9 @@ export function Composer({ conversation, disabled }: { conversation: Conversatio
     setFromVoice(true)
   })
   // A recording turned into text (the Voice notes skill, while it is on). The text goes below
-  // what is in the box, and is never sent by itself.
+  // what is in the box, and is never sent by itself. It keeps going if the person leaves.
   const voiceNotesOn = useExtras((s) => s.installedSkills.some((k) => k.id === 'voice' && k.enabled))
-  const recordingTarget = useMemo(() => ({ conversation_id: conversation.id }), [conversation.id])
+  const recordingTarget = useMemo(() => ({ conversation_id: conversation.id, project_id: conversation.project_id }), [conversation.id, conversation.project_id])
   const recording = useRecording((written) => {
     const before = textNow.current.replace(/\s+$/, '')
     const next = before ? `${before}\n\n${written}` : written

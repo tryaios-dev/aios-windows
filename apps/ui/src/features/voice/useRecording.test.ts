@@ -2,10 +2,11 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiosBridge, VoiceRecording } from '@aios/bridge-contract'
 import { useStore } from '@/lib/store'
-import { decodeRecording, parts, RATE, toMono16, type Decode } from './decodeRecording'
-import { useRecording, type RecordingDeps } from './useRecording'
+import { ACCEPT, decodeRecording, parts, RATE, toMono16, type Decode } from './decodeRecording'
+import { discardRecording, useRecording, useRecordings, type RecordingDeps } from './useRecording'
 
 const ID = 'ab'.repeat(16)
+const WHERE = { conversation_id: 'conv-1', project_id: 'proj-1' }
 const TARGET = { conversation_id: 'conv-1' }
 
 /** An AudioBuffer as a 16 kHz Web Audio context gives it back. */
@@ -57,17 +58,19 @@ function fakeBackend({ backlog = 60, slow = false } = {}) {
   return { voice: voice as unknown as AiosBridge['voice'], calls: voice, job, received: () => received }
 }
 
-function setup(decoded: AudioBuffer, backend = fakeBackend()) {
+function setup(decoded: AudioBuffer, backend = fakeBackend(), keepMs?: number) {
   const decode: Decode = vi.fn(async () => decoded)
-  const deps: RecordingDeps = { voice: () => backend.voice, decode, recorded: vi.fn(async () => undefined), pollMs: 1 }
+  const deps: RecordingDeps = { voice: () => backend.voice, decode, recorded: vi.fn(async () => undefined), pollMs: 1, keepMs }
   const onText = vi.fn()
-  const hook = renderHook(() => useRecording(onText, TARGET, deps))
+  const hook = renderHook(({ where }) => useRecording(onText, where, deps), { initialProps: { where: WHERE } })
   return { hook, backend, onText, decode, deps }
 }
 
 afterEach(() => {
+  discardRecording()
   vi.restoreAllMocks()
   useStore.setState({ toasts: [] })
+  useRecordings.setState({ watching: {} })
 })
 
 describe('a recording into text (the Voice notes skill)', () => {
@@ -131,12 +134,60 @@ describe('a recording into text (the Voice notes skill)', () => {
     expect(deps.recorded).not.toHaveBeenCalled()
   })
 
-  it('leaving the screen throws it away', async () => {
+  it('leaving the conversation leaves it running; coming back shows it, and a notice says when it is done', async () => {
+    const { hook, backend, onText } = setup(buffer(120))
+    act(() => hook.result.current.open(file()))
+    expect(hook.result.current.phase).toBe('reading')
+    hook.unmount()
+    expect(backend.calls.recordingDiscard).not.toHaveBeenCalled()
+    await waitFor(() => expect(useRecordings.getState().job?.phase).toBe('ready'))
+    expect(backend.received()).toBe(120) // all of it was sent while nobody was looking
+    const notice = useStore.getState().toasts.find((t) => t.title === 'Your recording is text now')
+    expect(notice?.action?.href).toBe('/projects/proj-1/c/conv-1')
+
+    const back = renderHook(() => useRecording(onText, WHERE))
+    expect(back.result.current.phase).toBe('ready')
+    expect(back.result.current.done).toBe(120)
+    act(() => back.result.current.take())
+    await waitFor(() => expect(onText).toHaveBeenCalled())
+    expect(backend.calls.recordingTake).toHaveBeenCalledWith(ID, TARGET)
+    expect(backend.calls.recordingDiscard).not.toHaveBeenCalled()
+    back.unmount()
+  })
+
+  it('no notice while the conversation is on screen', async () => {
+    const { hook } = setup(buffer(40))
+    act(() => hook.result.current.open(file()))
+    await waitFor(() => expect(hook.result.current.phase).toBe('ready'))
+    expect(useStore.getState().toasts).toEqual([])
+  })
+
+  it('another conversation waits: one recording at a time, shown only where it was started', async () => {
     const { hook, backend } = setup(buffer(40))
     act(() => hook.result.current.open(file()))
     await waitFor(() => expect(hook.result.current.phase).toBe('ready'))
-    hook.unmount()
-    await waitFor(() => expect(backend.calls.recordingDiscard).toHaveBeenCalledWith(ID))
+    hook.rerender({ where: { conversation_id: 'conv-2', project_id: 'proj-1' } })
+    expect(hook.result.current.phase).toBe('idle')
+    expect(hook.result.current.elsewhere).toBe(true)
+    act(() => hook.result.current.open(file()))
+    act(() => hook.result.current.discard())
+    expect(backend.calls.recordingStart).toHaveBeenCalledOnce()
+    expect(backend.calls.recordingDiscard).not.toHaveBeenCalled()
+    hook.rerender({ where: WHERE })
+    expect(hook.result.current.phase).toBe('ready')
+  })
+
+  it('while the text waits to be put in, the backend is told it is still wanted', async () => {
+    const backend = fakeBackend()
+    const { hook } = setup(buffer(40), backend, 5)
+    act(() => hook.result.current.open(file()))
+    await waitFor(() => expect(hook.result.current.phase).toBe('ready'))
+    const asked = backend.calls.recordingProgress.mock.calls.length
+    await waitFor(() => expect(backend.calls.recordingProgress.mock.calls.length).toBeGreaterThan(asked + 1))
+    act(() => hook.result.current.discard())
+    const after = backend.calls.recordingProgress.mock.calls.length
+    await new Promise((r) => setTimeout(r, 20))
+    expect(backend.calls.recordingProgress.mock.calls.length).toBe(after)
   })
 
   it.each([
@@ -145,7 +196,7 @@ describe('a recording into text (the Voice notes skill)', () => {
   ])('%s: says so in plain words and sends nothing', async (_name, decodeImpl, title) => {
     const backend = fakeBackend()
     const deps: RecordingDeps = { voice: () => backend.voice, decode: decodeImpl as Decode, recorded: vi.fn(async () => undefined), pollMs: 1 }
-    const hook = renderHook(() => useRecording(vi.fn(), TARGET, deps))
+    const hook = renderHook(() => useRecording(vi.fn(), WHERE, deps))
     act(() => hook.result.current.open(file()))
     await waitFor(() => expect(hook.result.current.phase).toBe('idle'))
     expect(useStore.getState().toasts.map((t) => t.title)).toContain(title)
@@ -163,6 +214,10 @@ describe('a recording into text (the Voice notes skill)', () => {
 })
 
 describe('decoding', () => {
+  it('the file picker shows the files Windows does not call audio: WhatsApp .mpeg, phone .mp4 and .3gp', () => {
+    expect(ACCEPT.split(',')).toEqual(expect.arrayContaining(['audio/*', '.mpeg', '.mp4', '.3gp']))
+  })
+
   it('averages the channels into 16-bit samples', () => {
     const pcm = toMono16(buffer(0.01, 2, 0.5)) // left 0.5, right -0.25: average 0.125
     expect(pcm.length).toBe(160)

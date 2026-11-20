@@ -8,8 +8,12 @@ import { VOICE_MAX_RECORDING_S } from '@aios/bridge-contract'
 export const RATE = 16_000
 /** A larger file is refused before it is read: decoding it would use too much memory. */
 export const MAX_FILE_BYTES = 500 * 1024 * 1024
-/** Shown in the file picker; anything else the browser can decode works too. */
-export const ACCEPT = 'audio/*,.mp3,.m4a,.aac,.wav,.ogg,.oga,.opus,.flac,.webm,.wma'
+/**
+ * Shown in the file picker; anything else the browser can decode works too. Windows files some
+ * audio under video types, so those extensions are listed: WhatsApp saves voice notes as .mpeg
+ * (MP3 inside), phones record .mp4 and .3gp.
+ */
+export const ACCEPT = 'audio/*,.mp3,.mpeg,.mpga,.m4a,.mp4,.3gp,.3gpp,.aac,.wav,.ogg,.oga,.opus,.flac,.webm,.wma'
 
 export class RecordingError extends Error {
   constructor(readonly code: 'voice_recording_unreadable' | 'voice_recording_too_big' | 'voice_recording_too_long' | 'voice_recording_silent') {
