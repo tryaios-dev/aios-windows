@@ -14,7 +14,11 @@ from tests.conftest import LAUNCH_TOKEN, LOOPBACK, FakeAnswers
 
 from aios_backend.config import Settings
 from aios_backend.main import create_app
+from aios_backend.voice import model as voice_model
+from aios_backend.voice.manager import MODEL_FILE
 from db.session import Database
+
+REPO = Path(__file__).resolve().parents[3]
 
 
 def test_the_list_has_included_and_addable_skills(client: TestClient) -> None:
@@ -36,11 +40,35 @@ def test_add_turn_off_and_remove_a_skill(client: TestClient) -> None:
     assert client.delete("/skills/minutes").json() == {"error": "skill_not_found"}
 
 
-def test_voice_notes_is_listed_but_not_in_this_build(client: TestClient) -> None:
-    voice = next(s for s in client.get("/skills").json()["catalogue"] if s["id"] == "voice")
-    assert voice["available"] is False and voice["name"] == "Voice notes"
-    assert client.post("/skills/voice").json() == {"error": "skill_not_in_build"}
+def _voice_notes(client: TestClient) -> dict[str, object]:
+    entry: dict[str, object] = next(
+        s for s in client.get("/skills").json()["catalogue"] if s["id"] == "voice"
+    )
+    return entry
+
+
+def test_voice_notes_skill_available_only_with_its_model(
+    client: TestClient, settings: Settings
+) -> None:
+    """Voice notes (recordings into text) runs on PR #17's speech engine: it can be added only
+    once that engine's model is on this computer, and its entry describes that model."""
+    assert _voice_notes(client)["available"] is False
+    assert client.post("/skills/voice").json() == {"error": "skill_needs_voice_model"}
     assert client.get("/skills").json()["installed"] == []
+
+    settings.models_dir.mkdir(parents=True, exist_ok=True)
+    (settings.models_dir / MODEL_FILE).write_bytes(b"the speech model")
+    assert _voice_notes(client)["available"] is True
+    added = client.post("/skills/voice")
+    assert added.status_code == 200 and added.json()["enabled"] is True
+
+
+def test_voice_notes_entry_matches_the_pinned_speech_model(client: TestClient) -> None:
+    voice = _voice_notes(client)
+    manifest = json.loads((REPO / "build/whisper/manifest.json").read_text())
+    assert voice["version"] == manifest["whisper_cpp_release"].removeprefix("v")
+    assert voice["size_bytes"] == voice_model.SIZE == 190_085_487
+    assert voice["licence"] == "MIT"
 
 
 def test_included_skills_cannot_be_added_or_removed(client: TestClient) -> None:

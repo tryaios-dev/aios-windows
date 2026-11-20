@@ -52,7 +52,7 @@ const MESSAGES: Record<string, string> = {
   update_check_off: "Update checks are switched off.",
   invalid_path: "That location can't be used. Choose another file or folder.",
   skill_added: "That skill is already added. It is in your list.",
-  skill_not_in_build: "This skill needs the speech engine, which comes in a later version of AIOS.",
+  skill_needs_voice_model: "This skill needs the speech model. Download it in Settings, Voice, then add the skill.",
   skill_included: "That skill comes with AIOS and is always there.",
   not_a_skill_file: "That is not a skill file. A skill file ends .aios-skill.",
   skill_file_invalid: "AIOS could not read that skill file. It needs a name, a line saying what it does and an instruction.",
