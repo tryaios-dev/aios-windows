@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { Check, FileAudio, Lock, Square, X } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { Button } from '@/components/ui/button'
@@ -57,7 +57,12 @@ export function RecordingPanel({ job, className }: { job: RecordingJob; classNam
   const reading = phase === 'reading'
   const ready = phase === 'ready'
   const status = reading ? 'Reading the recording' : ready ? (stopped ? 'Stopped' : 'Turned into text') : 'Turning it into text'
-  const lines = text ? text.slice(-600) : ''
+  // The whole text, scrollable; it follows the newest words while they are being written.
+  const box = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = box.current
+    if (el && !ready) el.scrollTop = el.scrollHeight
+  }, [text, ready])
 
   return (
     <div className={cn('px-4 pb-3 pt-3.5', className)}>
@@ -81,9 +86,15 @@ export function RecordingPanel({ job, className }: { job: RecordingJob; classNam
         </div>
       </div>
 
-      <p className="mt-3 max-h-32 min-h-12 overflow-hidden text-md leading-6 text-ink [mask-image:linear-gradient(180deg,transparent,black_30%)]" aria-live="off">
-        {lines ? (lines.length < text.length ? `…${lines}` : lines) : <span className="text-ink-50">{reading ? 'One moment…' : 'The text appears here as it is written.'}</span>}
-      </p>
+      <div
+        ref={box}
+        tabIndex={text ? 0 : undefined}
+        aria-label={text ? 'The text so far' : undefined}
+        className="mt-3 max-h-48 min-h-12 overflow-y-auto whitespace-pre-wrap pr-1 text-md leading-6 text-ink"
+        aria-live="off"
+      >
+        {text || <span className="text-ink-50">{reading ? 'One moment…' : 'The text appears here as it is written.'}</span>}
+      </div>
 
       <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <p className="flex min-w-0 items-center gap-1.5 text-xs leading-4.5 text-ink-50">

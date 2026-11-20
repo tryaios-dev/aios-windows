@@ -59,10 +59,10 @@ function fakeBackend({ backlog = 60, slow = false } = {}) {
 
 function setup(decoded: AudioBuffer, backend = fakeBackend()) {
   const decode: Decode = vi.fn(async () => decoded)
-  const deps: RecordingDeps = { voice: () => backend.voice, decode, pollMs: 1 }
+  const deps: RecordingDeps = { voice: () => backend.voice, decode, recorded: vi.fn(async () => undefined), pollMs: 1 }
   const onText = vi.fn()
   const hook = renderHook(() => useRecording(onText, TARGET, deps))
-  return { hook, backend, onText, decode }
+  return { hook, backend, onText, decode, deps }
 }
 
 afterEach(() => {
@@ -72,7 +72,7 @@ afterEach(() => {
 
 describe('a recording into text (the Voice notes skill)', () => {
   it('decodes the file to 16 kHz mono, sends it in 30 s parts, and the text goes in when asked', async () => {
-    const { hook, backend, onText } = setup(buffer(95))
+    const { hook, backend, onText, deps } = setup(buffer(95))
     act(() => hook.result.current.open(file()))
     expect(hook.result.current.phase).toBe('reading')
     await waitFor(() => expect(hook.result.current.phase).toBe('ready'))
@@ -87,6 +87,7 @@ describe('a recording into text (the Voice notes skill)', () => {
     act(() => hook.result.current.take())
     await waitFor(() => expect(onText).toHaveBeenCalledWith('w0 w1 w2 w3 w4 w5 w6 w7 w8'))
     expect(backend.calls.recordingTake).toHaveBeenCalledWith(ID, TARGET)
+    expect(deps.recorded).toHaveBeenCalledOnce() // Activity loads the new event
     expect(hook.result.current.phase).toBe('idle')
   })
 
@@ -119,7 +120,7 @@ describe('a recording into text (the Voice notes skill)', () => {
   })
 
   it('Discard throws it away and tells the backend', async () => {
-    const { hook, backend, onText } = setup(buffer(40))
+    const { hook, backend, onText, deps } = setup(buffer(40))
     act(() => hook.result.current.open(file()))
     await waitFor(() => expect(hook.result.current.phase).toBe('ready'))
     act(() => hook.result.current.discard())
@@ -127,6 +128,7 @@ describe('a recording into text (the Voice notes skill)', () => {
     await waitFor(() => expect(backend.calls.recordingDiscard).toHaveBeenCalledWith(ID))
     expect(backend.calls.recordingTake).not.toHaveBeenCalled()
     expect(onText).not.toHaveBeenCalled()
+    expect(deps.recorded).not.toHaveBeenCalled()
   })
 
   it('leaving the screen throws it away', async () => {
@@ -142,7 +144,7 @@ describe('a recording into text (the Voice notes skill)', () => {
     ['a recording over two hours', async () => buffer(7201, 1, 0), 'That recording is too long'],
   ])('%s: says so in plain words and sends nothing', async (_name, decodeImpl, title) => {
     const backend = fakeBackend()
-    const deps: RecordingDeps = { voice: () => backend.voice, decode: decodeImpl as Decode, pollMs: 1 }
+    const deps: RecordingDeps = { voice: () => backend.voice, decode: decodeImpl as Decode, recorded: vi.fn(async () => undefined), pollMs: 1 }
     const hook = renderHook(() => useRecording(vi.fn(), TARGET, deps))
     act(() => hook.result.current.open(file()))
     await waitFor(() => expect(hook.result.current.phase).toBe('idle'))

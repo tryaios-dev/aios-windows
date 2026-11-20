@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { errorCode, type AiosBridge, type VoiceRecording } from '@aios/bridge-contract'
 import { bridge } from '@/bridge'
+import { refreshEvents } from '@/bridge/live'
 import { useStore } from '@/lib/store'
 import { decodeRecording, parts, RecordingError, type Decode, browserDecode } from './decodeRecording'
 
@@ -41,11 +42,13 @@ export interface RecordingJob {
 export interface RecordingDeps {
   voice: () => AiosBridge['voice']
   decode: Decode
+  /** Activity shows the new event: the window's copy of it is loaded again. */
+  recorded: () => Promise<void>
   /** How long to wait before asking again whether the backend wants more audio. */
   pollMs?: number
 }
 
-const DEFAULT_DEPS: RecordingDeps = { voice: () => bridge().voice, decode: browserDecode }
+const DEFAULT_DEPS: RecordingDeps = { voice: () => bridge().voice, decode: browserDecode, recorded: refreshEvents }
 const POLL_MS = 1_000
 
 interface Run {
@@ -158,6 +161,7 @@ export function useRecording(
       .recordingTake(id, target)
       .then(({ text }) => {
         if (text.trim()) onTextRef.current(text.trim())
+        void depsRef.current.recorded().catch(() => undefined)
       })
       .catch((e) => say(errorCode(e)))
   }, [reset, target])
