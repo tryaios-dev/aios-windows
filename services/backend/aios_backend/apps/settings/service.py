@@ -15,6 +15,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from aios_backend import linked_config as linked
 from aios_backend import net
 from aios_backend.apps.settings import repository as repo
 from aios_backend.apps.settings.schemas import (
@@ -116,6 +117,14 @@ def record_update_check(
     return get(session)
 
 
+def _enabled(settings: Settings, kind: str, flow_id: str) -> bool:
+    if kind == "configured":
+        return settings.company_ai
+    if kind == "linked":  # only while that resource is linked (its key is in the key store)
+        return linked.linked_id() == flow_id.removeprefix("linked-")
+    return True
+
+
 def allowlist(settings: Settings) -> list[AllowlistEntry]:
     return [
         AllowlistEntry(
@@ -124,7 +133,7 @@ def allowlist(settings: Settings) -> list[AllowlistEntry]:
             port=port,
             purpose=purpose,
             kind=kind,
-            enabled=settings.company_ai if kind == "configured" else True,
+            enabled=_enabled(settings, kind, flow_id),
         )
         for flow_id, host, port, purpose, kind in ALLOWLIST
     ]

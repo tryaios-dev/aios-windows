@@ -510,6 +510,13 @@ export const simBridge: AiosBridge = {
     stop: async () => fail("not_generating"),
   },
 
+  // The preview has no key store: linking says it needs the desktop app.
+  resources: {
+    list: async () => [],
+    link: async () => fail("resource_key_missing"),
+    unlink: async () => undefined,
+  },
+
   skills: {
     // Voice notes can be added once the speech model is on this computer, as in the backend.
     list: async () => ({

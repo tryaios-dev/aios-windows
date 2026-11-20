@@ -131,7 +131,8 @@
             {
               "enum": [
                 "local",
-                "company"
+                "company",
+                "resource"
               ]
             },
             {

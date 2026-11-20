@@ -114,7 +114,7 @@ class MessageFile(_Open):
     classification_source: Source = "project"
     created_at: str = Field(pattern=TIME)
     status: Literal["complete", "partial", "error", "stopped"] = "complete"
-    provider: Literal["local", "company"] | None = None
+    provider: Literal["local", "company", "resource"] | None = None
     model_id: str | None = Field(default=None, pattern=MODEL_ID.pattern)
     prompt_tokens: int | None = Field(default=None, ge=0)
     completion_tokens: int | None = Field(default=None, ge=0)
@@ -139,7 +139,7 @@ class SummaryFile(_Open):
     classification_effective: Classification
     classification_source: Source = "project"
     model_id: str = Field(max_length=100)
-    provider: Literal["local", "company"]
+    provider: Literal["local", "company", "resource"]
     created_at: str = Field(pattern=TIME)
 
 

@@ -130,7 +130,7 @@ function ConversationRow({ conversation: c, active, projectId }: { conversation:
         </span>
         {elsewhere && (
           <span className="flex items-center gap-2">
-            <ProviderBadge provider={c.current_provider} model={companyModelName} muted={!active} />
+            <ProviderBadge provider={c.current_provider} model={c.current_provider === 'company' ? companyModelName : undefined} muted={!active} />
           </span>
         )}
         {c.last_message_preview && <span className="line-clamp-1 text-xs leading-4 text-ink-50">{c.last_message_preview}</span>}

@@ -125,9 +125,17 @@ def configured(settings: Settings) -> CompanyConfig | None:
 class CompanySource:
     """The chat ``AnswerSource`` for ``company``, used by the gateway.
 
+    A subclass can serve another provider over the same OpenAI-compatible protocol (a linked
+    resource, ``aios_backend.linked``): it sets ``provider``, ``prefix`` (of its error codes) and
+    ``system_prompt``.
+
     ``config`` returns the server to use now (None: Company is off); ``secret`` returns the API
     key (tests pass their own); ``client`` holds extra arguments for the HTTP client (tests pass a
     transport)."""
+
+    provider = PROVIDER
+    prefix = "company"
+    system_prompt = SYSTEM_PROMPT
 
     def __init__(
         self,
@@ -159,7 +167,11 @@ class CompanySource:
         try:
             key = self._secret()
         except Exception as exc:  # the key store cannot be used on this machine
-            log_event(log, "company_key_unreadable", error_code=type(exc).__name__)
+            log_event(
+                get_logger(self.prefix),
+                f"{self.prefix}_key_unreadable",
+                error_code=type(exc).__name__,
+            )
             return None
         key = key.strip() if key else None
         return key if key and valid_key(key) else None
@@ -167,11 +179,12 @@ class CompanySource:
     def _headers(self, key: str) -> dict[str, str]:
         return {**HEADERS, "Authorization": f"Bearer {key}"}
 
-    def _failed(self, code: str, found: CompanyConfig | None = None) -> CompanyError:
+    def _failed(self, reason: str, found: CompanyConfig | None = None) -> CompanyError:
+        code = f"{self.prefix}_{reason}"
         self.last_error = code
         if found is not None:
             self._checked = (found, self._clock(), False)
-        log_event(log, "company_failed", error_code=code)
+        log_event(get_logger(self.prefix), f"{self.prefix}_failed", error_code=code)
         return CompanyError(code)
 
     # ---- AnswerSource -----------------------------------------------------------------------
@@ -179,7 +192,7 @@ class CompanySource:
     def model(self, provider: str, model_id: str | None) -> ModelInfo | None:
         """The company model, or None while Company is off or its server cannot answer."""
         found = self._config()
-        if provider != PROVIDER or found is None:
+        if provider != self.provider or found is None:
             return None
         if not self._reachable(found):
             return None
@@ -189,7 +202,7 @@ class CompanySource:
 
     def prepare(self, provider: str, messages: list[dict[str, str]]) -> list[dict[str, str]]:
         """The messages exactly as they go to the server: the Company prompt first, once."""
-        return with_system_prompt(SYSTEM_PROMPT, messages)
+        return with_system_prompt(self.system_prompt, messages)
 
     def answer(self, provider: str, model_id: str, messages: list[dict[str, str]]) -> Streamed:
         """Answer text in chunks; ``usage`` holds the server's token counts once it is done.
@@ -204,7 +217,7 @@ class CompanySource:
         """Ask the server now, whatever was remembered (the operator's check command)."""
         with self._lock:
             self._checked = None
-        return self.model(PROVIDER, None)
+        return self.model(self.provider, None)
 
     def _reachable(self, found: CompanyConfig) -> bool:
         with self._lock:
@@ -218,14 +231,14 @@ class CompanySource:
             except CompanyError:
                 return False
             if not was_ok:
-                log_event(log, "company_reachable")
+                log_event(get_logger(self.prefix), f"{self.prefix}_reachable")
             self._checked, self.last_error = (found, self._clock(), True), None
             return True
 
     def _check(self, found: CompanyConfig) -> None:
         key = self._key()
         if key is None:
-            raise self._failed("company_key_missing", found)
+            raise self._failed("key_missing", found)
         try:
             with net.outbound_client(
                 net.Allowlist(company=lambda: found.base_url),
@@ -234,17 +247,17 @@ class CompanySource:
             ) as client:
                 resp = client.get(f"{api_root(found.base_url)}/models", headers=self._headers(key))
                 if resp.status_code in (401, 403):
-                    raise self._failed("company_key_rejected", found)
+                    raise self._failed("key_rejected", found)
                 if resp.status_code != 200:
-                    raise self._failed("company_unreachable", found)
+                    raise self._failed("unreachable", found)
                 listed = resp.json().get("data", [])
         except CompanyError:
             raise
         except (net.HostNotAllowed, net.HTTPError, ValueError, AttributeError) as exc:
-            raise self._failed("company_unreachable", found) from exc
+            raise self._failed("unreachable", found) from exc
         names = {m.get("id") for m in listed if isinstance(m, dict)}
         if found.model_name not in names:
-            raise self._failed("company_model_not_listed", found)
+            raise self._failed("model_not_listed", found)
 
     # ---- answers ------------------------------------------------------------------------------
 
@@ -252,11 +265,11 @@ class CompanySource:
         self, provider: str, messages: list[dict[str, str]], out: Streamed
     ) -> Iterator[str]:
         found = self._config()
-        if provider != PROVIDER or found is None:
-            raise self._failed("company_provider_disabled")
+        if provider != self.provider or found is None:
+            raise self._failed("provider_disabled")
         key = self._key()
         if key is None:
-            raise self._failed("company_key_missing", found)
+            raise self._failed("key_missing", found)
         body = {
             "model": found.model_name,
             "messages": messages,
@@ -279,12 +292,12 @@ class CompanySource:
                 ) as resp,
             ):
                 if resp.status_code in (401, 403):
-                    raise self._failed("company_key_rejected", found)
+                    raise self._failed("key_rejected", found)
                 if resp.status_code != 200:
-                    raise self._failed("company_unreachable", found)
+                    raise self._failed("unreachable", found)
                 for event in _events(resp.iter_lines()):
                     if "error" in event:
-                        raise self._failed("company_answer_failed", found)
+                        raise self._failed("answer_failed", found)
                     out.usage = _usage(event) or out.usage
                     text = think.feed(_delta(event))
                     if text:
@@ -295,7 +308,7 @@ class CompanySource:
         except CompanyError:
             raise
         except (net.HostNotAllowed, net.HTTPError) as exc:
-            raise self._failed("company_unreachable", found) from exc
+            raise self._failed("unreachable", found) from exc
 
 
 class CompanyModels(CompanySource):

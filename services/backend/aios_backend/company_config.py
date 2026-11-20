@@ -20,7 +20,7 @@ from urllib.parse import urlsplit
 FILE_NAME = "company.json"
 # What ``aios-backend company set`` uses when no address or model is given.
 DEEPSEEK_URL = "https://api.deepseek.com"
-DEEPSEEK_MODEL = "deepseek-chat"
+DEEPSEEK_MODEL = "deepseek-flash"  # DeepSeek's API lists deepseek-flash and deepseek-v4-pro
 DEFAULT_CONTEXT = 65_536  # tokens
 # The model id is recorded in evidence, so it may only hold what an evidence body accepts
 # (db.outbox): no spaces and no "/" (serve such models under another name, e.g. vLLM's

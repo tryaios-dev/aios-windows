@@ -115,7 +115,7 @@ function Row({ row, first, last, highlighted, onSelect }: { row: ActivityRow; fi
         <span className="flex justify-end pt-2">
           {line.left ? (
             <span className="inline-flex h-6 items-center gap-1 rounded-full border border-brass/60 bg-brass-soft px-2 text-xs font-medium leading-none whitespace-nowrap text-brass-text">
-              {event.provider === 'company' ? <Building2 className="size-3 shrink-0" aria-hidden /> : <ArrowUpRight className="size-3 shrink-0" aria-hidden />}
+              {event.provider === 'company' || event.provider === 'resource' ? <Building2 className="size-3 shrink-0" aria-hidden /> : <ArrowUpRight className="size-3 shrink-0" aria-hidden />}
               <span className="sr-only">Left this computer: </span>
               <span className="max-w-32 truncate" title={line.where}>
                 {line.where}

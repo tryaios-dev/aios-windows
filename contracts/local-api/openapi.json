@@ -66,7 +66,8 @@
           "kind": {
             "enum": [
               "fixed",
-              "configured"
+              "configured",
+              "linked"
             ],
             "title": "Kind",
             "type": "string"
@@ -693,7 +694,8 @@
           "current_provider": {
             "enum": [
               "local",
-              "company"
+              "company",
+              "resource"
             ],
             "title": "Current Provider",
             "type": "string"
@@ -738,7 +740,8 @@
           "provider_mode": {
             "enum": [
               "local",
-              "company"
+              "company",
+              "resource"
             ],
             "title": "Provider Mode",
             "type": "string"
@@ -1246,7 +1249,8 @@
               {
                 "enum": [
                   "local",
-                  "company"
+                  "company",
+                  "resource"
                 ],
                 "type": "string"
               },
@@ -1784,7 +1788,8 @@
               {
                 "enum": [
                   "local",
-                  "company"
+                  "company",
+                  "resource"
                 ],
                 "type": "string"
               },
@@ -2324,6 +2329,89 @@
         "title": "Licence",
         "type": "object"
       },
+      "LinkIn": {
+        "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
+          "monthly_limit": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Limit"
+          }
+        },
+        "title": "LinkIn",
+        "type": "object"
+      },
+      "LinkedResourceOut": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "linked_at": {
+            "format": "date-time",
+            "title": "Linked At",
+            "type": "string"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "monthly_limit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Limit"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "spent": {
+            "title": "Spent",
+            "type": "number"
+          },
+          "uses": {
+            "title": "Uses",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "model_id",
+          "linked_at",
+          "monthly_limit",
+          "spent",
+          "uses"
+        ],
+        "title": "LinkedResourceOut",
+        "type": "object"
+      },
       "MediaContentOut": {
         "description": "The file, base64 encoded, to show in the window.",
         "properties": {
@@ -2780,7 +2868,8 @@
           "provider": {
             "enum": [
               "local",
-              "company"
+              "company",
+              "resource"
             ],
             "title": "Provider",
             "type": "string"
@@ -3192,7 +3281,8 @@
           "to": {
             "enum": [
               "local",
-              "company"
+              "company",
+              "resource"
             ],
             "title": "To",
             "type": "string"
@@ -3214,7 +3304,8 @@
           "to": {
             "enum": [
               "local",
-              "company"
+              "company",
+              "resource"
             ],
             "title": "To",
             "type": "string"
@@ -3405,6 +3496,17 @@
         "title": "RecoveryKeyOut",
         "type": "object"
       },
+      "RegenerateIn": {
+        "properties": {
+          "allowed": {
+            "default": false,
+            "title": "Allowed",
+            "type": "boolean"
+          }
+        },
+        "title": "RegenerateIn",
+        "type": "object"
+      },
       "RestoreIn": {
         "description": "``backup_path``: the backed-up data folder holding ``chats.db`` and ``recovery.pkg``.",
         "properties": {
@@ -3502,6 +3604,11 @@
       },
       "SendIn": {
         "properties": {
+          "allowed": {
+            "default": false,
+            "title": "Allowed",
+            "type": "boolean"
+          },
           "knowledge_ids": {
             "items": {
               "type": "string"
@@ -4072,7 +4179,8 @@
           "provider": {
             "enum": [
               "local",
-              "company"
+              "company",
+              "resource"
             ],
             "title": "Provider",
             "type": "string"
@@ -4984,6 +5092,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RegenerateIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -5026,6 +5151,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RegenerateIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -7355,6 +7497,118 @@
         "summary": "Create a new recovery key: the keys are wrapped again; the key is returned once",
         "tags": [
           "setup"
+        ]
+      }
+    },
+    "/resources": {
+      "get": {
+        "operationId": "list_linked_resources_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LinkedResourceOut"
+                  },
+                  "title": "Response List Linked Resources Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "The cloud AI models linked to this AIOS",
+        "tags": [
+          "resources"
+        ]
+      }
+    },
+    "/resources/{resource_id}": {
+      "delete": {
+        "operationId": "unlink_resources__resource_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resource_id",
+            "required": true,
+            "schema": {
+              "title": "Resource Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unlink: remove the key; nothing is sent",
+        "tags": [
+          "resources"
+        ]
+      }
+    },
+    "/resources/{resource_id}/link": {
+      "post": {
+        "operationId": "link_resources__resource_id__link_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resource_id",
+            "required": true,
+            "schema": {
+              "title": "Resource Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkedResourceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Check the API key, store it, link",
+        "tags": [
+          "resources"
         ]
       }
     },

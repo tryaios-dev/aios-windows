@@ -4,7 +4,8 @@ import { ArrowLeft, ArrowRightLeft, Cpu, FileText, Pencil } from 'lucide-react'
 import { api } from '@/lib/api'
 import { STARTERS } from '@/data/stack'
 import { selectCompanyModelName, useStore, useStoreShallow } from '@/lib/store'
-import type { Conversation, Message, Project } from '@/lib/types'
+import type { Conversation, Message, Project, ProviderType } from '@/lib/types'
+import { useExtras } from '@/lib/extras'
 import { cn } from '@/lib/cn'
 import { dayLabel, formatTime, pluralise, relativeTime } from '@/lib/format'
 import { modelLabelById } from '@/lib/words'
@@ -43,7 +44,7 @@ export function ChatPane({ conversation, project, onBack }: { conversation: Conv
   const isCompany = conversation.current_provider === 'company'
   /** "Standard · Qwen3 8B" for an answer from this computer; the server's own name otherwise. */
   const companyModel = useStore(selectCompanyModelName)
-  const modelName = (m: Message) => (m.provider === 'company' ? companyModel : modelLabelById(m.model_id, installed))
+  const modelName = (m: Message) => (m.provider === 'company' ? companyModel : m.provider === 'resource' ? (m.model_id ?? '') : modelLabelById(m.model_id, installed))
 
   // A starter fills the message box through the same parameters Home uses: ?draft=<id>, plus example=1 for the full example.
   const fillFrom = (id: string, withExample: boolean) => {
@@ -92,7 +93,7 @@ export function ChatPane({ conversation, project, onBack }: { conversation: Conv
 
   // Dividers: summaries and moves between this computer and the company server are placed by position and time.
   const rendered = useMemo(() => {
-    const items: Array<{ kind: 'day'; key: string; label: string } | { kind: 'summary'; key: string } | { kind: 'move'; key: string; to: 'local' | 'company'; at: string } | { kind: 'message'; key: string; message: Message }> = []
+    const items: Array<{ kind: 'day'; key: string; label: string } | { kind: 'summary'; key: string } | { kind: 'move'; key: string; to: ProviderType; at: string } | { kind: 'message'; key: string; message: Message }> = []
     const moves = [...(conversation.moves ?? [])].sort((a, b) => a.at.localeCompare(b.at))
     let moveIdx = 0
     let lastDay = ''
@@ -259,15 +260,18 @@ function SummaryDivider() {
   )
 }
 
-function MoveDivider({ to, at }: { to: 'local' | 'company'; at: string }) {
+function MoveDivider({ to, at }: { to: ProviderType; at: string }) {
+  const linkedName = useExtras((s) => s.linkedResources[0]?.name) ?? 'the linked AI model'
+  const away = to !== 'local'
+  const where = to === 'resource' ? linkedName : 'the company server'
   return (
     <div className="my-3 flex items-center gap-3" role="separator">
-      <span className={cn('h-px flex-1', to === 'company' ? 'bg-ink/30' : 'bg-green/40')} />
-      <span className={cn('inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-2xs font-medium', to === 'company' ? 'border-ink/30 bg-paper-deep text-ink' : 'border-green/30 bg-green-wash text-green-dark')}>
+      <span className={cn('h-px flex-1', away ? 'bg-ink/30' : 'bg-green/40')} />
+      <span className={cn('inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-2xs font-medium', away ? 'border-ink/30 bg-paper-deep text-ink' : 'border-green/30 bg-green-wash text-green-dark')}>
         <ArrowRightLeft className="size-3" />
-        {to === 'company' ? `Moved to the company server · ${formatTime(at)} · its history was sent` : `Moved back to this computer · ${formatTime(at)} · nothing was sent`}
+        {away ? `Moved to ${where} · ${formatTime(at)} · its history was sent` : `Moved back to this computer · ${formatTime(at)} · nothing was sent`}
       </span>
-      <span className={cn('h-px flex-1', to === 'company' ? 'bg-ink/30' : 'bg-green/40')} />
+      <span className={cn('h-px flex-1', away ? 'bg-ink/30' : 'bg-green/40')} />
     </div>
   )
 }

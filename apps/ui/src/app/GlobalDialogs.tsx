@@ -2,6 +2,10 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { api } from '@/lib/api'
 import { useStore } from '@/lib/store'
+import { useExtras } from '@/lib/extras'
+import { answerAllowOnce } from '@/lib/allowOnce'
+import { pluralise } from '@/lib/format'
+import { RESOURCES } from '@/data/resources'
 import { modelLabel, sizeBlurb } from '@/lib/words'
 import { catalogueEntry } from '@/data/catalogue'
 import { ConfirmDialog, Dialog } from '@/components/ui/overlays'
@@ -15,6 +19,7 @@ export function GlobalDialogs() {
     <>
       <ContinueLocallyDialog />
       <ModelChoiceDialog />
+      <AllowOnceDialog />
     </>
   )
 }
@@ -97,5 +102,36 @@ function ModelChoiceDialog() {
         </RadioGroup>
       )}
     </Dialog>
+  )
+}
+
+/**
+ * "Allow once" (Resources page design): before a message goes to a linked cloud AI model, the
+ * person sees what would be sent and where, and allows it. Asked every time; "Stay on this
+ * computer" sends nothing and keeps the message in the box.
+ */
+function AllowOnceDialog() {
+  const prompt = useStore((s) => s.allowOnce)
+  const conv = useStore((s) => s.conversations.find((c) => c.id === prompt?.conversation_id))
+  const count = useStore((s) => s.messages.filter((m) => m.conversation_id === prompt?.conversation_id).length)
+  const linked = useExtras((s) => s.linkedResources[0])
+  const entry = RESOURCES.find((r) => r.id === linked?.id)
+  const name = linked?.name ?? entry?.name ?? 'the linked AI model'
+  const where = entry ? `, run by ${entry.provider} in ${entry.region.replace(/^Runs in /, '').replace(/\.$/, '')}` : ''
+  const sent = prompt?.again ? count : count + 1
+  const title = conv?.title ?? 'this conversation'
+  return (
+    <ConfirmDialog
+      open={!!prompt}
+      onOpenChange={(o) => {
+        if (!o) answerAllowOnce(false)
+      }}
+      eyebrow="This will leave your computer"
+      title={`Send ${pluralise(sent, 'message')} from \u201c${title}\u201d to ${name}${where}?`}
+      description="Only this conversation goes, and only this time. Activity keeps a note of it."
+      confirmLabel="Allow once"
+      cancelLabel="Stay on this computer"
+      onConfirm={() => answerAllowOnce(true)}
+    />
   )
 }

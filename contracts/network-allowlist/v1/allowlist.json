@@ -89,6 +89,14 @@
       "scheme": "https",
       "client": "backend-net",
       "when": "only if flag enabled (lab)"
+    },
+    {
+      "id": "linked-deepseek-v4",
+      "host": "api.deepseek.com",
+      "port": 443,
+      "scheme": "https",
+      "client": "backend-net",
+      "when": "only after the user links DeepSeek V4 on the Resources page and allows each send"
     }
   ],
   "x-status": "draft - B-06 records the real model-mirror and update-feed hostnames here (they must also pass the corporate proxy)"

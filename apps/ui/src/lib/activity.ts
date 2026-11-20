@@ -89,15 +89,15 @@ export function describeEvent(e: EvidenceEvent, l: ActivityLookups): ActivityLin
   const project = l.projects.find((p) => p.id === e.project_id)?.name
   const conv = l.conversations.find((c) => c.id === e.conversation_id)
   const conversation = conv?.title
-  const where: ActivityLine['where'] = e.provider === 'company' ? 'Company server' : 'This computer'
+  const where: ActivityLine['where'] = e.provider === 'company' ? 'Company server' : e.provider === 'resource' ? 'A linked AI model' : 'This computer'
   const p = e.payload ?? {}
-  const base = { who, where, left: e.provider === 'company' }
+  const base = { who, where, left: e.provider === 'company' || e.provider === 'resource' }
   const model = modelNameByDigest(e.model_digest, l.installed)
 
   switch (e.event_type) {
     case 'request': {
       if (p.purpose === 'summary') return { ...base, kind: 'questions', who: 'AIOS', what: 'Summarised the earlier messages in a long conversation, so the AI can keep track of it', about: conversation }
-      const ai = e.provider === 'company' ? 'The AI on the company server' : 'The AI'
+      const ai = e.provider === 'company' ? 'The AI on the company server' : e.provider === 'resource' ? 'The linked cloud AI model' : 'The AI'
       // A conversation that arrived in a file or as a copy was not started by this question.
       const started = !p.regenerate && !!l.firstQuestions?.has(e.seq) && (!conv || conv.classification_source === 'project')
       const asked = p.regenerate ? 'Asked the same question again' : started ? (conversation ? `Started \u201c${conversation}\u201d and asked a question` : 'Started a conversation and asked a question') : 'Asked a question'
@@ -109,7 +109,7 @@ export function describeEvent(e: EvidenceEvent, l: ActivityLookups): ActivityLin
       return { ...base, kind: 'questions', who: 'AIOS', what: 'Did not send a message to the AI because it was too long', about: conversation }
     case 'provider_changed':
       if (p.scope === 'project_default') return { ...base, kind: 'sharing', what: p.enabled ? 'Set new conversations in a project to run on the company server' : 'Set new conversations in a project to run on this computer again', about: project, left: false }
-      return { ...base, kind: 'sharing', what: e.provider === 'company' ? 'Moved a conversation to the company server. Its history was sent there' : 'Moved a conversation back to this computer. Nothing was sent', about: conversation }
+      return { ...base, kind: 'sharing', what: e.provider === 'company' ? 'Moved a conversation to the company server. Its history was sent there' : e.provider === 'resource' ? 'Moved a conversation to a linked cloud AI model. Its history was sent there' : 'Moved a conversation back to this computer. Nothing was sent', about: conversation }
     case 'project_created':
       return { ...base, kind: 'projects', what: p.default ? 'Created your first project' : 'Created a project', about: project }
     case 'project_reclassified':

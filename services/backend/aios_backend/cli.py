@@ -283,6 +283,42 @@ def cmd_company_key(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_resource_key(args: argparse.Namespace) -> int:
+    """Store the API key for a linkable resource on this computer (operator, invariant 3): the
+    person then only presses Link. Checked with the provider first; never printed."""
+    from aios_backend import linked, linked_config
+
+    if args.id not in linked_config.RESOURCES:
+        print(f"unknown resource: {args.id} (known: {', '.join(linked_config.RESOURCES)})")
+        return 1
+    value = _typed_or_piped_key()
+    if not linked_config.valid_key(value):
+        print("refused: the key must be 16-512 printable characters, no spaces", file=sys.stderr)
+        return 1
+    if not args.check:
+        problem = None
+    else:
+        problem = linked.check(args.id, value)
+    if problem is not None:
+        print(f"not stored: {problem} (resource_key_rejected = wrong key)", file=sys.stderr)
+        return 1
+    linked_config.store_provisioned(args.id, value)
+    print(
+        f"stored for {linked_config.NAMES.get(args.id, args.id)}: {len(value)} characters, "
+        f"ends ...{value[-4:]}. In AIOS: Add resources to my AI, press Link."
+    )
+    return 0
+
+
+def cmd_resource_clear(args: argparse.Namespace) -> int:
+    """Remove the operator's key for a resource (a link the person made keeps its own key)."""
+    from aios_backend import linked_config
+
+    linked_config.remove_provisioned(args.id)
+    print(f"removed the stored key for {args.id}")
+    return 0
+
+
 HINTS = {
     "company_key_missing": "no key in the key store: run aios-backend company key",
     "company_key_rejected": "the server refused the key: store the current one again",
@@ -383,7 +419,7 @@ def build_parser() -> argparse.ArgumentParser:
     profiles = [Profile.DESKTOP.value, Profile.DEV.value]
     c = csub.add_parser("set", help="save the server address and model; asks for the key")
     c.add_argument("--url", default=company.DEEPSEEK_URL, help="default: DeepSeek")
-    c.add_argument("--model", default=company.DEEPSEEK_MODEL, help="default: deepseek-chat")
+    c.add_argument("--model", default=company.DEEPSEEK_MODEL, help="default: deepseek-flash")
     c.add_argument("--context", type=int, default=company.DEFAULT_CONTEXT, help="tokens")
     c.add_argument("--profile", choices=profiles, default=Profile.DESKTOP.value)
     c.add_argument("--no-check", dest="check", action="store_false", help="do not test the server")
@@ -396,6 +432,15 @@ def build_parser() -> argparse.ArgumentParser:
     c = csub.add_parser("clear", help="remove the server address and the key")
     c.add_argument("--profile", choices=profiles, default=Profile.DESKTOP.value)
     c.set_defaults(func=cmd_company_clear)
+    p = sub.add_parser("resource", help="linked resources (Resources page): the operator's API key")
+    rsub = p.add_subparsers(dest="resource_command", required=True)
+    c = rsub.add_parser("key", help="store the API key on this computer (stdin or typed)")
+    c.add_argument("--id", default="deepseek-v4", help="default: deepseek-v4")
+    c.add_argument("--no-check", dest="check", action="store_false", help="do not ask the provider")
+    c.set_defaults(func=cmd_resource_key)
+    c = rsub.add_parser("clear", help="remove the stored API key")
+    c.add_argument("--id", default="deepseek-v4", help="default: deepseek-v4")
+    c.set_defaults(func=cmd_resource_clear)
     sub.add_parser(
         "rebuild-search", help="rebuild the full-text search index from the messages (H-02)"
     ).set_defaults(func=cmd_rebuild_search)

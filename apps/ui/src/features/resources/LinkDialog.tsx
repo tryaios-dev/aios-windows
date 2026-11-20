@@ -74,6 +74,11 @@ export function LinkDialog({ open, onOpenChange, resource, onLink }: { open: boo
           </RRadio.Root>
         </div>
 
+        {/* Where the API key comes from: the clipboard, read outside this window (invariant 3). */}
+        <p className="rounded-lg border border-line bg-paper-raised px-4 py-3 text-sm leading-5 text-ink-soft">
+          <span className="font-medium text-ink">Your {resource.provider} access.</span> If your organisation has set up {resource.provider} on this computer, just press Link. Otherwise copy your {resource.provider} API key first: AIOS reads it from the clipboard, checks it, keeps it in this computer&rsquo;s key store and clears the clipboard. It never shows on screen.
+        </p>
+
         {/* What happens afterwards, with the question AIOS will ask. */}
         <section className="overflow-hidden rounded-xl border border-line" aria-labelledby={`${limitLabel}-after`}>
           <h3 id={`${limitLabel}-after`} className="border-b border-line-soft bg-paper-raised px-4 py-2.5 text-sm font-semibold text-ink">

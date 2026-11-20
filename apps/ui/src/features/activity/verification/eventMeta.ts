@@ -137,8 +137,9 @@ export function eventContext(e: EvidenceEvent, lookups: ContextLookups): string 
       return conv ?? 'Conversation removed'
     case 'provider_changed': {
       if (p.scope === 'project_default') return `Company AI for new conversations · ${p.enabled === true ? 'on' : 'off'}`
-      const from = p.from === 'company' ? 'Company' : 'Local'
-      const to = (p.to ?? e.provider) === 'company' ? 'Company' : 'Local'
+      const side = (v: unknown) => (v === 'company' ? 'Company' : v === 'resource' ? 'Linked AI model' : 'Local')
+      const from = side(p.from)
+      const to = side(p.to ?? e.provider)
       const note = p.history_sent === true ? 'history sent' : 'nothing sent'
       return `${conv ? `${conv} · ` : ''}${from} → ${to} · ${note}`
     }

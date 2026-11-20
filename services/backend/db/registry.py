@@ -8,6 +8,7 @@ from aios_backend.apps.evidence import models as evidence_models  # noqa: F401
 from aios_backend.apps.media import models as media_models  # noqa: F401
 from aios_backend.apps.models import models as models_models  # noqa: F401
 from aios_backend.apps.projects import models as projects_models  # noqa: F401
+from aios_backend.apps.resources import models as resources_models  # noqa: F401
 from aios_backend.apps.search import models as search_models  # noqa: F401
 from aios_backend.apps.settings import models as settings_models  # noqa: F401
 from aios_backend.apps.setup import models as setup_models  # noqa: F401

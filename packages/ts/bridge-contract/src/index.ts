@@ -265,12 +265,25 @@ export const SettingsPatch = z
   .strict();
 export type SettingsPatch = z.infer<typeof SettingsPatch>;
 
+/** A cloud AI model linked on the Resources page. Its API key never reaches the window: Electron
+ * main reads it from the clipboard and hands it to the backend, which keeps it in the key store. */
+export const LinkedResource = z.object({
+  id: z.string(),
+  name: z.string(),
+  model_id: z.string(),
+  linked_at: z.string(),
+  monthly_limit: z.number().nullable(),
+  spent: z.number(),
+  uses: z.number().int(),
+});
+export type LinkedResource = z.infer<typeof LinkedResource>;
+
 export const AllowlistEntry = z.object({
   id: z.string(),
   host: z.string(),
   port: z.number().int(),
   purpose: z.string(),
-  kind: z.enum(["fixed", "configured"]),
+  kind: z.enum(["fixed", "configured", "linked"]),
   enabled: z.boolean(),
 });
 export type AllowlistEntry = z.infer<typeof AllowlistEntry>;
@@ -283,7 +296,8 @@ export type CatalogueCheck = z.infer<typeof CatalogueCheck>;
 export const Classification = z.enum(["restricted", "internal", "public"]);
 export type Classification = z.infer<typeof Classification>;
 export const ClassificationSource = z.enum(["project", "import", "review"]);
-export const Provider = z.enum(["local", "company"]);
+/** "resource": a cloud AI model linked on the Resources page (DeepSeek V4 first). */
+export const Provider = z.enum(["local", "company", "resource"]);
 export type Provider = z.infer<typeof Provider>;
 
 export const Project = z.object({
@@ -794,8 +808,9 @@ export interface AiosBridge {
     setProvider(id: string, to: Provider, confirmed: boolean): Promise<Conversation>;
     messages(id: string): Promise<Message[]>;
     /** `knowledgeIds`: documents from My secure knowledge whose text goes with the question. */
-    send(id: string, text: string, knowledgeIds?: string[]): Promise<Exchange>;
-    regenerate(id: string): Promise<Exchange>;
+    /** ``allowed``: the person pressed "Allow once" (a linked resource asks every time). */
+    send(id: string, text: string, knowledgeIds?: string[], allowed?: boolean): Promise<Exchange>;
+    regenerate(id: string, allowed?: boolean): Promise<Exchange>;
     /** GET /conversations/{id}/generation: answering now, its phase and the answer so far. */
     generation(id: string): Promise<GenerationState>;
     /** POST /conversations/{id}/stop: end the answer; the words so far are kept. */
@@ -808,6 +823,13 @@ export interface AiosBridge {
     query(q: string): Promise<SearchHit[]>;
   };
   /** Add skills to my AI. */
+  /** Add resources to my AI: cloud AI models linked with their own API key. */
+  resources: {
+    list(): Promise<LinkedResource[]>;
+    /** Links with the API key on the clipboard (read by Electron main, never by the window). */
+    link(id: string, monthlyLimit: number | null): Promise<LinkedResource>;
+    unlink(id: string): Promise<void>;
+  };
   skills: {
     list(): Promise<Skills>;
     install(id: string): Promise<InstalledSkill>;
