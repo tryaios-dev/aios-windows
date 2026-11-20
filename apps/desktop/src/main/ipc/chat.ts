@@ -47,14 +47,18 @@ export const chatHandlers: Record<string, Handler> = {
     ),
   "conversations.messages": async (b, id) =>
     z.array(Message).parse(await b.client.request("GET", `${conv(id)}/messages`)),
-  "conversations.send": async (b, id, text, knowledgeIds) =>
+  "conversations.send": async (b, id, text, knowledgeIds, allowed) =>
     Exchange.parse(
       await b.client.request("POST", `${conv(id)}/messages`, {
         text: z.string().min(1).max(200_000).parse(text),
         knowledge_ids: KnowledgeIds.parse(knowledgeIds) ?? [],
+        allowed: z.boolean().optional().parse(allowed) ?? false,
       }),
     ),
-  "conversations.regenerate": async (b, id) => Exchange.parse(await b.client.request("POST", `${conv(id)}/regenerate`)),
+  "conversations.regenerate": async (b, id, allowed) =>
+    Exchange.parse(
+      await b.client.request("POST", `${conv(id)}/regenerate`, { allowed: z.boolean().optional().parse(allowed) ?? false }),
+    ),
   "conversations.generation": async (b, id) =>
     GenerationState.parse(await b.client.request("GET", `${conv(id)}/generation`)),
   "conversations.stop": async (b, id) => Message.parse(await b.client.request("POST", `${conv(id)}/stop`)),

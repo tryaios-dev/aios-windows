@@ -28,6 +28,10 @@
 /services/backend/aios_backend/gateway/                  @tryaios-dev/security-reviewers
 /services/backend/aios_backend/company.py               @tryaios-dev/security-reviewers
 /services/backend/aios_backend/company_config.py        @tryaios-dev/security-reviewers
+/services/backend/aios_backend/linked.py                @tryaios-dev/security-reviewers
+/services/backend/aios_backend/linked_config.py         @tryaios-dev/security-reviewers
+/services/backend/aios_backend/apps/resources/          @tryaios-dev/security-reviewers
+/apps/desktop/src/main/ipc/resources.ts                 @tryaios-dev/security-reviewers
 
 # evidence writer and verifier
 /services/evidence-writer/                                   @tryaios-dev/security-reviewers

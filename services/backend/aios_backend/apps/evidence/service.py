@@ -60,7 +60,7 @@ def _event_out(
         seq=row.seq,
         pending=row.seq is None,
         stream_id=stream_id,
-        provider=provider if provider in ("local", "company") else None,
+        provider=provider if provider in ("local", "company", "resource") else None,
         model_digest=text("artifact_sha256"),
         input_commitment=text("input_commitment"),
         output_commitment=text("output_commitment"),

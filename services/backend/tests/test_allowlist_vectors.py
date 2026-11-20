@@ -26,5 +26,9 @@ def test_ac_21_allowlist_golden_case(case: dict[str, object]) -> None:
 
 def test_ac_21_the_vectors_use_the_contract_hosts() -> None:
     listed = json.loads((FOLDER.parent / "allowlist.json").read_text(encoding="utf-8"))
-    fixed = {(f["host"], f["port"]) for f in listed["flows"] if f["host"] != "configured"}
+    fixed = {
+        (f["host"], f["port"])
+        for f in listed["flows"]
+        if f["host"] != "configured" and not f["id"].startswith("linked-")  # per-resource client
+    }
     assert fixed == set(net.FIXED)

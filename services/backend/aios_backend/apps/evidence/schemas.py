@@ -26,7 +26,7 @@ class EvidenceEventOut(BaseModel):
     format_version: int = 1
     stream_id: str | None = None
     epoch: int | None = None
-    provider: Literal["local", "company"] | None = None
+    provider: Literal["local", "company", "resource"] | None = None
     model_digest: str | None = None
     input_commitment: str | None = None
     output_commitment: str | None = None

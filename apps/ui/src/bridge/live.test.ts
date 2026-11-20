@@ -139,6 +139,7 @@ function fakeBridge() {
     },
     search: unused(),
     knowledge: { ...unused(), list: vi.fn(async () => []), pathOf: vi.fn(() => "") },
+    resources: { ...unused(), list: vi.fn(async () => []) },
     skills: { ...unused(), list: vi.fn(async () => ({ catalogue: [], installed: [] })) },
     evidence: {
       ...unused(),

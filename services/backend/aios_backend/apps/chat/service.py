@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from aios_backend import linked_config as linked
 from aios_backend.apps.chat import repository as repo
 from aios_backend.apps.chat.answers import AnswerSource, ModelInfo
 from aios_backend.apps.chat.schemas import (
@@ -40,6 +41,8 @@ from db.models import Conversation, Message, ProviderMove, Summary
 from db.session import Database
 
 MAX_ANSWER_TOKENS = 1500
+# Providers whose answers come from outside this computer: moving there asks first (PR-03).
+LEAVES = frozenset({"company", "resource"})
 SYSTEM_PROMPT_TOKENS = 220
 NEW_TITLE = "New conversation"
 INPUT_TAG = "aios/evidence/v1/commit/input"
@@ -261,14 +264,18 @@ def delete_conversation(session: Session, conversation_id: str) -> None:
 def change_provider(
     session: Session, settings: Settings, conversation_id: str, to: str, confirmed: bool
 ) -> ConversationOut:
-    """Local -> Company asks first and needs the operator flag; Company -> Local never asks."""
+    """Moving to Company (needs the operator flag) or to a linked resource (needs a resource
+    linked on the Resources page) asks first; moving back to Local never asks."""
     conv = _conversation(session, conversation_id)
     current = conv.current_provider
     if current == to:
         return conversation_out(session, [conv])[0]
-    if to == "company":
-        if not settings.company_ai:
-            raise AppError("company_provider_disabled", 409)
+    leaves = to in LEAVES
+    if to == "company" and not settings.company_ai:
+        raise AppError("company_provider_disabled", 409)
+    if to == "resource" and linked.linked_id() is None:
+        raise AppError("resource_not_linked", 409)
+    if leaves:
         if not confirmed:
             raise AppError("confirmation_required", 400)
         repo.record_event(
@@ -278,13 +285,13 @@ def change_provider(
             conversation_id=conv.id,
             body={
                 "conversation_id": conv.id,
-                "provider": "company",
+                "provider": to,
                 "classification": conv.classification_effective,
             },
         )
     conv.current_provider = to
     conv.provider_mode = to
-    conv.model_id = None if to == "company" else repo.default_model_id(session)
+    conv.model_id = None if leaves else repo.default_model_id(session)
     conv.updated_at = _now()
     repo.add(session, ProviderMove(conversation_id=conv.id, to_provider=to))
     repo.record_event(
@@ -296,7 +303,7 @@ def change_provider(
             "conversation_id": conv.id,
             "from": current,
             "to": to,
-            "history_sent": to == "company",
+            "history_sent": leaves,
         },
     )
     return conversation_out(session, [conv])[0]
@@ -312,12 +319,34 @@ def _ready_model(settings: Settings, answers: AnswerSource | None, conv: Convers
     provider = conv.current_provider
     if provider == "company" and not settings.company_ai:
         raise AppError("company_provider_disabled", 409)
+    if provider == "resource" and linked.linked_id() is None:
+        raise AppError("resource_not_linked", 409)
     if answers is None:
-        raise AppError("no_model" if provider == "local" else "company_unreachable", 409)
+        raise AppError("no_model" if provider == "local" else f"{provider}_unreachable", 409)
     info = answers.model(provider, conv.model_id)
     if info is None:
-        raise AppError("model_missing" if provider == "local" else "company_unreachable", 409)
+        raise AppError("model_missing" if provider == "local" else f"{provider}_unreachable", 409)
     return info
+
+
+def _allow_once(session: Session, conv: Conversation, allowed: bool) -> None:
+    """A linked resource is asked every time (Resources page: "Each time, AIOS shows you exactly
+    what would be sent and where, and waits for you to allow it"). Each allowed send is recorded."""
+    if conv.current_provider != "resource":
+        return
+    if not allowed:
+        raise AppError("allow_once_required", 400)
+    repo.record_event(
+        session,
+        "disclosure_confirmed",
+        project_id=conv.project_id,
+        conversation_id=conv.id,
+        body={
+            "conversation_id": conv.id,
+            "provider": "resource",
+            "classification": conv.classification_effective,
+        },
+    )
 
 
 def _begin(generations: Generations, conv: Conversation, message_id: str) -> Generation:
@@ -814,10 +843,12 @@ def send(
     conversation_id: str,
     text: str,
     knowledge_ids: list[str] | None = None,
+    allowed: bool = False,
 ) -> Exchange:
     conv = _conversation(session, conversation_id)
     clean = _clean(text)
     info = _ready_model(settings, answers, conv)
+    _allow_once(session, conv, allowed)
     assert answers is not None  # checked by _ready_model
     count = token_counter(answers, conv.current_provider, info.model_id)
     _check_size(session, conv, info, clean, count)
@@ -849,11 +880,13 @@ def regenerate(
     answers: AnswerSource | None,
     generations: Generations,
     conversation_id: str,
+    allowed: bool = False,
 ) -> Exchange:
     """Answer the last question again; the old answer is kept in ``previous_versions`` (A-03)."""
     conv = _conversation(session, conversation_id)
     last, earlier = _regenerate_target(session, conv)
     info = _ready_model(settings, answers, conv)
+    _allow_once(session, conv, allowed)
     assert answers is not None
     if generations.busy():
         raise AppError("busy", 409)
@@ -955,12 +988,14 @@ def stream_send(
     conversation_id: str,
     text: str,
     knowledge_ids: list[str] | None = None,
+    allowed: bool = False,
 ) -> Iterator[str]:
     """Checks run before the stream starts, so they still answer with an HTTP error."""
     with db.session() as session:
         conv = _conversation(session, conversation_id)
         clean = _clean(text)
         info = _ready_model(settings, answers, conv)
+        _allow_once(session, conv, allowed)
         assert answers is not None
         count = token_counter(answers, conv.current_provider, info.model_id)
         _check_size(session, conv, info, clean, count)
@@ -1003,11 +1038,13 @@ def stream_regenerate(
     answers: AnswerSource | None,
     generations: Generations,
     conversation_id: str,
+    allowed: bool = False,
 ) -> Iterator[str]:
     with db.session() as session:
         conv = _conversation(session, conversation_id)
         last, earlier = _regenerate_target(session, conv)
         info = _ready_model(settings, answers, conv)
+        _allow_once(session, conv, allowed)
         assert answers is not None
         if generations.busy():
             raise AppError("busy", 409)

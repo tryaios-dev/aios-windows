@@ -82,6 +82,14 @@ const MESSAGES: Record<string, string> = {
   no_model: "No AI model is installed yet. Add one in AI models.",
   model_missing: "No installed AI model can answer. Add one in AI models.",
   company_unreachable: "The company server can't be reached.",
+  allow_once_required: "Nothing was sent. AIOS asks before each message goes to a linked AI model.",
+  resource_not_linked: "This AI model is not linked any more. Link it again on Add resources to my AI, or move the conversation back to this computer.",
+  resource_unreachable: "The linked AI model can't be reached. Check the internet connection, or move the conversation back to this computer.",
+  resource_key_missing: "No key is set up for this AI model on this computer. Ask your administrator, or copy your own API key and press Link again.",
+  resource_key_invalid: "That doesn't look like an API key. Copy the whole key and try again.",
+  resource_key_rejected: "The provider refused this API key. Copy the current key from your account and try again.",
+  resource_model_not_listed: "This API key doesn't give access to the AI model. Check your account with the provider.",
+  resource_key_unreadable: "The key store of this computer can't be used right now.",
   empty_message: "The message is empty.",
   message_too_large: "This message is too long for the AI model. Shorten it or split it up.",
   nothing_to_regenerate: "There is no answer to ask again yet.",
@@ -178,7 +186,7 @@ export function toEvent(e: LiveEvent, streamId: string): EvidenceEvent {
   // A backup is shown as the design's "Backed up your AIOS" (an export of kind backup).
   if (e.event_type === "backup_created") payload.kind = "backup";
   if (typeof payload.model_id === "string" && payload.entry_id === undefined) payload.entry_id = payload.model_id;
-  const provider = payload.provider === "local" || payload.provider === "company" ? payload.provider : undefined;
+  const provider = payload.provider === "local" || payload.provider === "company" || payload.provider === "resource" ? payload.provider : undefined;
   return {
     seq: e.seq ?? e.id,
     format_version: 1,
@@ -319,7 +327,7 @@ export function toKnowledgeDoc(d: LiveKnowledgeDoc): KnowledgeDoc {
 
 /** Before loading: forget what an earlier load put in the store, so nothing stale is shown. */
 export function clearLoaded(): void {
-  useExtras.setState({ knowledge: [], skillCatalogue: [], installedSkills: [], skillInstalls: {} });
+  useExtras.setState({ knowledge: [], skillCatalogue: [], installedSkills: [], skillInstalls: {}, linkedResources: [] });
   useStore.setState((s) => ({
     projects: [],
     conversations: [],
@@ -453,6 +461,14 @@ export async function refreshSkills(): Promise<void> {
     skillCatalogue: catalogue.map((e) => ({ ...e, included: e.included ?? undefined, own: e.own ?? undefined, available: e.available ?? undefined })),
     installedSkills: installed,
   });
+}
+
+/** GET /resources: the cloud AI models linked on the Resources page. */
+export async function refreshResources(): Promise<void> {
+  const current = ticket("resources");
+  const linked = await bridge().resources.list();
+  if (!current()) return;
+  useExtras.setState({ linkedResources: linked });
 }
 
 export async function refreshEvents(): Promise<void> {
@@ -605,7 +621,7 @@ export function stopWatchingDownloads(): void {
 /** Everything a set-up workspace shows. Messages load per conversation. */
 export async function refreshWorkspace(): Promise<void> {
   await refreshProjects();
-  await Promise.all([refreshConversations(), refreshEvents(), refreshModels(), refreshKnowledge(), refreshSkills()]);
+  await Promise.all([refreshConversations(), refreshEvents(), refreshModels(), refreshKnowledge(), refreshSkills(), refreshResources()]);
   await refreshHealthQuietly(); // after the models: the loaded model is matched against them
   // Facts for Settings and Activity: a failed read never fails the workspace.
   await Promise.all([refreshSystem().catch(() => undefined), refreshStream().catch(() => undefined)]);

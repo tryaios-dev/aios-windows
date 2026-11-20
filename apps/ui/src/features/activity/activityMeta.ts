@@ -100,5 +100,6 @@ export function modelFact(event: EvidenceEvent, installed: InstalledModel[]): st
   const model = installed.find((m) => m.artifact_digest === event.model_digest) ?? CATALOGUE.find((m) => m.artifact_digest === event.model_digest)
   if (model) return modelLabel(model)
   if (event.provider === 'company') return selectCompanyModelName(useStore.getState())
+  if (event.provider === 'resource') return typeof event.payload?.model_id === 'string' ? event.payload.model_id : 'the linked AI model'
   return 'An AI model that is no longer on this computer'
 }

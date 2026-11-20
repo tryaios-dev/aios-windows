@@ -24,6 +24,7 @@ import {
   refreshModels,
   refreshProjects,
   refreshSkills,
+  refreshResources,
   refreshSettings,
   refreshStatus,
   refreshWorkspace,
@@ -35,6 +36,7 @@ import {
 } from '@/bridge/live'
 import { useStore } from './store'
 import { useExtras } from './extras'
+import { askAllowOnce } from './allowOnce'
 import { kindOf } from '@/data/knowledge'
 import type {
   BackupResult,
@@ -54,7 +56,7 @@ const s = () => useStore.getState()
 
 export type SendResult =
   | { ok: true }
-  | { ok: false; reason: 'no_model' | 'too_large' | 'busy' | 'company_unreachable' | 'model_missing' | 'error'; detail?: string }
+  | { ok: false; reason: 'no_model' | 'too_large' | 'busy' | 'company_unreachable' | 'model_missing' | 'not_allowed' | 'error'; detail?: string }
 export type RestoreResult = { ok: true; epoch: number | null } | { ok: false; error: string }
 export type ImportOutcome = { ok: true; result: ImportResult } | { ok: false; error: string }
 
@@ -77,6 +79,22 @@ function packageFileName(projectId: string): string {
 }
 
 const afterConversation = (id: string) => () => Promise.all([refreshConversation(id), refreshEvents()])
+
+/**
+ * The signed Activity record of an answer is written a few seconds after the answer (the evidence
+ * writer). Look again a few times, so "Not recorded yet" turns into "See in Activity" by itself
+ * instead of waiting for the next click.
+ */
+const EVIDENCE_LOOKS_MS = [1500, 3000, 6000, 10000]
+function settleEvidence(id: string, step = 0): void {
+  const pending = () => s().messages.some((m) => m.conversation_id === id && m.evidence_pending)
+  if (step >= EVIDENCE_LOOKS_MS.length || !pending()) return
+  setTimeout(() => {
+    void Promise.all([loadMessages(id), refreshEvents()])
+      .catch(() => undefined)
+      .finally(() => settleEvidence(id, step + 1))
+  }, EVIDENCE_LOOKS_MS[step])
+}
 
 async function updateSettings(patch: SettingsChange): Promise<void> {
   try {
@@ -253,13 +271,18 @@ export const api = {
     messages: (id: string) => s().messages.filter((m) => m.conversation_id === id),
     /** POST /conversations/{id}/messages */
     send: async (id: string, text: string, knowledgeIds: string[] = []): Promise<SendResult> => {
+      // A linked cloud AI model asks every time ("Allow once"); nothing is sent until it is allowed.
+      const toResource = s().conversations.find((c) => c.id === id)?.current_provider === 'resource'
+      const allowed = toResource ? await askAllowOnce(id) : false
+      if (toResource && !allowed) return { ok: false, reason: 'not_allowed', detail: 'Nothing was sent.' }
       // The words appear as they are written; the stored messages replace them when it ends.
       const endLive = watchAnswer(id, text)
       try {
-        await bridge().conversations.send(id, text, knowledgeIds)
+        await bridge().conversations.send(id, text, knowledgeIds, allowed)
         endLive()
         // refreshHealth: a graphics-card-to-processor fallback during this answer shows its notice now (D-06).
         await Promise.all([loadMessages(id), afterConversation(id)(), refreshHealthQuietly()])
+        settleEvidence(id)
         return { ok: true }
       } catch (err) {
         endLive()
@@ -288,15 +311,19 @@ export const api = {
           if (errorCode(err) !== 'not_generating') reportFailure(err, 'Not stopped')
         })
     },
-    regenerate: (id: string) => {
+    regenerate: async (id: string) => {
+      const toResource = s().conversations.find((c) => c.id === id)?.current_provider === 'resource'
+      const allowed = toResource ? await askAllowOnce(id, true) : false
+      if (toResource && !allowed) return
       const endLive = watchAnswer(id, null)
       void change(
         'Not asked again',
-        () => bridge().conversations.regenerate(id),
+        () => bridge().conversations.regenerate(id, allowed),
         async () => {
           endLive()
           await loadMessages(id)
           await Promise.all([refreshEvents(), refreshHealthQuietly()])
+          settleEvidence(id)
         },
       ).finally(endLive)
     },
@@ -487,6 +514,14 @@ export const api = {
 
   /** The system folder dialog for the backup to restore from. Null when cancelled. */
   chooseBackupFolder: async (): Promise<string | null> => (await bridge().setup.chooseBackupFolder())?.path ?? null,
+
+  /** Add resources to my AI: GET /resources, POST /resources/{id}/link, DELETE /resources/{id}. The API key
+   * is read from the clipboard by Electron main; this window never sees it (invariant 3). */
+  resources: {
+    link: (id: string, monthlyLimit: number | null) =>
+      change('Not linked', () => bridge().resources.link(id, monthlyLimit), () => Promise.all([refreshResources(), refreshEvents()])),
+    unlink: (id: string) => change('Not unlinked', () => bridge().resources.unlink(id), () => Promise.all([refreshResources(), refreshEvents(), refreshConversations()])),
+  },
 
   /** Add skills to my AI: GET /skills, POST /skills/{id}, PUT /skills/{id}/enabled, DELETE /skills/{id}, POST /skills/file. */
   skills: {

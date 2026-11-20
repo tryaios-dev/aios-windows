@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from aios_backend import linked_config
 from aios_backend.apps.settings.service import ALLOWLIST
 from db.outbox import ContentInEvidence, check_body
 
@@ -44,13 +45,17 @@ def test_new_conversations_use_the_default_model(client: TestClient) -> None:
     assert conv["model_id"] == "qwen3-4b-q4km"
 
 
-def test_network_list_matches_the_contract(client: TestClient) -> None:
+def test_network_list_matches_the_contract(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(linked_config, "stored_key", lambda rid: None)  # not this PC's key store
     contract = json.loads(ALLOWLIST_FILE.read_text("utf-8"))["flows"]
     assert [(f["id"], f["host"], f["port"]) for f in contract] == [
         (a[0], a[1], a[2]) for a in ALLOWLIST
     ]
     flows = client.get("/system/network").json()
-    assert [f["enabled"] for f in flows] == [True] * (len(flows) - 1) + [False]  # Company off
+    off = {"company-server", "linked-deepseek-v4"}  # Company off, DeepSeek not linked
+    assert [f["enabled"] for f in flows] == [f["id"] not in off for f in flows]
 
 
 def test_evidence_is_pending_until_the_writer_runs(client: TestClient) -> None:

@@ -7,7 +7,8 @@
 
 export type Classification = 'restricted' | 'internal' | 'public'
 export type ClassificationSource = 'project' | 'import' | 'review'
-export type ProviderType = 'local' | 'company'
+/** 'resource': a cloud AI model linked on the Resources page (DeepSeek V4 first). */
+export type ProviderType = 'local' | 'company' | 'resource'
 export type MessageRole = 'user' | 'assistant'
 export type MessageStatus = 'complete' | 'partial' | 'error' | 'stopped' | 'streaming'
 export type ModelTier = 'small' | 'medium' | 'large'
@@ -258,7 +259,7 @@ export interface AllowlistEntry {
   id?: string
   host: string
   purpose: string
-  kind: 'fixed' | 'configured'
+  kind: 'fixed' | 'configured' | 'linked'
   enabled: boolean
 }
 
@@ -465,6 +466,9 @@ export interface ResourceEntry {
 
 export interface LinkedResource {
   id: string
+  /** The resource's name and the model it answers with, from the backend. */
+  name?: string
+  model_id?: string
   linked_at: string
   /** Monthly spending limit in euros; null means none was set. */
   monthly_limit: number | null

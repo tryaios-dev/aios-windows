@@ -101,6 +101,8 @@ export interface AppState {
   checkpoints: Checkpoint[]
   generation: Generation | null
   continueLocally: ContinueLocallyPrompt | null
+  /** "Allow once": a send to a linked resource waits for the person (Resources page design). */
+  allowOnce: { conversation_id: string; again: boolean } | null
   modelChoice: ModelChoicePrompt | null
   fallbackNotice: { at: string; dismissed: boolean } | null
   recoveryKey: string | null
@@ -204,6 +206,7 @@ export const useStore = create<Store>()((set, get) => {
     checkpoints: [],
     generation: null,
     continueLocally: null,
+    allowOnce: null,
     modelChoice: null,
     fallbackNotice: null,
     recoveryKey: null,
@@ -262,6 +265,7 @@ export const selectConversation = (id: string | undefined) => (s: Store) => s.co
 export const selectCompanyModelName = (s: Store) => s.health.company.model_name || 'the company server’s AI model'
 export const selectModelName = (modelId: string | null | undefined, provider: ProviderType = 'local') => (s: Store) => {
   if (provider === 'company') return selectCompanyModelName(s)
+  if (provider === 'resource') return modelId ?? 'the linked AI model'
   return s.installedModels.find((m) => m.id === modelId)?.name ?? catalogueEntry(modelId)?.name ?? 'No model'
 }
 const NO_HOSTS: AllowlistEntry[] = []

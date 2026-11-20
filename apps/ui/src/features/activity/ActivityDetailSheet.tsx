@@ -50,7 +50,7 @@ export function ActivityDetailSheet({ row, open, onOpenChange, lookups, installe
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span>{line.where}</span>
             <span className="inline-flex h-5 items-center gap-1 rounded-sm border border-brass/60 px-1.5 text-2xs font-medium leading-none whitespace-nowrap text-brass-text">
-              {event.provider === 'company' ? <Building2 className="size-3" aria-hidden /> : <ArrowUpRight className="size-3" aria-hidden />}
+              {event.provider === 'company' || event.provider === 'resource' ? <Building2 className="size-3" aria-hidden /> : <ArrowUpRight className="size-3" aria-hidden />}
               Left this computer
             </span>
           </span>

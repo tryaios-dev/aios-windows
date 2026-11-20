@@ -10,6 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
+from aios_backend import linked
 from aios_backend.apps.chat.answers import AnswerSource
 from aios_backend.apps.chat.router import router as chat_router
 from aios_backend.apps.evidence.router import router as evidence_router
@@ -19,6 +20,7 @@ from aios_backend.apps.models.engine import LocalEngine
 from aios_backend.apps.models.mirror import ModelMirror
 from aios_backend.apps.models.router import router as models_router
 from aios_backend.apps.projects.router import router as projects_router
+from aios_backend.apps.resources.router import router as resources_router
 from aios_backend.apps.search.router import router as search_router
 from aios_backend.apps.settings import service as settings_service
 from aios_backend.apps.settings.router import router as settings_router
@@ -198,6 +200,7 @@ def create_app(
     app.state.voice = voice
     app.state.voice_sessions = VoiceSessions(voice)
     app.state.answers = answers
+    app.state.resource_check = linked.check  # a key is checked before it is stored
     app.state.generations = Generations()
     app.state.local_engine = local_engine
     app.state.mirror = mirror
@@ -218,6 +221,7 @@ def create_app(
         models_router,
         knowledge_router,
         skills_router,
+        resources_router,
         voice_router,
     ):
         app.include_router(router)
