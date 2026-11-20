@@ -10,6 +10,7 @@ import {
   ArrowRightLeft,
   Database,
   Download,
+  FileAudio,
   FileDown,
   FileUp,
   FolderMinus,
@@ -68,6 +69,7 @@ export const EVENT_META: Record<EventType, EventMeta> = {
   media_completed: { label: 'Media completed', icon: Download },
   media_exported: { label: 'Media exported', icon: Download },
   media_deleted: { label: 'Media deleted', icon: Trash2 },
+  recording_transcribed: { label: 'Recording transcribed', icon: FileAudio },
 }
 
 export const ACTOR_LABEL: Record<EvidenceEvent['actor'], string> = {
@@ -210,6 +212,10 @@ export function eventContext(e: EvidenceEvent, lookups: ContextLookups): string 
       return [str(p.kind), 'copy saved outside the encrypted store', num(p.size_bytes) ? formatBytes(num(p.size_bytes)!) : undefined].filter(Boolean).join(' · ')
     case 'media_deleted':
       return `${str(p.kind) ?? 'media'} · deleted`
+    case 'recording_transcribed':
+      return [num(p.seconds) !== undefined ? `${num(p.seconds)} s of audio` : undefined, num(p.phrases) !== undefined ? `${num(p.phrases)} phrases` : undefined, p.stopped ? 'stopped early' : undefined, 'on this computer, text not recorded']
+        .filter(Boolean)
+        .join(' · ')
     default:
       return ''
   }

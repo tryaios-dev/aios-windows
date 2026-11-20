@@ -658,6 +658,31 @@ export type VoiceText = z.infer<typeof VoiceText>;
 export const VoiceFinished = z.object({ text: z.string() });
 export type VoiceFinished = z.infer<typeof VoiceFinished>;
 
+/* Recording files turned into text: the Voice notes skill, on the same speech engine. The window
+ * decodes the file into the audio dictation sends and sends it in parts of up to 30 s. */
+export const VOICE_MAX_RECORDING_S = 7200;
+export const VOICE_MAX_RECORDING_PART_BYTES = 960_000;
+export const VoiceRecordingSeconds = z.number().positive().max(VOICE_MAX_RECORDING_S);
+export const VoiceRecordingPart = z
+  .instanceof(Uint8Array)
+  .refine((a) => a.byteLength % 2 === 0 && a.byteLength <= VOICE_MAX_RECORDING_PART_BYTES, "voice_audio_invalid");
+
+/** Progress; the window sends the next part only while `waiting_s` is under `backlog_s`. */
+export const VoiceRecording = z.object({
+  recording_id: VoiceSessionId,
+  state: z.enum(["working", "done", "stopped", "failed"]),
+  total_s: z.number(),
+  done_s: z.number(),
+  waiting_s: z.number(),
+  backlog_s: z.number(),
+  text: z.string(),
+});
+export type VoiceRecording = z.infer<typeof VoiceRecording>;
+
+/** Where the text of a recording goes; Activity records that it happened, never the text. */
+export const VoiceRecordingTarget = z.object({ conversation_id: Id.optional(), project_id: Id.optional() }).strict();
+export type VoiceRecordingTarget = z.infer<typeof VoiceRecordingTarget>;
+
 /* ------------------------------------------------------------------ pictures and videos (R-7) */
 /** Made on the company's GPU server; the description leaves this computer, so the UI asks first. */
 export const MediaKind = z.enum(["image", "video"]);
@@ -883,6 +908,19 @@ export interface AiosBridge {
     finish(sessionId: string): Promise<VoiceFinished>;
     /** Throws away what was heard. */
     cancel(sessionId: string): Promise<void>;
+    /** Turning a recording into text (the Voice notes skill): fails with `skill_not_enabled` while it is off. */
+    recordingStart(seconds: number, languages?: string[]): Promise<VoiceRecording>;
+    /** The next part of the decoded recording, up to 30 s; returns at once with the progress. */
+    recordingAudio(recordingId: string, pcm: Uint8Array): Promise<VoiceRecording>;
+    /** All of it has been sent. */
+    recordingEnd(recordingId: string): Promise<VoiceRecording>;
+    recordingProgress(recordingId: string): Promise<VoiceRecording>;
+    /** Stops; the text written so far is kept. */
+    recordingStop(recordingId: string): Promise<VoiceRecording>;
+    /** The text, once done or stopped; the job ends and Activity records where it went. */
+    recordingTake(recordingId: string, target: VoiceRecordingTarget): Promise<VoiceFinished>;
+    /** Throws the text away. */
+    recordingDiscard(recordingId: string): Promise<void>;
   };
   /** Pictures and short videos made on the company's GPU server (R-7), kept per project. */
   media: {

@@ -6,6 +6,9 @@ from pydantic import BaseModel, Field
 
 # 2 s of 16 kHz 16-bit mono audio per call, base64: the window sends about 250 ms.
 MAX_AUDIO_B64 = 86_000
+# A recording is sent in parts of up to 30 s (base64 of 960 000 bytes, plus a margin).
+MAX_RECORDING_PART_B64 = 1_300_000
+MAX_RECORDING_S = 7200.0
 
 
 class ModelStatus(BaseModel):
@@ -49,3 +52,36 @@ class VoiceText(BaseModel):
 
 class FinishedText(BaseModel):
     text: str
+
+
+class RecordingIn(BaseModel):
+    """A recording the window decoded: its length, and the computer's languages as in OpenIn."""
+
+    seconds: float = Field(gt=0, le=MAX_RECORDING_S)
+    languages: list[str] = Field(default_factory=list, max_length=5)
+
+
+class RecordingAudioIn(BaseModel):
+    """The next part of the recording: 16 kHz, mono, 16-bit little-endian PCM, base64."""
+
+    pcm: str = Field(max_length=MAX_RECORDING_PART_B64, pattern=r"^[A-Za-z0-9+/]*={0,2}$")
+
+
+class RecordingOut(BaseModel):
+    """Progress of a recording being turned into text. ``waiting_s``: audio received but not yet
+    turned into text; the window sends the next part only while it is under ``backlog_s``."""
+
+    recording_id: str
+    state: Literal["working", "done", "stopped", "failed"]
+    total_s: float
+    done_s: float
+    waiting_s: float
+    backlog_s: float
+    text: str
+
+
+class TakeIn(BaseModel):
+    """Where the text goes: a conversation, or a project (a new conversation in it)."""
+
+    conversation_id: str | None = Field(default=None, max_length=64)
+    project_id: str | None = Field(default=None, max_length=64)

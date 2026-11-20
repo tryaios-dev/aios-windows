@@ -126,6 +126,13 @@ const bridge: AiosBridge = {
     audio: (sessionId, pcm) => invoke("voice.audio", sessionId, pcm),
     finish: (sessionId) => invoke("voice.finish", sessionId),
     cancel: (sessionId) => invoke("voice.cancel", sessionId),
+    recordingStart: (seconds, languages) => invoke("voice.recordingStart", seconds, languages),
+    recordingAudio: (id, pcm) => invoke("voice.recordingAudio", id, pcm),
+    recordingEnd: (id) => invoke("voice.recordingEnd", id),
+    recordingProgress: (id) => invoke("voice.recordingProgress", id),
+    recordingStop: (id) => invoke("voice.recordingStop", id),
+    recordingTake: (id, target) => invoke("voice.recordingTake", id, target),
+    recordingDiscard: (id) => invoke("voice.recordingDiscard", id),
   },
   media: {
     status: () => invoke("media.status"),

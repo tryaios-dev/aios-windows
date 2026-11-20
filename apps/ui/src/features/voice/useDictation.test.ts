@@ -46,6 +46,13 @@ function fakeVoice(text = ['Hello', 'there']) {
     }),
     finish: vi.fn(async () => ({ text: ` ${text.join(' ')} ` })),
     cancel: vi.fn(async () => undefined),
+    recordingStart: vi.fn(),
+    recordingAudio: vi.fn(),
+    recordingEnd: vi.fn(),
+    recordingProgress: vi.fn(),
+    recordingStop: vi.fn(),
+    recordingTake: vi.fn(),
+    recordingDiscard: vi.fn(),
   } satisfies AiosBridge['voice']
   return { voice, sent: () => bytes }
 }

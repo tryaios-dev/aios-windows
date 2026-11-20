@@ -26,8 +26,9 @@ class Entry:
     instruction: str
     included: bool = False
     version: str = "1.0"
-    # A skill listed before it can run (it needs an engine a later version brings).
-    available: bool = True
+    # What must be on this computer before the skill can be added: "voice_model" is the speech
+    # model of the Voice engine (ADR 0016). None: nothing.
+    needs: str | None = None
     publisher: str = PUBLISHER
     licence: str | None = None
     download_bytes: int | None = None
@@ -150,11 +151,13 @@ SKILLS: tuple[Entry, ...] = (
         uses=("Recordings you choose",),
         example="Turn this recording of Tuesday's call into text.",
         instruction="",
-        version="1.5.4",
-        available=False,  # needs the on-device speech-to-text engine, not in this build
+        # The Voice engine of ADR 0016: whisper.cpp at build/whisper/manifest.json, with the
+        # speech model of aios_backend/voice/model.py (Whisper small q5_1).
+        version="1.9.5",
+        needs="voice_model",
         publisher="Whisper community build",
         licence="MIT",
-        download_bytes=466_000_000,
+        download_bytes=190_085_487,
     ),
     Entry(
         id="charts",

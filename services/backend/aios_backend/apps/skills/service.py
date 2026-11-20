@@ -31,7 +31,11 @@ _ID = re.compile(r"[^a-z0-9]+")
 LIMITS = {"name": 120, "line": 300, "detail": 4000, "version": 32, "licence": 64, "example": 500}
 
 
-def _entry_out(e: catalogue.Entry) -> SkillEntryOut:
+# What can be on this computer that a skill may need (catalogue.Entry.needs).
+Present = frozenset[str]
+
+
+def _entry_out(e: catalogue.Entry, present: Present = frozenset()) -> SkillEntryOut:
     return SkillEntryOut(
         id=e.id,
         name=e.name,
@@ -46,7 +50,7 @@ def _entry_out(e: catalogue.Entry) -> SkillEntryOut:
         uses=list(e.uses),
         example=e.example,
         included=e.included,
-        available=e.available,
+        available=e.needs is None or e.needs in present,
     )
 
 
@@ -72,11 +76,12 @@ def _installed_out(s: Skill) -> InstalledSkillOut:
     return InstalledSkillOut(id=s.id, installed_at=s.created_at, enabled=s.enabled)
 
 
-def list_skills(session: Session) -> SkillsOut:
+def list_skills(session: Session, present: Present = frozenset()) -> SkillsOut:
+    """``present``: what is on this computer that a listed skill may need."""
     rows = repo.all_skills(session)
     own = [_row_out(s) for s in rows if s.own]
     return SkillsOut(
-        catalogue=[_entry_out(e) for e in catalogue.SKILLS] + own,
+        catalogue=[_entry_out(e, present) for e in catalogue.SKILLS] + own,
         installed=[_installed_out(s) for s in rows],
     )
 
@@ -91,14 +96,14 @@ def _record(session: Session, event: str, s: Skill) -> None:
     repo.record_event(session, event, actor="user", body=body)
 
 
-def install(session: Session, skill_id: str) -> InstalledSkillOut:
+def install(session: Session, skill_id: str, present: Present = frozenset()) -> InstalledSkillOut:
     entry = catalogue.BY_ID.get(skill_id)
     if entry is None:
         raise not_found("skill")
     if entry.included:
         raise AppError("skill_included", 409)
-    if not entry.available:
-        raise AppError("skill_not_in_build", 409)
+    if entry.needs is not None and entry.needs not in present:
+        raise AppError(f"skill_needs_{entry.needs}", 409)
     if repo.get(session, skill_id) is not None:
         raise AppError("skill_added", 409)
     out = _entry_out(entry)

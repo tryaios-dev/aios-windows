@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { api } from '@/lib/api'
-import { notInThisBuild } from '@/bridge/live'
+import { useStore } from '@/lib/store'
 import { useExtras } from '@/lib/extras'
 import { pluralise } from '@/lib/format'
 import type { SkillEntry } from '@/lib/types'
@@ -59,9 +59,13 @@ export function SkillsView() {
   const markAddedHere = (id: string) => setAddedHere((prev) => new Set(prev).add(id))
 
   const add = (skill: SkillEntry) => {
-    // Listed as in the design, but it needs an engine this build does not have: say so, add nothing.
+    // It needs something not on this computer yet (Voice notes: the speech model): say so, add nothing.
     if (skill.available === false) {
-      notInThisBuild(skill.name)
+      useStore.getState().toast({
+        kind: 'info',
+        title: `${skill.name} needs the speech model`,
+        description: 'Download it in Settings, Voice, then add the skill. Nothing was changed.',
+      })
       review.setOpen(false)
       return
     }
