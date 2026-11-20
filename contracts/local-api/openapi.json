@@ -3290,6 +3290,96 @@
         "title": "ReclassifyOut",
         "type": "object"
       },
+      "RecordingAudioIn": {
+        "description": "The next part of the recording: 16 kHz, mono, 16-bit little-endian PCM, base64.",
+        "properties": {
+          "pcm": {
+            "maxLength": 1300000,
+            "pattern": "^[A-Za-z0-9+/]*={0,2}$",
+            "title": "Pcm",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pcm"
+        ],
+        "title": "RecordingAudioIn",
+        "type": "object"
+      },
+      "RecordingIn": {
+        "description": "A recording the window decoded: its length, and the computer's languages as in OpenIn.",
+        "properties": {
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 5,
+            "title": "Languages",
+            "type": "array"
+          },
+          "seconds": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 7200.0,
+            "title": "Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "seconds"
+        ],
+        "title": "RecordingIn",
+        "type": "object"
+      },
+      "RecordingOut": {
+        "description": "Progress of a recording being turned into text. ``waiting_s``: audio received but not yet\nturned into text; the window sends the next part only while it is under ``backlog_s``.",
+        "properties": {
+          "backlog_s": {
+            "title": "Backlog S",
+            "type": "number"
+          },
+          "done_s": {
+            "title": "Done S",
+            "type": "number"
+          },
+          "recording_id": {
+            "title": "Recording Id",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "working",
+              "done",
+              "stopped",
+              "failed"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "total_s": {
+            "title": "Total S",
+            "type": "number"
+          },
+          "waiting_s": {
+            "title": "Waiting S",
+            "type": "number"
+          }
+        },
+        "required": [
+          "recording_id",
+          "state",
+          "total_s",
+          "done_s",
+          "waiting_s",
+          "backlog_s",
+          "text"
+        ],
+        "title": "RecordingOut",
+        "type": "object"
+      },
       "RecoveryKeyOut": {
         "description": "A new recovery key for this installation. ``recovery_key`` is in this reply exactly once.",
         "properties": {
@@ -4138,6 +4228,37 @@
           "generating_conversation_id"
         ],
         "title": "SystemStatus",
+        "type": "object"
+      },
+      "TakeIn": {
+        "description": "Where the text goes: a conversation, or a project (a new conversation in it).",
+        "properties": {
+          "conversation_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          }
+        },
+        "title": "TakeIn",
         "type": "object"
       },
       "UpdateAvailable": {
@@ -7994,6 +8115,316 @@
           }
         },
         "summary": "Download the speech model (setup, Settings > Voice)",
+        "tags": [
+          "voice"
+        ]
+      }
+    },
+    "/voice/recordings": {
+      "post": {
+        "operationId": "open_recording_voice_recordings_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordingIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "skill_not_enabled, voice_not_built, voice_no_model"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "voice_failed"
+          }
+        },
+        "summary": "Start turning a recording into text: starts the speech engine if needed",
+        "tags": [
+          "voice"
+        ]
+      }
+    },
+    "/voice/recordings/{recording_id}": {
+      "delete": {
+        "operationId": "discard_recording_voice_recordings__recording_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recording_id",
+            "required": true,
+            "schema": {
+              "title": "Recording Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stop and throw the recording's text away",
+        "tags": [
+          "voice"
+        ]
+      },
+      "get": {
+        "operationId": "recording_progress_voice_recordings__recording_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recording_id",
+            "required": true,
+            "schema": {
+              "title": "Recording Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "The progress and the text so far",
+        "tags": [
+          "voice"
+        ]
+      }
+    },
+    "/voice/recordings/{recording_id}/audio": {
+      "post": {
+        "operationId": "add_recording_audio_voice_recordings__recording_id__audio_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recording_id",
+            "required": true,
+            "schema": {
+              "title": "Recording Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordingAudioIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add the next part; returns the progress",
+        "tags": [
+          "voice"
+        ]
+      }
+    },
+    "/voice/recordings/{recording_id}/end": {
+      "post": {
+        "operationId": "end_recording_voice_recordings__recording_id__end_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recording_id",
+            "required": true,
+            "schema": {
+              "title": "Recording Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "All of the recording has been sent",
+        "tags": [
+          "voice"
+        ]
+      }
+    },
+    "/voice/recordings/{recording_id}/stop": {
+      "post": {
+        "operationId": "stop_recording_voice_recordings__recording_id__stop_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recording_id",
+            "required": true,
+            "schema": {
+              "title": "Recording Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stop; the text written so far is kept",
+        "tags": [
+          "voice"
+        ]
+      }
+    },
+    "/voice/recordings/{recording_id}/take": {
+      "post": {
+        "operationId": "take_recording_voice_recordings__recording_id__take_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recording_id",
+            "required": true,
+            "schema": {
+              "title": "Recording Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TakeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinishedText"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "The text, to put into a conversation; Activity records that it happened",
         "tags": [
           "voice"
         ]

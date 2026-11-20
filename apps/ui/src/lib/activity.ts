@@ -141,6 +141,11 @@ export function describeEvent(e: EvidenceEvent, l: ActivityLookups): ActivityLin
       return { ...base, kind: 'sharing', what: `Saved a copy of a ${p.kind === 'video' ? 'video' : 'picture'} outside AIOS`, about: typeof p.size_bytes === 'number' ? formatBytes(p.size_bytes) : project }
     case 'media_deleted':
       return { ...base, kind: 'projects', what: `Deleted a ${p.kind === 'video' ? 'video' : 'picture'}`, about: project }
+    case 'recording_transcribed': {
+      const minutes = typeof p.seconds === 'number' ? Math.max(1, Math.round(p.seconds / 60)) : null
+      const length = minutes ? `a ${minutes}-minute recording` : 'a recording'
+      return { ...base, kind: 'projects', what: `Turned ${length} into text on this computer${p.stopped ? ', stopping part way' : ''}, and put it in the message box. The text is not recorded here`, about: conversation }
+    }
     case 'model_installed':
       return { ...base, kind: 'models', what: `Installed ${model ? `the AI model ${model}` : 'an AI model'}. AIOS checked it is the genuine, unmodified file`, about: typeof p.size_bytes === 'number' ? formatBytes(p.size_bytes) : undefined }
     case 'model_deleted':

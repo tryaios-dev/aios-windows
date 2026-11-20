@@ -214,6 +214,8 @@ export type EventType =
   | 'media_completed'
   | 'media_exported'
   | 'media_deleted'
+  /* A recording turned into text on this computer (the Voice notes skill). Proposed, like the ones above. */
+  | 'recording_transcribed'
 
 export interface EvidenceEvent {
   seq: number

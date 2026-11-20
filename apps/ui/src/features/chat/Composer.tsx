@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { ArrowUp, Building2, ChevronDown, Cpu, Lock, MonitorSmartphone, Square } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -18,6 +18,8 @@ import { documentNamedIn, useChosenDocuments, useKnowledgeUse } from './knowledg
 import { lowerFirst } from './Starters'
 import { useDictation } from '@/features/voice/useDictation'
 import { AutoHeight, FromVoiceNote, MicButton, VoicePanel } from '@/features/voice/VoicePanel'
+import { RecordingButton, RecordingPanel } from '@/features/voice/RecordingPanel'
+import { useRecording } from '@/features/voice/useRecording'
 
 /** Text another screen handed over through router state, for example Home's ask box when a message could not be sent. */
 function handedOverText(state: unknown): string | null {
@@ -167,7 +169,21 @@ export function Composer({ conversation, disabled }: { conversation: Conversatio
     setTooLong(false)
     setFromVoice(true)
   })
-  const speaking = dictation.phase !== 'idle'
+  // A recording turned into text (the Voice notes skill, while it is on). The text goes below
+  // what is in the box, and is never sent by itself.
+  const voiceNotesOn = useExtras((s) => s.installedSkills.some((k) => k.id === 'voice' && k.enabled))
+  const recordingTarget = useMemo(() => ({ conversation_id: conversation.id }), [conversation.id])
+  const recording = useRecording((written) => {
+    const before = textNow.current.replace(/\s+$/, '')
+    const next = before ? `${before}\n\n${written}` : written
+    selectAfterFill.current = [next.length, next.length]
+    showStartAfterFill.current = false
+    setText(next)
+    setSampleId(null)
+    setTooLong(false)
+  }, recordingTarget)
+  const transcribing = recording.phase !== 'idle'
+  const speaking = dictation.phase !== 'idle' || transcribing
 
   const send = async () => {
     if (!text.trim() || busy || otherBusy || disabled) return
@@ -244,7 +260,8 @@ export function Composer({ conversation, disabled }: { conversation: Conversatio
           )}
           {!isCompany && !disabled && <KnowledgeChips conversationId={conversation.id} />}
           <AutoHeight>
-            {speaking && <VoicePanel dictation={dictation} className="animate-fade" />}
+            {dictation.phase !== 'idle' && <VoicePanel dictation={dictation} className="animate-fade" />}
+            {transcribing && <RecordingPanel job={recording} className="animate-fade" />}
             <div className={speaking ? 'hidden' : undefined}>
               <textarea
                 ref={ref}
@@ -342,7 +359,8 @@ export function Composer({ conversation, disabled }: { conversation: Conversatio
                 </div>
 
                 <div className="flex items-center gap-1.5">
-                  {!busy && <MicButton onClick={dictation.start} disabled={disabled} />}
+                  {!busy && (voiceNotesOn || transcribing) && <RecordingButton job={recording} disabled={disabled || dictation.phase !== 'idle'} />}
+                  {!busy && <MicButton onClick={dictation.start} disabled={disabled || transcribing} />}
                   {busy ? (
                     <Button size="sm" variant="secondary" leading={<Square className="size-3 fill-current" />} onClick={() => api.conversations.stop()}>
                       Stop

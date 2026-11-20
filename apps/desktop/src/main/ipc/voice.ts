@@ -2,6 +2,10 @@ import {
   VoiceAudio,
   VoiceFinished,
   VoiceLanguages,
+  VoiceRecording,
+  VoiceRecordingPart,
+  VoiceRecordingSeconds,
+  VoiceRecordingTarget,
   VoiceSession,
   VoiceSessionId,
   VoiceStatus,
@@ -10,6 +14,7 @@ import {
 import type { Handler } from "./index.js";
 
 const session = (id: unknown) => `/voice/sessions/${VoiceSessionId.parse(id)}`;
+const recording = (id: unknown) => `/voice/recordings/${VoiceSessionId.parse(id)}`;
 
 /**
  * Speak instead of typing (ADR 0016). The window's microphone audio goes to the backend, which
@@ -30,5 +35,22 @@ export const voiceHandlers: Record<string, Handler> = {
   "voice.finish": async (b, id) => VoiceFinished.parse(await b.client.request("POST", `${session(id)}/finish`)),
   "voice.cancel": async (b, id) => {
     await b.client.request("DELETE", session(id));
+  },
+  // Recording files (the Voice notes skill): the window decoded the file; main passes the audio on.
+  "voice.recordingStart": async (b, seconds, languages) => {
+    const body = { seconds: VoiceRecordingSeconds.parse(seconds), languages: VoiceLanguages.parse(languages ?? []) };
+    return VoiceRecording.parse(await b.client.request("POST", "/voice/recordings", body));
+  },
+  "voice.recordingAudio": async (b, id, pcm) => {
+    const audio = Buffer.from(VoiceRecordingPart.parse(pcm)).toString("base64");
+    return VoiceRecording.parse(await b.client.request("POST", `${recording(id)}/audio`, { pcm: audio }));
+  },
+  "voice.recordingEnd": async (b, id) => VoiceRecording.parse(await b.client.request("POST", `${recording(id)}/end`)),
+  "voice.recordingProgress": async (b, id) => VoiceRecording.parse(await b.client.request("GET", recording(id))),
+  "voice.recordingStop": async (b, id) => VoiceRecording.parse(await b.client.request("POST", `${recording(id)}/stop`)),
+  "voice.recordingTake": async (b, id, target) =>
+    VoiceFinished.parse(await b.client.request("POST", `${recording(id)}/take`, VoiceRecordingTarget.parse(target ?? {}))),
+  "voice.recordingDiscard": async (b, id) => {
+    await b.client.request("DELETE", recording(id));
   },
 };

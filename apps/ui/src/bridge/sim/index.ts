@@ -63,6 +63,16 @@ const simVoiceModel = () => {
   const status = simVoice.modelAt === null ? "missing" : received < SIM_VOICE_MODEL_BYTES ? "downloading" : "ready";
   return { status, received_bytes: status === "missing" ? 0 : received, total_bytes: SIM_VOICE_MODEL_BYTES, error: null } as const;
 };
+const simRecording: { total: number; received: number; state: "working" | "done" | "stopped" } = { total: 0, received: 0, state: "working" };
+const simRecordingNow = () => ({
+  recording_id: "7e".repeat(16),
+  state: simRecording.state,
+  total_s: simRecording.total,
+  done_s: simRecording.state === "done" ? simRecording.total : simRecording.received,
+  waiting_s: 0,
+  backlog_s: 60,
+  text: Array.from({ length: Math.ceil(simRecording.received / 30) }, () => SIM_VOICE_WORDS.join(" ") + ".").join(" "),
+});
 /** One more word for every 0.6 s of sound (16 kHz, 16-bit). */
 const simVoiceText = () => SIM_VOICE_WORDS.slice(0, Math.floor(simVoice.bytes / 19_200)).join(" ");
 
@@ -203,7 +213,7 @@ const SIM_SKILLS: LiveSkillEntry[] = [
   uses: [CONVERSATION],
   example: example as string,
   included: included as boolean,
-  ...(id === "voice" ? { available: false, publisher: "Whisper community build", licence: "MIT", version: "1.5.4", size_bytes: 466_000_000, uses: ["Recordings you choose"] } : {}),
+  ...(id === "voice" ? { publisher: "Whisper community build", licence: "MIT", version: "1.9.5", size_bytes: 190_085_487, uses: ["Recordings you choose"] } : {}),
 }));
 
 const SIM_FOLDER = "Documents/Client contracts";
@@ -501,11 +511,15 @@ export const simBridge: AiosBridge = {
   },
 
   skills: {
-    list: async () => ({ catalogue: SIM_SKILLS, installed: state.skills }),
+    // Voice notes can be added once the speech model is on this computer, as in the backend.
+    list: async () => ({
+      catalogue: SIM_SKILLS.map((e) => (e.id === "voice" ? { ...e, available: simVoiceModel().status === "ready" } : e)),
+      installed: state.skills,
+    }),
     install: async (id) => {
       const entry = SIM_SKILLS.find((e) => e.id === id) ?? fail("skill_not_found");
       if (entry.included) fail("skill_included");
-      if (entry.available === false) fail("skill_not_in_build");
+      if (id === "voice" && simVoiceModel().status !== "ready") fail("skill_needs_voice_model");
       if (state.skills.some((k) => k.id === id)) fail("skill_added");
       const added = { id, installed_at: now(), enabled: true };
       state.skills.push(added);
@@ -650,6 +664,29 @@ export const simBridge: AiosBridge = {
       return { text: simVoiceText() };
     },
     cancel: async () => undefined,
+    // A recording "becomes text" as fast as it is sent: one sample sentence per 30 s part.
+    recordingStart: async (seconds) => {
+      await wait(300);
+      simRecording.total = seconds;
+      simRecording.received = 0;
+      simRecording.state = "working";
+      return simRecordingNow();
+    },
+    recordingAudio: async (_id, pcm) => {
+      simRecording.received += pcm.byteLength / 32_000;
+      return simRecordingNow();
+    },
+    recordingEnd: async () => {
+      simRecording.state = "done";
+      return simRecordingNow();
+    },
+    recordingProgress: async () => simRecordingNow(),
+    recordingStop: async () => {
+      simRecording.state = "stopped";
+      return simRecordingNow();
+    },
+    recordingTake: async () => ({ text: simRecordingNow().text }),
+    recordingDiscard: async () => undefined,
   },
 
   /**

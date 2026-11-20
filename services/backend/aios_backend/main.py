@@ -26,6 +26,7 @@ from aios_backend.apps.settings.router import router as settings_router
 from aios_backend.apps.setup.router import router as setup_router
 from aios_backend.apps.skills.router import router as skills_router
 from aios_backend.apps.voice.router import router as voice_router
+from aios_backend.apps.voice.service import Recordings as VoiceRecordings
 from aios_backend.apps.voice.service import Sessions as VoiceSessions
 from aios_backend.components import Components, ComponentState
 from aios_backend.config import Settings
@@ -183,6 +184,7 @@ def create_app(
         if child is not None:
             child.stop()
         await app.state.voice_sessions.close()
+        await app.state.voice_recordings.close()
         await voice.shutdown()
         await manager.shutdown()
         database.dispose()
@@ -202,6 +204,7 @@ def create_app(
     app.state.engine = engine
     app.state.voice = voice
     app.state.voice_sessions = VoiceSessions(voice)
+    app.state.voice_recordings = VoiceRecordings(voice)
     app.state.answers = answers
     app.state.media = media
     app.state.generations = Generations()
