@@ -3,6 +3,7 @@ import { Channels } from "@aios/bridge-contract";
 import type { BackendHandle } from "../backend/spawn.js";
 import { chatHandlers, evidenceHandlers, searchHandlers } from "./chat.js";
 import { knowledgeHandlers } from "./knowledge.js";
+import { mediaHandlers } from "./media.js";
 import { modelsHandlers } from "./models.js";
 import { projectsHandlers } from "./projects.js";
 import { settingsHandlers } from "./settings.js";
@@ -26,6 +27,7 @@ export const handlers: Record<string, Handler> = {
   ...skillsHandlers,
   ...modelsHandlers,
   ...voiceHandlers,
+  ...mediaHandlers,
 };
 
 /** One registry of allowed calls. */

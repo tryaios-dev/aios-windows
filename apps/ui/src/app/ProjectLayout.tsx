@@ -33,7 +33,13 @@ export function ProjectLayout() {
   if (!project) return <Navigate to="/" replace />
 
   const base = `/projects/${project.id}`
-  const tab = location.pathname.endsWith('/activity') ? 'activity' : location.pathname.endsWith('/settings') ? 'settings' : 'conversations'
+  const tab = location.pathname.endsWith('/activity')
+    ? 'activity'
+    : location.pathname.endsWith('/settings')
+      ? 'settings'
+      : location.pathname.endsWith('/media')
+        ? 'media'
+        : 'conversations'
 
   const newConversation = async () => {
     const conv = await api.conversations.create(project.id)
@@ -93,6 +99,8 @@ export function ProjectLayout() {
           className="mt-1"
           items={[
             { label: 'Conversations', active: tab === 'conversations', onSelect: () => navigate(base), count: convCount },
+            // Pictures and videos are made on the company server: the tab shows only where one is set up (R-7).
+            ...(companyFlag ? [{ label: 'Images & video', active: tab === 'media', onSelect: () => navigate(`${base}/media`) }] : []),
             { label: 'Activity', active: tab === 'activity', onSelect: () => navigate(`${base}/activity`), count: activityCount },
             { label: 'Settings', active: tab === 'settings', onSelect: () => navigate(`${base}/settings`) },
           ]}

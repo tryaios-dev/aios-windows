@@ -6,7 +6,7 @@
  *
  * Not in the backend yet, so refused with a plain message and nothing changed: resources.
  */
-import { errorCode, type FolderPreview, type PackageFile, type SkillFileCheck } from '@aios/bridge-contract'
+import { errorCode, type FolderPreview, type MediaCreate, type MediaItem, type PackageFile, type SkillFileCheck } from '@aios/bridge-contract'
 import { bridge } from '@/bridge'
 import {
   applySettings,
@@ -620,6 +620,42 @@ export const api = {
         reportFailure(err, 'Setup could not finish')
         return false
       }
+    },
+  },
+
+  /**
+   * Pictures and videos made on the company's GPU server (R-7). The screen keeps its own list
+   * (`features/media/useMedia`); these calls report failures as toasts and return undefined.
+   */
+  media: {
+    status: () => bridge().media.status(),
+    list: (projectId: string) => bridge().media.list(projectId),
+    get: (id: string) => bridge().media.get(id),
+    content: (id: string) => bridge().media.content(id),
+    /** `confirmation_required` is returned, not shown, so the screen can ask first. */
+    create: async (projectId: string, input: MediaCreate): Promise<{ ok: true; item: MediaItem } | { ok: false; code: string }> => {
+      try {
+        const item = await bridge().media.create(projectId, input)
+        void refreshEvents()
+        return { ok: true, item }
+      } catch (err) {
+        const code = errorCode(err)
+        if (code !== 'confirmation_required') reportFailure(err, input.kind === 'video' ? 'Video not started' : 'Picture not started')
+        return { ok: false, code }
+      }
+    },
+    cancel: (id: string) => change('Not stopped', () => bridge().media.cancel(id), refreshEvents),
+    save: async (id: string): Promise<boolean> => {
+      const saved = await change('Not saved', () => bridge().media.save(id), refreshEvents)
+      if (saved) s().toast({ kind: 'success', title: 'Saved', description: saved.path })
+      return !!saved
+    },
+    remove: async (id: string): Promise<boolean> => {
+      const done = await change('Not deleted', async () => {
+        await bridge().media.remove(id)
+        return true
+      }, refreshEvents)
+      return !!done
     },
   },
 }

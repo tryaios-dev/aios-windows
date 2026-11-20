@@ -14,6 +14,7 @@ import type {
   InstalledModel as LiveModel,
   InstalledSkill as LiveInstalledSkill,
   KnowledgeDoc as LiveKnowledgeDoc,
+  MediaItem as LiveMediaItem,
   SkillEntry as LiveSkillEntry,
   Message as LiveMessage,
   Project as LiveProject,
@@ -155,6 +156,26 @@ function record(event_type: string, fields: { project_id?: string | null; conver
     pending: false,
   });
   return seq;
+}
+
+/* ------------------------------------------------------------------ pictures (R-7) */
+const simMedia: LiveMediaItem[] = [];
+/** A 1×1 picture: the preview has no GPU server, only the flow. */
+const SIM_PICTURE = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+const SIM_PICTURE_MS = 5000;
+const simMediaItem = (id: string) => simMedia.find((m) => m.id === id) ?? fail("media_not_found");
+/** Moves a simulated job along by the time since it started: waiting, then making, then done. */
+function simMediaNow(item: LiveMediaItem): LiveMediaItem {
+  if (item.status === "queued" || item.status === "running") {
+    const elapsed = Date.now() - Date.parse(item.created_at);
+    if (elapsed >= SIM_PICTURE_MS) {
+      Object.assign(item, { status: "done", progress: 1, position: null, mime: "image/png", size_bytes: 68, finished_at: now() });
+      record("media_completed", { project_id: item.project_id, actor: "app", payload: { kind: "image", status: "done", size_bytes: 68 } });
+    } else if (elapsed >= 1000) {
+      Object.assign(item, { status: "running", position: null, progress: Math.min(0.95, (elapsed - 1000) / (SIM_PICTURE_MS - 1000)) });
+    }
+  }
+  return { ...item };
 }
 
 const CONVERSATION = "The conversation you are in";
@@ -629,5 +650,72 @@ export const simBridge: AiosBridge = {
       return { text: simVoiceText() };
     },
     cancel: async () => undefined,
+  },
+
+  /**
+   * Pictures in the browser preview (R-7): no GPU server here, so a picture "takes" about 5 s and
+   * is a small sample image. Videos are not simulated (the preview has no sample video).
+   */
+  media: {
+    status: async () => ({
+      available: true,
+      reason: null,
+      models: [
+        { id: "flux-schnell", kind: "image" as const },
+        { id: "sdxl-lightning", kind: "image" as const },
+      ],
+    }),
+    list: async (projectId) => {
+      project(projectId);
+      return simMedia.filter((m) => m.project_id === projectId).map(simMediaNow);
+    },
+    create: async (projectId, input) => {
+      const p = project(projectId);
+      if (input.kind !== "image") fail("unknown_model");
+      if (!p.company_ai_enabled && !input.confirmed) fail("confirmation_required");
+      const item: LiveMediaItem = {
+        id: newId(),
+        project_id: projectId,
+        kind: "image",
+        model: input.model,
+        prompt: input.prompt,
+        negative_prompt: input.negative_prompt ?? null,
+        width: input.width,
+        height: input.height,
+        frames: null,
+        seed: input.seed ?? Math.floor(Math.random() * 4294967295),
+        status: "queued",
+        progress: 0,
+        position: 0,
+        error_code: null,
+        mime: null,
+        size_bytes: null,
+        created_at: now(),
+        finished_at: null,
+      };
+      simMedia.unshift(item);
+      record("media_requested", { project_id: projectId, payload: { kind: "image", model: input.model, width: input.width, height: input.height } });
+      return { ...item };
+    },
+    get: async (id) => simMediaNow(simMediaItem(id)),
+    content: async (id) => {
+      const item = simMediaNow(simMediaItem(id));
+      if (item.status !== "done") fail("media_not_ready");
+      return { id, mime: "image/png" as const, data_base64: SIM_PICTURE };
+    },
+    cancel: async (id) => {
+      const item = simMediaItem(id);
+      if (item.status === "queued" || item.status === "running") Object.assign(item, { status: "cancelled", finished_at: now() });
+      return { ...item };
+    },
+    save: async (id) => {
+      simMediaItem(id);
+      return { path: `C:\\Users\\you\\Documents\\aios-picture-${id.slice(0, 8)}.png`, size_bytes: 68 };
+    },
+    remove: async (id) => {
+      const at = simMedia.findIndex((m) => m.id === id);
+      if (at >= 0) simMedia.splice(at, 1);
+      record("media_deleted", { payload: { kind: "image" } });
+    },
   },
 };
