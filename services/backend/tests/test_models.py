@@ -7,9 +7,12 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from tests.conftest import LAUNCH_TOKEN, LOOPBACK
 
 from aios_backend.apps.models import catalogue
 from aios_backend.config import Settings
+from aios_backend.main import create_app
+from db.session import Database
 
 CONTENT = b"GGUF" + b"\x00" * 1020  # a tiny stand-in for a model file
 
@@ -164,6 +167,67 @@ def test_deleting_the_default_model_removes_the_file_and_clears_the_default(
     assert client.get("/models").json() == []
     assert "model_deleted" in [e["event_type"] for e in client.get("/evidence").json()]
     assert client.delete(f"/models/{tiny_entry.id}").json() == {"error": "model_not_found"}
+
+
+# ------------------------------------------------------------------ issue 11: a model is chosen
+def test_the_first_ai_model_installed_is_the_one_chat_uses(
+    client: TestClient, tmp_path: Path, tiny_entry: catalogue.Entry
+) -> None:
+    assert client.get("/settings").json()["default_model_id"] is None
+    client.post("/models/import", json={"path": str(gguf(tmp_path))})
+    assert client.get("/settings").json()["default_model_id"] == tiny_entry.id
+    # Chosen by the person: installing never changes it.
+    client.patch("/settings", json={"default_model_id": SMALL})
+    client.delete(f"/models/{tiny_entry.id}")
+    client.post("/models/import", json={"path": str(gguf(tmp_path))})
+    assert client.get("/settings").json()["default_model_id"] == SMALL
+
+
+def _restart(settings: Settings, db: Database) -> TestClient:
+    headers = {"Authorization": f"Bearer {LAUNCH_TOKEN}"}
+    return TestClient(create_app(settings, db), client=LOOPBACK, headers=headers)
+
+
+def test_opening_aios_with_one_model_and_none_chosen_chooses_it(
+    client: TestClient,
+    settings: Settings,
+    db: Database,
+    tmp_path: Path,
+    tiny_entry: catalogue.Entry,
+) -> None:
+    """Installations from before the fix: the model is installed, nothing is chosen."""
+    client.post("/models/import", json={"path": str(gguf(tmp_path))})
+    client.patch("/settings", json={"default_model_id": None})
+    with _restart(settings, db) as again:
+        assert again.get("/settings").json()["default_model_id"] == tiny_entry.id
+    with _restart(settings, db) as later:  # and it stays chosen
+        assert later.get("/settings").json()["default_model_id"] == tiny_entry.id
+
+
+def test_with_two_models_and_none_chosen_aios_does_not_guess(
+    client: TestClient,
+    settings: Settings,
+    db: Database,
+    tmp_path: Path,
+    tiny_entry: catalogue.Entry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client.post("/models/import", json={"path": str(gguf(tmp_path))})
+    other_content = b"GGUF" + b"\x01" * 60
+    other = dataclasses.replace(
+        tiny_entry,
+        id="tiny-two-q4km",
+        file_name="tiny-two.gguf",
+        size_bytes=len(other_content),
+        artifact_digest=hashlib.sha256(other_content).hexdigest(),
+    )
+    real = catalogue.entries()
+    monkeypatch.setattr(catalogue, "entries", lambda: (*real, other))
+    path = gguf(tmp_path, other_content, name="two.gguf")
+    assert client.post("/models/import", json={"path": str(path)}).status_code in (200, 201)
+    client.patch("/settings", json={"default_model_id": None})
+    with _restart(settings, db) as again:
+        assert again.get("/settings").json()["default_model_id"] is None
 
 
 def test_download_is_not_available_in_this_build(client: TestClient) -> None:
