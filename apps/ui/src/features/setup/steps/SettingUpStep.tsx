@@ -1,15 +1,13 @@
 import type * as React from 'react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Pause, Play, RotateCw } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
-import { bridge } from '@/bridge'
 import { api } from '@/lib/api'
 import { useStore } from '@/lib/store'
 import type { ModelTier } from '@/lib/types'
 import { formatBytes, formatDuration, formatSpeed } from '@/lib/format'
 import { modelLabel } from '@/lib/words'
-import { AIOS_PARTS, type AiosPart } from '@/data/stack'
 import { cn } from '@/lib/cn'
 import { Button } from '@/components/ui/button'
 import { Hash, KeyValue, Mono } from '@/components/ui/layout'
@@ -17,71 +15,39 @@ import { DrawnTick, ProgressBar, timeLeftWords, useTransferStats } from '@/compo
 import { Vignette } from '@/components/app/Vignettes'
 import { useVoiceStatus } from '@/features/voice/useVoiceModel'
 import { Disclosure, Plate, StepBody, StepFooter, StepHeading } from '../SetupFrame'
-import { GIB, WORKING_SPACE_BYTES, availableTiers, spaceNeededGb, tierEntry } from '../tiers'
+import { GIB, WORKING_SPACE_BYTES, spaceNeededGb, tierEntry } from '../tiers'
+import { beginSetup, chooseModel, retrySetup, useSetupRun } from '../setupRun'
+import { LINES, progress, type Facts, type LineState, type ModelState } from '../setupSteps'
 
 const EASE: [number, number, number, number] = [0.2, 0.7, 0.2, 1]
 
-/*
- * No internet is not simulated in the prototype. When the real application
- * cannot reach the model's publisher, this step shows, in place of the
- * progress block:
- *
- *   Title:  "AIOS cannot reach the place the AI model comes from."
- *   Body:   "Check that this computer is online, then carry on. Nothing has
- *            been lost. If a model file came with your installer, AIOS can
- *            use that instead."
- *   Button: "Try again"
- *   Link:   "Use the model file that came with my installer instead"
- *
- * "Skip for now" stays available, as it does everywhere on this step.
- */
-
 /**
- * Step 3. Starts by itself, and shows everything AIOS is putting on this
- * computer, not only the AI model: a checklist that grows one line at a
- * time above a single progress bar, with a small drawing of the part being
- * added right now.
- *
- * What is real and what is staged:
- *   - The AI model line and the progress bar follow the download the
- *     backend reports (bytes received, paused, dropped, checked). In the
- *     prototype that backend is simulated.
- *   - The other lines are ticked at set points along the way. They say what
- *     the installation includes; they are not tied to separate backend
- *     steps yet. Engineering has to confirm the list (src/data/stack.ts)
- *     and, where a step is real, tick its line from the real event.
+ * Step 3. Shows everything AIOS is putting on this computer, one line per part, each with the
+ * state the backend reports (findings 4 and 5). The work itself started when the person pressed
+ * Continue on "Your computer" (setupRun.ts), so the AI model is already downloading (finding 6).
+ * Every line is there from the start; the title names a part that is running; the percentage
+ * covers every part.
  */
-type ModelState = 'adding' | 'checking' | 'paused' | 'dropped' | 'damaged' | 'no-space' | 'skipped' | 'ready'
-
 export function SettingUpStep({ note, tier, skipped, onSkip, onUnskip, onBack, onContinue }: { note?: string; tier: ModelTier; skipped: boolean; onSkip: () => void; onUnskip: () => void; onBack: () => void; onContinue: () => void }) {
   const entry = tierEntry(tier)
   const entryId = entry.entry_id
   const hw = useStore((s) => s.hardware)
   const download = useStore((s) => s.downloads[entryId])
   const installed = useStore((s) => s.installedModels.some((m) => m.id === entryId))
-  const installedSource = useStore((s) => s.installedModels.find((m) => m.id === entryId)?.source)
+  const run = useSetupRun((s) => s.steps)
   const [fromFile, setFromFile] = useState(false)
-  // The model file from the installer package is being checked (offline package, MVP 10.1).
-  const [checkingPackage, setCheckingPackage] = useState(false)
-  // How far along the checklist is, 0 to 100. Replay mode arrives with the model installed: show it finished.
-  const [shown, setShown] = useState(installed ? 100 : 0)
-  const started = useRef(false)
   const stats = useTransferStats(download, entry.size_bytes)
   const voice = useVoiceStatus()
+  const voiceAsked = useSetupRun((s) => s.voiceAsked)
   const queryClient = useQueryClient()
-  const [voiceFailed, setVoiceFailed] = useState(false)
-
-  // Voice's speech model (190 MB) downloads alongside the AI model; it never holds setup up if it
-  // cannot: Settings > Voice offers it again.
-  const voiceStarted = useRef(false)
   useEffect(() => {
-    if (voiceStarted.current) return
-    voiceStarted.current = true
-    bridge()
-      .voice.downloadModel()
-      .then((s) => queryClient.setQueryData(['voice-status'], s))
-      .catch(() => setVoiceFailed(true))
-  }, [queryClient])
+    if (voiceAsked) void queryClient.invalidateQueries({ queryKey: ['voice-status'] })
+  }, [voiceAsked, queryClient])
+
+  // Opened straight on this step (setup reopened here): start the work now.
+  useEffect(() => {
+    beginSetup(skipped ? null : entryId)
+  }, [entryId, skipped])
 
   const needGb = spaceNeededGb(entry)
   const enoughSpace = installed || hw.free_disk_gb * GIB >= entry.size_bytes + WORKING_SPACE_BYTES
@@ -91,78 +57,45 @@ export function SettingUpStep({ note, tier, skipped, onSkip, onUnskip, onBack, o
     if (enoughSpace) api.models.download(entryId)
   }
 
-  // Start once, by itself. A download left paused or interrupted by an earlier visit is shown as it is.
-  useEffect(() => {
-    if (started.current) return
-    started.current = true
-    // A download begun for the other size is no longer wanted.
-    const inFlight = useStore.getState().downloads
-    for (const other of availableTiers().map((t) => tierEntry(t).entry_id)) {
-      if (other !== entryId && inFlight[other]) api.models.cancel(other)
-    }
-    if (installed || skipped || download) return
-    // A model that came with the installer is used first: no download, no network (MVP 10.1).
-    void (async () => {
-      setCheckingPackage(true)
-      const fromPackage = await api.models.installFromPackage(entryId)
-      setCheckingPackage(false)
-      if (fromPackage) setFromFile(true)
-      else if (enoughSpace) api.models.download(entryId)
-    })()
-    // The ref keeps this to one start, whatever changes afterwards.
-  }, [installed, skipped, download, entryId, enoughSpace])
-
   const status = download?.status
-  const verifying = status === 'verifying' || checkingPackage
+  const verifying = status === 'verifying'
   const failed = status === 'failed'
   const damaged = failed && download?.error_kind === 'damaged'
   const paused = status === 'paused'
   const downloading = status === 'downloading'
 
-  const model: ModelState = installed ? 'ready' : skipped ? 'skipped' : !download && !enoughSpace ? 'no-space' : verifying ? 'checking' : damaged ? 'damaged' : failed ? 'dropped' : paused ? 'paused' : 'adding'
+  const model: ModelState = installed ? 'ready' : skipped ? 'skipped' : !download && !enoughSpace ? 'no-space' : verifying ? 'checking' : damaged ? 'damaged' : failed ? 'dropped' : paused ? 'paused' : fromFile ? 'copying' : 'adding'
 
-  // While the AI model arrives, the checklist keeps pace with it.
-  useEffect(() => {
-    if (downloading) setShown((v) => Math.max(v, stats.pct * 0.96))
-  }, [downloading, stats.pct])
+  const figures =
+    model === 'adding' && download
+      ? [`${formatBytes(stats.received)} of ${formatBytes(stats.total)}`, stats.speedBps !== null ? formatSpeed(stats.speedBps) : 'connecting', stats.etaSeconds !== null ? `${timeLeftWords(stats.etaSeconds).toLowerCase()} left` : 'working out the time left'].join(' · ')
+      : null
+  const modelDetail =
+    model === 'paused' ? `${formatBytes(stats.received)} of ${formatBytes(stats.total)} is saved`
+    : model === 'dropped' ? `${formatBytes(stats.received)} has arrived and is saved`
+    : model === 'no-space' ? `It needs ${needGb} GB free. This computer has ${hw.free_disk_gb} GB`
+    : model === 'adding' && !download ? 'Starting'
+    : (figures ?? `${modelLabel(entry)}, ${formatBytes(entry.size_bytes)}`)
 
-  // With nothing left to download (being checked, already here, or skipped) the remaining lines follow at a steady pace.
-  const coasting = verifying || installed || skipped
-  useEffect(() => {
-    if (!coasting) return
-    const t = setInterval(() => setShown((v) => (v >= 100 ? 100 : Math.min(100, v + 2.4))), 110)
-    return () => clearInterval(t)
-  }, [coasting])
-
-  // The Voice line: shown unless this build has no speech engine.
   const voiceModel = voice?.model.status
-  const voiceShown = voiceFailed || (!!voice && voice.state !== 'not_built')
-  const voiceRow: { state: RowState; title: string; detail: string } | null = !voiceShown
-    ? null
-    : voiceModel === 'ready'
-      ? { state: 'done', title: 'Voice is ready', detail: 'Speak instead of typing, turned into text on this computer' }
-      : voiceFailed || voiceModel === 'failed'
-        ? { state: 'failed', title: 'Voice was not downloaded', detail: 'You can add it later in Settings, Voice' }
-        : voiceModel === 'verifying'
-          ? { state: 'current', title: 'Checking the speech model', detail: 'Making sure it is the genuine, unmodified file' }
-          : {
-              state: 'current',
-              title: 'Downloading speech for Voice',
-              detail: voice && voice.model.received_bytes > 0 ? `${formatBytes(voice.model.received_bytes)} of ${formatBytes(voice.model.total_bytes)}` : 'Starting',
-            }
-  const voiceSettled = !voiceRow || voiceRow.state !== 'current'
+  const voiceFacts: Facts['voice'] =
+    voice && voice.state === 'not_built'
+      ? null
+      : voiceModel === 'ready'
+        ? { state: 'ready', fraction: 1 }
+        : voiceModel === 'failed'
+          ? { state: 'failed', fraction: 1 }
+          : voiceModel === 'verifying'
+            ? { state: 'checking', fraction: 1 }
+            : voice && voice.model.received_bytes > 0
+              ? { state: 'downloading', fraction: voice.model.received_bytes / Math.max(1, voice.model.total_bytes), detail: `${formatBytes(voice.model.received_bytes)} of ${formatBytes(voice.model.total_bytes)}` }
+              : { state: 'waiting', fraction: 0 }
 
-  const finished = (installed || skipped) && shown >= 100 && voiceSettled
-  const moving = downloading || coasting
-  const others = AIOS_PARTS.filter((p) => p.id !== 'model')
-  const modelPart = AIOS_PARTS.find((p) => p.id === 'model')!
-  const done = (p: AiosPart) => shown >= p.at
-  const current = others.find((p) => !done(p))
-  const readyCount = others.filter(done).length + (installed ? 1 : 0) + (voiceRow?.state === 'done' ? 1 : 0)
-  const total = AIOS_PARTS.length - (skipped ? 1 : 0) + (voiceRow ? 1 : 0)
-  // The drawing shows what is being added right now: the next small part, then the AI model itself.
-  const featured: AiosPart = current ?? modelPart
-  const percent = finished ? 100 : Math.min(99, Math.floor(shown))
+  const p = progress({ run, model, modelDetail, modelFraction: stats.total ? stats.received / stats.total : 0, voice: voiceFacts })
+  const { finished, percent } = p
+  const featured = p.featured ? LINES[p.featured] : null
+  const moving = p.lines.some((l) => l.state === 'current')
+  const anyFailed = p.lines.some((l) => l.state === 'failed' && ['storage', 'rules', 'activity', 'project'].includes(l.id))
 
   const useInstallerFile = () => {
     api.models.cancel(entryId)
@@ -175,44 +108,26 @@ export function SettingUpStep({ note, tier, skipped, onSkip, onUnskip, onBack, o
 
   const skip = () => {
     // Keep what has arrived so far; it can be carried on later from AI models.
-    if (downloading) api.models.pause(entryId)
+    chooseModel(null)
     onSkip()
   }
 
   const resumeAfterSkip = () => {
     onUnskip()
+    chooseModel(entryId)
     if (download && status !== 'downloading') {
       if (damaged) api.models.download(entryId)
       else api.models.resume(entryId)
     } else if (!download) start()
   }
 
-  const canUseFile = !installed && !verifying && !skipped && (!!download || !enoughSpace)
+  const canUseFile = !installed && !verifying && !skipped && !fromFile && (!!download || !enoughSpace)
   const canSkip = !installed && !verifying && !skipped
-
-  const copied = fromFile || installedSource === 'offline'
-  const figures =
-    model === 'adding'
-      ? [`${formatBytes(stats.received)} of ${formatBytes(stats.total)}`, stats.speedBps !== null ? formatSpeed(stats.speedBps) : 'connecting', stats.etaSeconds !== null ? `${timeLeftWords(stats.etaSeconds).toLowerCase()} left` : 'working out the time left'].join(' · ')
-      : null
-
-  // The AI model line says what is true of the model right now.
-  const modelLine: { title: string; detail: string } = {
-    adding: { title: copied ? 'Copying your AI model' : modelPart.adding, detail: figures ?? modelLabel(entry) },
-    checking: { title: 'Checking your AI model', detail: 'Making sure it is the genuine, unmodified file' },
-    paused: { title: 'Download paused', detail: `${formatBytes(stats.received)} of ${formatBytes(stats.total)} is saved` },
-    dropped: { title: 'The connection dropped', detail: `${formatBytes(stats.received)} has arrived and is saved` },
-    damaged: { title: 'The AI model did not pass its check', detail: 'AIOS removed it. Nothing from it was kept' },
-    'no-space': { title: 'Not enough free space for the AI model', detail: `It needs ${needGb} GB free. This computer has ${hw.free_disk_gb} GB` },
-    skipped: { title: 'No AI model for now', detail: 'You can add one later from AI models' },
-    ready: { title: modelPart.ready, detail: `${modelLabel(entry)}, ${formatBytes(entry.size_bytes)}` },
-  }[model]
-
-  const modelRowState: RowState = model === 'ready' ? 'done' : model === 'adding' || model === 'checking' ? 'current' : model === 'paused' ? 'paused' : model === 'skipped' ? 'skipped' : 'failed'
 
   // One sentence and one button for anything that needs the person.
   let attention: { tone: 'brass' | 'deny'; text: string; action: React.ReactNode } | null = null
-  if (model === 'paused') attention = { tone: 'brass', text: 'What has arrived is saved. Resume when you are ready.', action: <Button size="sm" variant="primary" leading={<Play className="size-3.5" />} onClick={() => api.models.resume(entryId)}>Resume</Button> }
+  if (anyFailed) attention = { tone: 'deny', text: 'Part of setting up did not finish. Trying again usually fixes this.', action: <Button size="sm" variant="primary" leading={<RotateCw className="size-3.5" />} onClick={retrySetup}>Try again</Button> }
+  else if (model === 'paused') attention = { tone: 'brass', text: 'What has arrived is saved. Resume when you are ready.', action: <Button size="sm" variant="primary" leading={<Play className="size-3.5" />} onClick={() => api.models.resume(entryId)}>Resume</Button> }
   else if (model === 'dropped') attention = { tone: 'deny', text: 'Check that this computer is online, then carry on from where it stopped.', action: <Button size="sm" variant="primary" leading={<RotateCw className="size-3.5" />} onClick={() => api.models.resume(entryId)}>Carry on</Button> }
   else if (model === 'damaged') attention = { tone: 'deny', text: 'It was damaged or changed on the way. Downloading again usually fixes this.', action: <Button size="sm" variant="primary" leading={<RotateCw className="size-3.5" />} onClick={() => api.models.download(entryId)}>Download again</Button> }
   else if (model === 'no-space') attention = { tone: 'deny', text: `Free about ${toFreeGb} GB, then try again. Nothing has been downloaded yet.`, action: <Button size="sm" variant="primary" leading={<RotateCw className="size-3.5" />} onClick={start}>Try again</Button> }
@@ -230,21 +145,21 @@ export function SettingUpStep({ note, tier, skipped, onSkip, onUnskip, onBack, o
               <div className="relative hidden w-[212px] shrink-0 border-r border-line-soft bg-[linear-gradient(180deg,#eef3ee_0%,#f8f8f4_100%)] sm:block">
                 <div aria-hidden className="dot-grid absolute inset-0 opacity-70 [mask-image:radial-gradient(70%_85%_at_50%_50%,black,transparent)]" />
                 <AnimatePresence mode="wait" initial={false}>
-                  <motion.div key={finished ? 'ready' : featured.id} className="absolute inset-0 flex items-center justify-center px-2" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.12 } }} transition={{ duration: 0.3, ease: EASE }}>
-                    {finished ? (
+                  <motion.div key={finished || !p.featured ? 'ready' : p.featured} className={cn('absolute inset-0 flex items-center justify-center px-2', moving && 'vg-loop')} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.12 } }} transition={{ duration: 0.3, ease: EASE }}>
+                    {finished || !featured ? (
                       <span className="flex size-14 items-center justify-center rounded-full bg-green text-white shadow-[0_10px_24px_-10px_rgba(30,95,70,0.7)]">
                         <DrawnTick className="size-6" />
                       </span>
                     ) : (
-                      <Vignette kind={featured.id} />
+                      <Vignette kind={featured.drawing} />
                     )}
                   </motion.div>
                 </AnimatePresence>
               </div>
               <div className="flex min-w-0 flex-1 flex-col justify-center px-5 py-3 sm:px-6" role="status" aria-live="polite">
                 <AnimatePresence mode="wait" initial={false}>
-                  <motion.div key={finished ? 'ready' : featured.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.1 } }} transition={{ duration: 0.26, ease: EASE }}>
-                    {finished ? (
+                  <motion.div key={finished || !p.featured ? 'ready' : p.featured} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.1 } }} transition={{ duration: 0.26, ease: EASE }}>
+                    {finished || !featured ? (
                       <>
                         <p className="label-mono text-green">All done</p>
                         <h2 className="mt-1 text-xl font-semibold leading-7 tracking-[-0.01em] text-ink">Your AIOS is ready</h2>
@@ -252,7 +167,7 @@ export function SettingUpStep({ note, tier, skipped, onSkip, onUnskip, onBack, o
                       </>
                     ) : (
                       <>
-                        <p className="label-mono text-green">{moving ? 'Adding now' : 'Waiting'}</p>
+                        <p className="label-mono text-green">{p.lines.find((l) => l.id === p.featured)?.state === 'current' ? 'Adding now' : 'Waiting for you'}</p>
                         <h2 className="mt-1 text-xl font-semibold leading-7 tracking-[-0.01em] text-ink">{featured.name}</h2>
                         <p className="mt-1 text-sm leading-5 text-ink-soft">{featured.why}</p>
                       </>
@@ -262,16 +177,11 @@ export function SettingUpStep({ note, tier, skipped, onSkip, onUnskip, onBack, o
               </div>
             </div>
 
-            {/* The list grows as each part is put in place. Its height is held, so nothing jumps as lines arrive. */}
-            <ol className="flex min-h-[272px] flex-col px-5 py-2 sm:px-6" aria-label="What is on this computer so far">
-              {others.map((p) => {
-                const isDone = done(p)
-                const isCurrent = !isDone && current?.id === p.id
-                if (!isDone && !isCurrent) return null
-                return <Row key={p.id} state={isDone ? 'done' : moving ? 'current' : 'paused'} title={isDone ? p.ready : p.adding} detail={isDone ? p.detail : undefined} />
-              })}
-              {voiceRow && <Row state={voiceRow.state} title={voiceRow.title} detail={voiceRow.detail} live={voiceRow.state === 'current'} />}
-              <Row state={modelRowState} title={modelLine.title} detail={modelLine.detail} live={model === 'adding'} />
+            {/* Every part, from the start, each with its real state. */}
+            <ol className="flex flex-col px-5 py-2 sm:px-6" aria-label="What AIOS is putting on this computer">
+              {p.lines.map((l) => (
+                <Row key={l.id} state={l.state} title={l.title} detail={l.detail} live={l.live} />
+              ))}
             </ol>
 
             {/* One progress bar for the whole installation */}
@@ -281,9 +191,9 @@ export function SettingUpStep({ note, tier, skipped, onSkip, onUnskip, onBack, o
                   <span className="text-[30px] font-medium tracking-[-0.03em]">{percent}</span>
                   <span className="ml-0.5 text-base text-ink-50">%</span>
                 </p>
-                <ProgressBar value={finished ? 100 : shown} tone={attention?.tone === 'deny' ? 'deny' : model === 'paused' ? 'brass' : 'green'} active={moving && !finished} label="Setting up AIOS" valueText={`${percent} percent. ${readyCount} of ${total} ready.`} />
+                <ProgressBar value={percent} tone={attention?.tone === 'deny' ? 'deny' : model === 'paused' ? 'brass' : 'green'} active={moving && !finished} label="Setting up AIOS" valueText={`${percent} percent. ${p.ready} of ${p.total} ready.`} />
                 <p className="shrink-0 text-sm leading-5 tabular text-ink-soft">
-                  <span className="font-medium text-ink">{readyCount}</span> of {total} ready
+                  <span className="font-medium text-ink">{p.ready}</span> of {p.total} ready
                 </p>
                 {model === 'adding' && downloading && (
                   <Button size="sm" variant="ghost" leading={<Pause className="size-3.5" />} onClick={() => api.models.pause(entryId)} className="-mr-2 shrink-0">
@@ -347,7 +257,7 @@ export function SettingUpStep({ note, tier, skipped, onSkip, onUnskip, onBack, o
   )
 }
 
-type RowState = 'done' | 'current' | 'paused' | 'failed' | 'skipped'
+type RowState = LineState
 
 /** One line of the checklist. It arrives with a short fade and its tick is drawn in. */
 function Row({ state, title, detail, live }: { state: RowState; title: string; detail?: string; /** The detail is a running figure, not a description. */ live?: boolean }) {
@@ -362,6 +272,7 @@ function Row({ state, title, detail, live }: { state: RowState; title: string; d
           state === 'paused' && 'border-brass bg-brass-soft',
           state === 'failed' && 'border-deny bg-deny-soft',
           state === 'skipped' && 'border-line bg-paper-raised',
+          state === 'waiting' && 'border-line bg-white',
         )}
       >
         {state === 'done' && <DrawnTick className="size-2.5" strokeWidth={2.75} />}
@@ -370,9 +281,9 @@ function Row({ state, title, detail, live }: { state: RowState; title: string; d
         {state === 'failed' && <span className="size-1.5 rounded-full bg-deny" />}
       </span>
       <span className="flex min-w-0 flex-1 items-baseline gap-x-2.5">
-        <span className={cn('shrink-0 text-sm leading-5', state === 'done' ? 'font-medium text-ink' : state === 'failed' ? 'font-medium text-deny' : state === 'skipped' ? 'text-ink-soft' : 'font-medium text-ink')}>
+        <span className={cn('shrink-0 text-sm leading-5', state === 'done' ? 'font-medium text-ink' : state === 'failed' ? 'font-medium text-deny' : state === 'skipped' || state === 'waiting' ? 'text-ink-soft' : 'font-medium text-ink')}>
           {title}
-          <span className="sr-only">{state === 'done' ? ' (ready)' : state === 'current' ? ' (in progress)' : state === 'paused' ? ' (on hold)' : state === 'failed' ? ' (stopped)' : ''}</span>
+          <span className="sr-only">{state === 'done' ? ' (ready)' : state === 'current' ? ' (in progress)' : state === 'paused' ? ' (on hold)' : state === 'failed' ? ' (stopped)' : state === 'waiting' ? ' (waiting)' : ''}</span>
         </span>
         {detail && <span className={cn('min-w-0 truncate text-sm leading-5 text-ink-50', live && 'tabular')} aria-live={live ? 'off' : undefined}>{detail}</span>}
       </span>

@@ -20,6 +20,7 @@ const bridge: AiosBridge = {
   setup: {
     status: () => invoke("setup.status"),
     createStore: () => invoke("setup.createStore"),
+    createProject: () => invoke("setup.createProject"),
     complete: () => invoke("setup.complete"),
     chooseBackupFolder: () => invoke("setup.chooseBackupFolder"),
     chooseBackupLocation: () => invoke("setup.chooseBackupLocation"),
@@ -117,6 +118,7 @@ const bridge: AiosBridge = {
     remove: (id) => invoke("models.remove", id),
     hardware: (refresh) => invoke("models.hardware", refresh),
     engine: () => invoke("models.engine"),
+    startEngine: (modelId) => invoke("models.startEngine", modelId),
     benchmark: () => invoke("models.benchmark"),
   },
   voice: {

@@ -63,6 +63,8 @@ export async function createMainWindow(): Promise<BrowserWindow> {
     width: 1280,
     height: 820,
     show: false,
+    // The app's paper colour (--color-paper): never a white flash while a screen loads.
+    backgroundColor: "#f6f5f1",
     title: "AIOS",
     ...windowIcon(),
     webPreferences: { ...RENDERER_PREFERENCES, preload: path.join(import.meta.dirname, "../preload/index.cjs") },

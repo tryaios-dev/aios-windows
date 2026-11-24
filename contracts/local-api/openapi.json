@@ -7882,6 +7882,27 @@
         ]
       }
     },
+    "/setup/project": {
+      "post": {
+        "operationId": "create_project_setup_project_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Completed"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Create the default project once (a Setting up step); first run goes on",
+        "tags": [
+          "setup"
+        ]
+      }
+    },
     "/setup/status": {
       "get": {
         "operationId": "setup_status_setup_status_get",
