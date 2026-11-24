@@ -29,6 +29,12 @@ function fakeBridge({ writerAfter = 0, storeFails = false } = {}) {
         return { default_project_id: 'proj-1' }
       }),
     },
+    knowledge: {
+      list: vi.fn(async () => {
+        calls.push('knowledge')
+        return []
+      }),
+    },
     voice: { downloadModel: vi.fn(async () => ({})) },
     models: { startEngine: vi.fn(async () => ({ state: 'ready' })) },
   }
@@ -60,10 +66,10 @@ describe('Setting up starts on Continue and runs each part once (findings 5, 6 a
     beginSetup(LIGHT, d)
     expect(d.startModel).toHaveBeenCalledWith(LIGHT) // before Setting up opens (finding 6)
     expect(fake.b.voice.downloadModel).toHaveBeenCalledOnce()
-    await waitFor(() => expect(useSetupRun.getState().steps.project.state).toBe('done'))
+    await waitFor(() => expect(useSetupRun.getState().steps.knowledge.state).toBe('done'))
     const { steps } = useSetupRun.getState()
     expect([steps.rules.state, steps.activity.state, steps.storage.state]).toEqual(['done', 'done', 'done'])
-    expect(fake.calls).toEqual(['store', 'project']) // the project needs the storage
+    expect(fake.calls).toEqual(['store', 'project', 'knowledge']) // the knowledge base needs the storage
     // The key waits in this window's memory for "Save your recovery key" (finding 8).
     expect(useStore.getState().recoveryKey).toBe('AAAA-BBBB')
   })
@@ -72,7 +78,7 @@ describe('Setting up starts on Continue and runs each part once (findings 5, 6 a
     const fake = fakeBridge()
     const d = deps(fake)
     beginSetup(LIGHT, d)
-    await waitFor(() => expect(useSetupRun.getState().steps.project.state).toBe('done'))
+    await waitFor(() => expect(useSetupRun.getState().steps.knowledge.state).toBe('done'))
     beginSetup(LIGHT, d)
     expect(d.startModel).toHaveBeenCalledOnce()
     expect(fake.b.setup.createStore).toHaveBeenCalledOnce()
@@ -121,10 +127,10 @@ describe('Setting up starts on Continue and runs each part once (findings 5, 6 a
     const fake = fakeBridge({ storeFails: true })
     beginSetup(LIGHT, deps(fake))
     await waitFor(() => expect(useSetupRun.getState().steps.storage.state).toBe('failed'))
-    expect(useSetupRun.getState().steps.project.state).toBe('waiting')
+    expect(useSetupRun.getState().steps.knowledge.state).toBe('waiting')
     fake.b.setup.createStore.mockResolvedValueOnce({ recovery_key: 'CCCC-DDDD', package_id: 'p', stream_id: 's', signing_key_id: 'k' })
     retrySetup()
-    await waitFor(() => expect(useSetupRun.getState().steps.project.state).toBe('done'))
+    await waitFor(() => expect(useSetupRun.getState().steps.knowledge.state).toBe('done'))
     expect(fake.b.settings.network).toHaveBeenCalledOnce()
     expect(useStore.getState().recoveryKey).toBe('CCCC-DDDD')
   })

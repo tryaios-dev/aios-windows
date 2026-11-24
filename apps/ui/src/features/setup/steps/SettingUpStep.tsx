@@ -25,8 +25,8 @@ const EASE: [number, number, number, number] = [0.2, 0.7, 0.2, 1]
  * Step 3. Shows everything AIOS is putting on this computer, one line per part, each with the
  * state the backend reports (findings 4 and 5). The work itself started when the person pressed
  * Continue on "Your computer" (setupRun.ts), so the AI model is already downloading (finding 6).
- * Every line is there from the start; the title names a part that is running; the percentage
- * covers every part.
+ * A line shows once its part has started; the title names a part that is running; the
+ * percentage covers every part.
  */
 export function SettingUpStep({ note, tier, skipped, onSkip, onUnskip, onBack, onContinue }: { note?: string; tier: ModelTier; skipped: boolean; onSkip: () => void; onUnskip: () => void; onBack: () => void; onContinue: () => void }) {
   const entry = tierEntry(tier)
@@ -95,7 +95,7 @@ export function SettingUpStep({ note, tier, skipped, onSkip, onUnskip, onBack, o
   const { finished, percent } = p
   const featured = p.featured ? LINES[p.featured] : null
   const moving = p.lines.some((l) => l.state === 'current')
-  const anyFailed = p.lines.some((l) => l.state === 'failed' && ['storage', 'rules', 'activity', 'project'].includes(l.id))
+  const anyFailed = p.lines.some((l) => l.state === 'failed' && ['storage', 'knowledge', 'rules', 'activity'].includes(l.id))
 
   const useInstallerFile = () => {
     api.models.cancel(entryId)
@@ -177,7 +177,7 @@ export function SettingUpStep({ note, tier, skipped, onSkip, onUnskip, onBack, o
               </div>
             </div>
 
-            {/* Every part, from the start, each with its real state. */}
+            {/* Each part once it has started, with its real state. */}
             <ol className="flex flex-col px-5 py-2 sm:px-6" aria-label="What AIOS is putting on this computer">
               {p.lines.map((l) => (
                 <Row key={l.id} state={l.state} title={l.title} detail={l.detail} live={l.live} />

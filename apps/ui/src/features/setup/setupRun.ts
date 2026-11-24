@@ -18,17 +18,18 @@ import { GIB, WORKING_SPACE_BYTES } from './tiers'
  *   activity   the activity log's writer answers (GET /system/status)
  *   storage    the encrypted storage and its recovery key (POST /setup/store); the key waits,
  *              in memory only, for "Save your recovery key"
- *   project    the first project (POST /setup/project), once the storage is there
+ *   knowledge  the first project (POST /setup/project) and the knowledge base (GET /knowledge),
+ *              once the storage is there
  *   voice      the speech model downloads (its state comes from GET /voice/status)
  *   download   the AI model downloads, or is copied from the installer package
  *   check      the AI model is checked (its state comes from the download)
  *   engine     the AI engine starts with the new model, once it is checked; the model becomes the
  *              one new conversations use
  *
- * Voice, download and check are not tracked here: the screen reads them from the backend's own
+ * Voice and the AI model's download and check are not tracked here: the screen reads them from the backend's own
  * download states. This module keeps only what has no other home.
  */
-export type RunStepId = 'rules' | 'activity' | 'storage' | 'project' | 'engine'
+export type RunStepId = 'rules' | 'activity' | 'storage' | 'knowledge' | 'engine'
 export type StepState = 'waiting' | 'running' | 'done' | 'failed'
 
 export interface RunStep {
@@ -50,7 +51,7 @@ const WAITING: Record<RunStepId, RunStep> = {
   rules: { state: 'waiting' },
   activity: { state: 'waiting' },
   storage: { state: 'waiting' },
-  project: { state: 'waiting' },
+  knowledge: { state: 'waiting' },
   engine: { state: 'waiting' },
 }
 
@@ -128,7 +129,11 @@ export function beginSetup(entryId: string | null, with_: SetupDeps = DEFAULT_DE
         stream: { ...st.stream, stream_id: created.stream_id, signer_key_id: created.signing_key_id },
       }))
     }))
-    if (stored && todo('project')) await step('project', async () => void (await b.setup.createProject()))
+    if (stored && todo('knowledge'))
+      await step('knowledge', async () => {
+        await b.setup.createProject()
+        await b.knowledge.list() // the knowledge base answers from the new storage
+      })
   })()
 
   // Voice downloads beside the AI model. It never holds setup up: Settings, Voice offers it again.
@@ -169,7 +174,7 @@ export function chooseModel(entryId: string | null): void {
   if (useSetupRun.getState().started) engineWhenInstalled()
 }
 
-/** Try the parts that failed again (rules, activity log, storage, project, engine). */
+/** Try the parts that failed again (rules, activity log, storage, knowledge base, engine). */
 export function retrySetup(): void {
   const { steps, entryId } = useSetupRun.getState()
   const failed = (Object.keys(steps) as RunStepId[]).filter((id) => steps[id].state === 'failed')
@@ -190,7 +195,7 @@ export function startEngine(entryId: string): void {
   })
 }
 
-/** For the AI model's two parts (download and check), from the backend's download state. */
+/** Starts the AI model; its download and check are read from the backend's download state. */
 async function startModel(entryId: string): Promise<void> {
   const entry = catalogueEntry(entryId)
   if (!entry) return

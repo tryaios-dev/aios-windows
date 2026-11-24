@@ -3,14 +3,18 @@ import type { RunStep, RunStepId } from './setupRun'
 
 /**
  * The lines of Setting up, worked out from what the backend reports and nothing else (test
- * findings 4 and 5). Every line is there from the start; the title names a line that is running;
- * the counter counts the ticked lines; the percentage covers every line and reads 100 only when
- * all of them are settled.
+ * findings 4 and 5), with the design's eight parts in the design's order. A line shows once its
+ * part has started (the AI model's from the start); the title names a line that is running; the
+ * counter counts the ticked lines; the percentage covers every part and reads 100 only when all
+ * of them are settled.
  *
- * Names and order are placeholders until the design's eight steps arrive (finding 4): change
- * them in LINES only.
+ * Document reading and memory have no work of their own: the reader is built in and the
+ * summaries of long conversations are kept in the storage, so both are ready the moment the
+ * encrypted storage is. The knowledge base is the first project plus the knowledge list
+ * answering from the new storage. The AI engine starts once the model is checked, but has no line
+ * and holds nothing up: chat starts it anyway when needed.
  */
-export type LineId = 'storage' | 'rules' | 'activity' | 'voice' | 'download' | 'check' | 'engine' | 'project'
+export type LineId = 'storage' | 'documents' | 'knowledge' | 'voice' | 'memory' | 'rules' | 'activity' | 'model'
 export type LineState = 'waiting' | 'current' | 'paused' | 'done' | 'failed' | 'skipped'
 
 interface LineText {
@@ -29,17 +33,17 @@ interface LineText {
 }
 
 export const LINES: Record<LineId, LineText> = {
-  storage: { name: 'Encrypted storage', adding: 'Creating your encrypted storage', ready: 'Your storage is encrypted', detail: 'Only this computer can open it', why: 'Everything AIOS keeps is encrypted on this computer. Your recovery key comes next.', drawing: 'storage', weight: 2 },
+  storage: { name: 'Secure storage', adding: 'Setting up secure storage', ready: 'Secure storage is ready', detail: 'Everything is encrypted on this computer', why: 'Everything AIOS keeps is locked on this computer, and only you hold the key.', drawing: 'storage', weight: 2 },
+  documents: { name: 'Document reading', adding: 'Adding document reading', ready: 'Document reading is ready', detail: 'AIOS can take in your PDFs and files', why: 'Drop in PDFs, Word files and spreadsheets, and your AI can work from them.', drawing: 'documents', weight: 1 },
+  knowledge: { name: 'Knowledge base', adding: 'Preparing your knowledge base', ready: 'Your knowledge base is ready', detail: 'One protected place for the documents you add', why: 'The documents you add are kept together in one protected place, ready for your AI to use.', drawing: 'knowledge', weight: 1 },
+  voice: { name: 'Voice', adding: 'Adding voice', ready: 'Voice is ready', detail: 'Speak instead of typing', why: 'Talk to your AI instead of typing, and turn recordings into text.', drawing: 'voice', weight: 3, optional: true },
+  memory: { name: 'Memory', adding: 'Turning on memory', ready: 'Memory is on', detail: 'Your AI keeps track of what was said earlier', why: 'Your AI keeps track of long conversations, so you do not have to repeat yourself.', drawing: 'memory', weight: 1 },
   rules: { name: 'Rules', adding: 'Turning on the rules', ready: 'Rules are on', detail: 'Nothing leaves this computer unless you say so', why: 'Built-in rules decide what your AI may do. The first: nothing leaves this computer unless you say so.', drawing: 'rules', weight: 1 },
   activity: { name: 'Activity log', adding: 'Starting the activity log', ready: 'Activity log is on', detail: 'You can see everything your AI does', why: 'Every action is written down in plain words, in order, so you can always see what your AI did.', drawing: 'activity', weight: 1 },
-  voice: { name: 'Voice', adding: 'Downloading speech for Voice', ready: 'Voice is ready', detail: 'Speak instead of typing, turned into text on this computer', why: 'Speak instead of typing. Your voice is turned into text on this computer.', drawing: 'voice', weight: 3, optional: true },
-  download: { name: 'AI model', adding: 'Downloading your AI model', ready: 'Your AI model is downloaded', detail: '', why: 'The AI itself. It runs on this computer and keeps working with no internet.', drawing: 'model', weight: 20 },
-  check: { name: 'Checking the AI model', adding: 'Checking your AI model', ready: 'Your AI model is checked', detail: 'It is the genuine, unmodified file', why: 'AIOS makes sure the file is exactly the one that passed its checks.', drawing: 'model', weight: 2 },
-  engine: { name: 'AI engine', adding: 'Starting the AI engine', ready: 'The AI engine is running', detail: 'Chat works straight away', why: 'The engine runs your AI model on this computer, so chat is ready when you are.', drawing: 'model', weight: 3, optional: true },
-  project: { name: 'First project', adding: 'Opening your first project', ready: 'Your first project is ready', detail: 'Restricted: it stays on this computer', why: 'Projects keep conversations and documents together. Your first one is ready to use.', drawing: 'knowledge', weight: 1 },
+  model: { name: 'AI model', adding: 'Downloading your AI model', ready: 'Your AI model is downloaded and checked', detail: '', why: 'The AI itself. It runs on this computer and keeps working with no internet.', drawing: 'model', weight: 22 },
 }
 
-export const ORDER: LineId[] = ['storage', 'rules', 'activity', 'voice', 'download', 'check', 'engine', 'project']
+export const ORDER: LineId[] = ['storage', 'documents', 'knowledge', 'voice', 'memory', 'rules', 'activity', 'model']
 
 export interface Line {
   id: LineId
@@ -69,16 +73,17 @@ const RUN_STATE: Record<RunStep['state'], LineState> = { waiting: 'waiting', run
 function lineFor(id: LineId, f: Facts): Line | null {
   const text = LINES[id]
   const plain = (state: LineState, detail?: string): Line => ({ id, state, title: state === 'done' ? text.ready : text.adding, detail: detail ?? (state === 'done' ? text.detail : undefined) })
+  const fromRun = (step: RunStep) => plain(RUN_STATE[step.state], step.state === 'failed' ? 'It did not start. Try again.' : undefined)
   switch (id) {
     case 'storage':
+    case 'knowledge':
     case 'rules':
     case 'activity':
-    case 'project':
-      return plain(RUN_STATE[f.run[id].state], f.run[id].state === 'failed' ? 'It did not start. Try again.' : undefined)
-    case 'engine':
-      if (f.model === 'skipped') return { id, state: 'skipped', title: 'No AI engine for now', detail: 'It starts once you add an AI model' }
-      if (f.run.engine.state === 'failed') return { id, state: 'failed', title: 'The AI engine did not start yet', detail: 'It starts by itself when you send a message' }
-      return plain(RUN_STATE[f.run.engine.state])
+      return fromRun(f.run[id])
+    case 'documents':
+    case 'memory':
+      // Built in; they need only the encrypted storage.
+      return plain(f.run.storage.state === 'done' ? 'done' : 'waiting')
     case 'voice': {
       const v = f.voice
       if (!v) return null
@@ -87,24 +92,17 @@ function lineFor(id: LineId, f: Facts): Line | null {
       if (v.state === 'checking') return { id, state: 'current', title: 'Checking the speech model', detail: 'Making sure it is the genuine, unmodified file' }
       return { id, state: v.state === 'waiting' ? 'waiting' : 'current', title: text.adding, detail: v.detail, live: v.state === 'downloading' }
     }
-    case 'download': {
+    case 'model': {
       const m = f.model
       if (m === 'skipped') return { id, state: 'skipped', title: 'No AI model for now', detail: 'You can add one later from AI models' }
-      if (m === 'ready' || m === 'checking') return { id, state: 'done', title: text.ready, detail: f.modelDetail }
+      if (m === 'ready') return { id, state: 'done', title: text.ready, detail: f.modelDetail }
+      if (m === 'checking') return { id, state: 'current', title: 'Checking your AI model', detail: 'Making sure it is the genuine, unmodified file' }
+      if (m === 'damaged') return { id, state: 'failed', title: 'The AI model did not pass its check', detail: 'AIOS removed it. Nothing from it was kept' }
       if (m === 'copying') return { id, state: 'current', title: 'Copying your AI model', detail: f.modelDetail }
       if (m === 'paused') return { id, state: 'paused', title: 'Download paused', detail: f.modelDetail }
       if (m === 'dropped') return { id, state: 'failed', title: 'The connection dropped', detail: f.modelDetail }
       if (m === 'no-space') return { id, state: 'failed', title: 'Not enough free space for the AI model', detail: f.modelDetail }
-      if (m === 'damaged') return { id, state: 'done', title: text.ready, detail: f.modelDetail }
       return { id, state: 'current', title: text.adding, detail: f.modelDetail, live: true }
-    }
-    case 'check': {
-      const m = f.model
-      if (m === 'skipped') return { id, state: 'skipped', title: 'Nothing to check', detail: 'No AI model for now' }
-      if (m === 'ready') return plain('done')
-      if (m === 'checking') return { id, state: 'current', title: text.adding, detail: 'Making sure it is the genuine, unmodified file' }
-      if (m === 'damaged') return { id, state: 'failed', title: 'The AI model did not pass its check', detail: 'AIOS removed it. Nothing from it was kept' }
-      return plain('waiting')
     }
   }
 }
@@ -122,25 +120,32 @@ export interface Progress {
 
 const SETTLED: LineState[] = ['done', 'skipped']
 
+/** How far the AI model is: the download is most of it, the check the rest. */
+function modelShare(f: Facts): number {
+  if (f.model === 'checking') return 0.95
+  return 0.9 * f.modelFraction
+}
+
 export function progress(f: Facts): Progress {
-  const lines = ORDER.map((id) => lineFor(id, f)).filter((l): l is Line => l !== null)
+  const all = ORDER.map((id) => lineFor(id, f)).filter((l): l is Line => l !== null)
   const settled = (l: Line) => SETTLED.includes(l.state) || (l.state === 'failed' && !!LINES[l.id].optional)
-  const finished = lines.every(settled)
-  const counted = lines.filter((l) => l.state !== 'skipped')
+  const finished = all.every(settled)
+  const counted = all.filter((l) => l.state !== 'skipped')
   let sum = 0
   let total = 0
-  for (const l of lines) {
+  for (const l of all) {
     const w = LINES[l.id].weight
     total += w
     if (settled(l)) sum += w
-    else if (l.id === 'download' && l.state !== 'waiting') sum += w * f.modelFraction
+    else if (l.id === 'model' && l.state !== 'waiting') sum += w * modelShare(f)
     else if (l.id === 'voice' && f.voice) sum += w * f.voice.fraction
   }
   const percent = finished ? 100 : Math.min(99, Math.floor((sum / total) * 100))
-  const running = lines.find((l) => l.state === 'current')
-  const stuck = lines.find((l) => l.state === 'paused' || (l.state === 'failed' && !LINES[l.id].optional))
+  const running = all.find((l) => l.state === 'current')
+  const stuck = all.find((l) => l.state === 'paused' || (l.state === 'failed' && !LINES[l.id].optional))
   return {
-    lines,
+    // A part shows once it has started; the AI model from the start.
+    lines: all.filter((l) => l.state !== 'waiting' || l.id === 'model'),
     featured: finished ? null : (running ?? stuck ?? null)?.id ?? null,
     ready: counted.filter((l) => l.state === 'done').length,
     total: counted.length,
