@@ -84,7 +84,7 @@ function fakeBridge() {
         if (state.status.store_created) throw remote("store_exists");
         state.status = { ...state.status, store_created: true, stream_id: "stream-1", signing_key_id: "key-1" };
         return {
-          recovery_key: "AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH-JJJJ",
+          recovery_key: "AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH",
           package_id: "p",
           stream_id: "stream-1",
           signing_key_id: "key-1",
@@ -98,6 +98,7 @@ function fakeBridge() {
       chooseBackupLocation: vi.fn(async () => null),
       setBackupLocation: vi.fn(async () => state.status),
       newRecoveryKey: vi.fn(async () => ({ recovery_key: "AAAA-BBBB", package_id: "pkg-2", issued_at: "2026-11-15T07:00:00Z" })),
+      saveRecoveryKey: vi.fn(async () => true),
       backup: vi.fn(async () => {
         throw remote("no_backup_location");
       }),
@@ -191,7 +192,7 @@ describe("desktop app: setup and settings come from the backend", () => {
 
   it("issues the recovery key once; a second store is refused", async () => {
     const first = await api.firstRun.issueRecoveryKey();
-    expect(first).toEqual({ ok: true, key: "AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH-JJJJ" });
+    expect(first).toEqual({ ok: true, key: "AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH" });
     expect(useStore.getState().recoveryKey).toBe(first.ok && first.key);
     const second = await api.firstRun.issueRecoveryKey();
     expect(second.ok).toBe(false);
@@ -205,10 +206,20 @@ describe("desktop app: setup and settings come from the backend", () => {
     expect(useStore.getState().ui.firstRunComplete).toBe(true);
   });
 
+  it("Save as a file hands the key to the system Save dialog and says it was saved (issue 10)", async () => {
+    expect(await api.recoveryKey.saveAsFile("AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH")).toBe(true);
+    expect(fake.bridge.setup.saveRecoveryKey).toHaveBeenCalledWith("AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH");
+    expect(useStore.getState().toasts.map((t) => t.title)).toContain("Recovery key saved");
+    vi.mocked(fake.bridge.setup.saveRecoveryKey).mockResolvedValueOnce(false); // cancelled: nothing said
+    useStore.setState({ toasts: [] });
+    expect(await api.recoveryKey.saveAsFile("AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH")).toBe(false);
+    expect(useStore.getState().toasts).toEqual([]);
+  });
+
   it("explains a failed restore in plain words", async () => {
     const r = await api.restore({ backup_path: "D:\\backup", recovery_key: "x" });
     expect(r).toEqual({ ok: false, error: expect.stringContaining("doesn't match this backup") });
-    expect(RECOVERY_KEY_LENGTH).toBe(36);
+    expect(RECOVERY_KEY_LENGTH).toBe(32); // 8 groups of 4 (test findings, issue 9)
   });
 });
 

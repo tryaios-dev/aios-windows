@@ -354,7 +354,7 @@ export const simBridge: AiosBridge = {
       last_backup_size: state.lastBackupSize,
     }),
     createStore: async () => {
-      const key = Array.from({ length: 9 }, () => Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, "X")).join("-");
+      const key = Array.from({ length: 8 }, () => Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, "X")).join("-");
       record("recovery_key_issued", { actor: "app" });
       return { recovery_key: key, package_id: newId(), stream_id: SEED_STREAM.stream_id, signing_key_id: SEED_STREAM.signer_key_id };
     },
@@ -368,8 +368,9 @@ export const simBridge: AiosBridge = {
       state.backupLocation = folder;
       return simBridge.setup.status();
     },
+    saveRecoveryKey: async () => true,
     newRecoveryKey: async () => {
-      const key = Array.from({ length: 9 }, () => Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, "X")).join("-");
+      const key = Array.from({ length: 8 }, () => Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, "X")).join("-");
       record("recovery_package_written", { actor: "app" });
       record("recovery_key_issued", { actor: "user" });
       return { recovery_key: key, package_id: newId(), issued_at: now() };

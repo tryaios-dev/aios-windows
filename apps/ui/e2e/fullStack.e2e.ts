@@ -106,7 +106,7 @@ describe("desktop app against the real backend", () => {
 
   it("setup: creates the store, shows the recovery key once, finishes with the default project", async () => {
     const issued = await ui.api.firstRun.issueRecoveryKey();
-    expect(issued.ok && issued.key).toMatch(/^([0-9A-Z]{4}-){8}[0-9A-Z]{4}$/);
+    expect(issued.ok && issued.key).toMatch(/^([0-9A-Z]{4}-){7}[0-9A-Z]{4}$/);
     const again = await ui.api.firstRun.issueRecoveryKey();
     expect(!again.ok && again.alreadyIssued).toBe(true);
 
@@ -361,7 +361,7 @@ describe("desktop app against the real backend", () => {
 
   it("a new recovery key: shown once, nine groups, recorded without the key (D4)", async () => {
     const key = await ui.api.recoveryKey.createNew();
-    expect(key).toMatch(/^([0-9A-Z]{4}-){8}[0-9A-Z]{4}$/);
+    expect(key).toMatch(/^([0-9A-Z]{4}-){7}[0-9A-Z]{4}$/);
     expect(store().settings.recovery_key_issued_at).not.toBeNull();
     expect(JSON.stringify(store().events)).not.toContain(key!.replace(/-/g, ""));
   });
