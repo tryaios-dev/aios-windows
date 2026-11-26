@@ -5,6 +5,7 @@ the Win32 API. Nothing here leaves the machine.
 """
 
 import ctypes
+import math
 import os
 import platform
 import shutil
@@ -73,7 +74,7 @@ class WindowsPlatform(Platform):
         return Hardware(
             cpu=_cpu_name(),
             cores=os.cpu_count() or 1,
-            ram_gb=round(_ram_bytes() / GIB),
+            ram_gb=ram_gb(_installed_kib(), _usable_bytes()),
             gpu_name=gpu_name,
             vram_gb=vram_gb,
             gpu_driver_ok=driver_ok,
@@ -83,7 +84,30 @@ class WindowsPlatform(Platform):
 
 
 # The helpers below run on Windows only; `sys.platform` checks keep mypy and other OSes happy.
-def _ram_bytes() -> int:
+def ram_gb(installed_kib: int | None, usable_bytes: int) -> int:
+    """The memory in the computer, in GB, as Task Manager and the box say ("8 GB").
+
+    Windows can use a little less than is installed: the integrated graphics and the firmware
+    keep some for themselves, so an 8 GB laptop often shows "7.4 GB usable". The usable figure
+    would put that laptop under the 8 GB minimum, so the installed memory counts. If Windows
+    cannot say how much is installed, the usable memory is rounded up to the next whole GB.
+    """
+    if installed_kib:
+        return round(installed_kib * 1024 / GIB)
+    return math.ceil(usable_bytes / GIB)
+
+
+def _installed_kib() -> int | None:
+    """Installed memory in KiB, from the firmware's memory table; None if Windows cannot say."""
+    if sys.platform != "win32":
+        return None
+    kib = ctypes.c_ulonglong(0)
+    if ctypes.windll.kernel32.GetPhysicallyInstalledSystemMemory(ctypes.byref(kib)):
+        return int(kib.value)
+    return None
+
+
+def _usable_bytes() -> int:
     if sys.platform != "win32":
         return 0
     status = _MemoryStatus()
