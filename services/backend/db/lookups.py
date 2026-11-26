@@ -21,6 +21,18 @@ def clear_default_model(session: Session) -> None:
     session.execute(text("UPDATE settings SET default_model_id = NULL WHERE id = 1"))
 
 
+def choose_default_model(session: Session, model_id: str) -> bool:
+    """Called by the models app: ``model_id`` becomes the default model if none is chosen
+    (test findings, issue 11). True if it was chosen."""
+    result = session.execute(
+        text(
+            "UPDATE settings SET default_model_id = :id WHERE id = 1 AND default_model_id IS NULL"
+        ),
+        {"id": model_id},
+    )
+    return bool(getattr(result, "rowcount", 0))
+
+
 def voice_languages(session: Session) -> tuple[str, ...]:
     """The languages the person speaks for Voice, main first (table of apps/settings); empty
     until chosen."""

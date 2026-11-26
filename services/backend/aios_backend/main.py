@@ -16,6 +16,7 @@ from aios_backend.apps.chat.router import router as chat_router
 from aios_backend.apps.evidence.router import router as evidence_router
 from aios_backend.apps.knowledge.router import router as knowledge_router
 from aios_backend.apps.media.router import router as media_router
+from aios_backend.apps.models import service as models_service
 from aios_backend.apps.models.downloads import Downloads
 from aios_backend.apps.models.engine import LocalEngine
 from aios_backend.apps.models.mirror import ModelMirror
@@ -92,6 +93,17 @@ def register_error_handlers(app: FastAPI) -> None:
         return JSONResponse({"error": "internal_error"}, status_code=500)
 
 
+def choose_only_model(database: Database) -> None:
+    """With no AI model chosen and exactly one installed, choose it (test findings, issue 11)."""
+    try:
+        with database.session() as session:
+            if models_service.choose_only_model(session) is not None:
+                session.commit()
+                log_event(log, "default_model_chosen")
+    except Exception as exc:  # chats.db locked or unreadable: nothing to choose from
+        log_event(log, "default_model_unreadable", error_code=type(exc).__name__)
+
+
 def load_safe_mode(database: Database) -> bool:
     """Saved Safe mode; off if chats.db cannot be read (then nothing else works either)."""
     try:
@@ -157,6 +169,7 @@ def create_app(
         if local_models is not None:
             local_models.bind(asyncio.get_running_loop())
         await manager.set_safe_mode(load_safe_mode(database))  # before any engine can start
+        await asyncio.to_thread(choose_only_model, database)
         await manager.startup()  # ends orphaned engines (IPC-52), starts the watcher
         await voice.startup()  # the same for whisper-server (IPC-38)
         child = None
