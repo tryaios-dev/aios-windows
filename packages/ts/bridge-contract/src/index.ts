@@ -765,6 +765,8 @@ export interface AiosBridge {
     status(): Promise<SetupStatus>;
     /** Create the store and the Recovery Package. Fails with `store_exists` the second time. */
     createStore(): Promise<StoreCreated>;
+    /** POST /setup/project: the default project, created once while setting up; first run goes on. */
+    createProject(): Promise<Completed>;
     complete(): Promise<Completed>;
     /** System folder dialog; null when cancelled. */
     chooseBackupFolder(): Promise<BackupFolder | null>;
@@ -889,6 +891,8 @@ export interface AiosBridge {
     remove(id: string): Promise<void>;
     hardware(refresh: boolean): Promise<Hardware>;
     engine(): Promise<EngineStatus>;
+    /** POST /engine/start: start the engine with this installed model loaded (Setting up). */
+    startEngine(modelId: string): Promise<EngineStatus>;
     /** Starts the engine with the default model if needed and times a short answer. */
     benchmark(): Promise<BenchmarkRun>;
   };
