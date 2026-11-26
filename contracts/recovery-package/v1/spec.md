@@ -25,15 +25,21 @@ RFC 3339 UTC time with milliseconds. Restated here so this contract stands alone
 
 ## 3 Recovery key
 
-- 20 random bytes (160 bits) from the OS CSPRNG.
-- Display form: Crockford base32 of the 20 bytes (32 characters), then 4 checksum characters =
+- 140 random bits from the OS CSPRNG, held as 18 bytes (the top 4 bits zero).
+- Display form: Crockford base32 of the 140 bits (28 characters), then 4 checksum characters =
   the first 20 bits of `H("aios/recovery/v1/key-check", key_bytes)` in Crockford base32;
-  36 characters shown as 9 groups of 4 separated by `-`.
+  32 characters shown as 8 groups of 4 separated by `-` (two rows of four on screen and paper).
+- Keys issued by 0.1.0 are 20 bytes (160 bits): 32 characters plus the same 4 checksum
+  characters, 9 groups. Restore accepts them for as long as such backups may exist; the length
+  of the typed key (32 or 36 characters after normalisation) tells the two apart.
 - Input normalisation: remove spaces and `-`, uppercase, map `O`→`0`, `I`/`L`→`1`; reject
   `U`. A wrong checksum is reported as a typing error before any KDF runs.
-- The KDF input is the 20 raw bytes, not the text.
+- The KDF input is the raw key bytes (18, or 20 for a 0.1.0 key), not the text.
 - Shown once (`recovery_key_issued` evidence event records that it was shown, never the key).
-  Never logged, written to disk, put in the clipboard by AIOS automatically, or sent anywhere.
+  Never logged, written to disk by AIOS on its own, put in the clipboard by AIOS automatically,
+  or sent anywhere. The one file it may go into is one the user saves with "Save as a file":
+  in the place the user picks, written once, with no copy, temporary file or log line (test
+  findings, issue 10; an exception to invariant 3 the spec owner is asked to confirm).
 
 ## 4 File format (`recovery.pkg`)
 
@@ -145,7 +151,9 @@ entropy, not from Argon2id).
   locked) and Node `crypto` without extra native dependencies, and is FIPS-approved, which eases
   customer security reviews. XChaCha20-Poly1305's main advantage (nonce-misuse margin) does not
   apply to single-message keys.
-- **P-2 Recovery key strength.** PROPOSED: 160 random bits, 36-character display with checksum.
+- **P-2 Recovery key strength.** PROPOSED: 140 random bits, 32-character display (8 groups)
+  with checksum (test findings 0.1.0, issue 9: the design shows 8 groups). 0.1.0 issued 160-bit
+  keys in 9 groups; restore accepts both.
 - **P-3 Argon2id parameters.** PROPOSED: 64 MiB / 3 / 4 for writing, bounded on reading.
 - **P-4 Contents.** PROPOSED: `db_key` and `signing_key_seed` only. The company API key (lab
   only) is not included; the user re-enters it after restore.

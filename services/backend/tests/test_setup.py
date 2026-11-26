@@ -31,10 +31,23 @@ def first_run(client: TestClient) -> dict:
 
 # ------------------------------------------------------------------ recovery key and package
 def test_recovery_key_display_and_parse() -> None:
+    """Test findings, issue 9: 8 groups of 4, typed with or without spaces or dashes."""
     key = rp.new_recovery_key()
     text = rp.format_recovery_key(key)
-    assert len(text) == 44 and text.count("-") == 8  # 9 groups of 4
+    assert len(text) == 39 and text.count("-") == 7  # 8 groups of 4: 28 key + 4 checksum
+    assert len(key) == 18 and key[0] < 16  # 140 random bits
     assert rp.parse_recovery_key(text.lower().replace("-", " ")) == key
+    assert rp.parse_recovery_key(text.replace("-", "")) == key
+    assert rp.parse_recovery_key(f"  {text}  ") == key
+
+
+def test_a_key_from_0_1_0_still_opens_its_backups() -> None:
+    """Keys issued before issue 9 have 9 groups (160 bits): restore keeps accepting them."""
+    old = bytes(range(1, 21))
+    text = rp.format_recovery_key(old)
+    assert len(text) == 44 and text.count("-") == 8
+    assert rp.parse_recovery_key(text) == old
+    assert rp.parse_recovery_key(text.replace("-", " ").lower()) == old
 
 
 def test_recovery_key_typing_error_is_caught_before_the_kdf() -> None:

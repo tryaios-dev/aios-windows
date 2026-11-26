@@ -180,9 +180,12 @@ export function HomeView() {
                 const project = await workProject()
                 const conv = project && (await api.conversations.create(project.id))
                 if (!project || !conv) return
+                // Open the conversation at once: the answer is written there as it comes.
+                const where = `/projects/${project.id}/c/${conv.id}`
+                navigate(where)
                 const sent = await api.conversations.send(conv.id, text)
-                // If it could not be sent, the words go with you into the conversation's message box.
-                navigate(`/projects/${project.id}/c/${conv.id}`, sent.ok ? undefined : { state: { draftText: text } })
+                // If it could not be sent, the words go back into the message box, if the person is still there.
+                if (!sent.ok && window.location.hash === `#${where}`) navigate(where, { replace: true, state: { draftText: text } })
               }}
             />
 

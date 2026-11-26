@@ -53,6 +53,7 @@ async function startBackend(): Promise<number> {
 type Ui = {
   api: typeof import("../src/lib/api").api;
   hydrate: typeof import("../src/bridge/live").hydrate;
+  refreshEvents: typeof import("../src/bridge/live").refreshEvents;
   useStore: typeof import("../src/lib/store").useStore;
 };
 let ui: Ui;
@@ -60,17 +61,26 @@ let ui: Ui;
 /** Changes reload in the background; give them time on a busy machine (CI runners included). */
 const eventually = (check: () => void) => vi.waitFor(check, { timeout: 5_000, interval: 50 });
 const store = () => ui.useStore.getState();
+/** Activity entries reach the activity log through its writer, a moment after the change; ask again until they are there. */
+const activitySoon = (check: (events: ReturnType<typeof store>["events"]) => void) =>
+  vi.waitFor(
+    async () => {
+      await ui.refreshEvents();
+      check(store().events);
+    },
+    { timeout: 10_000, interval: 100 },
+  );
 const lastToast = () => store().toasts.at(-1);
 
 beforeAll(async () => {
   if (!existsSync(PYTHON)) throw new Error(`run \`uv sync\` first: ${PYTHON} is missing`);
   await startBackend();
-  const [{ api }, { hydrate }, { useStore }] = await Promise.all([
+  const [{ api }, { hydrate, refreshEvents }, { useStore }] = await Promise.all([
     import("../src/lib/api"),
     import("../src/bridge/live"),
     import("../src/lib/store"),
   ]);
-  ui = { api, hydrate, useStore };
+  ui = { api, hydrate, refreshEvents, useStore };
 });
 
 afterAll(async () => {
@@ -106,11 +116,11 @@ describe("desktop app against the real backend", () => {
 
   it("setup: creates the store, shows the recovery key once (a new one if asked again), finishes with the default project", async () => {
     const issued = await ui.api.firstRun.issueRecoveryKey();
-    expect(issued.ok && issued.key).toMatch(/^([0-9A-Z]{4}-){8}[0-9A-Z]{4}$/);
+    expect(issued.ok && issued.key).toMatch(/^([0-9A-Z]{4}-){7}[0-9A-Z]{4}$/);
     // The store is never created twice: asked again (AIOS closed before the key was saved, D13),
     // the backend wraps the keys under a new key and the first one stops working.
     const again = await ui.api.firstRun.issueRecoveryKey();
-    expect(again.ok && again.key).toMatch(/^([0-9A-Z]{4}-){8}[0-9A-Z]{4}$/);
+    expect(again.ok && again.key).toMatch(/^([0-9A-Z]{4}-){7}[0-9A-Z]{4}$/);
     expect(again.ok && again.key).not.toBe(issued.ok && issued.key);
 
     expect(await ui.api.firstRun.complete()).toBe(true);
@@ -202,7 +212,7 @@ describe("desktop app against the real backend", () => {
     const messages = ui.api.conversations.messages(conversationId);
     expect(messages.map((m) => m.role)).toEqual(["user", "assistant"]);
     expect(messages[1]!.content).toBe("You said: Where is the supplier price list?");
-    expect(store().events.some((e) => e.event_type === "request" && e.conversation_id === conversationId)).toBe(true);
+    await activitySoon((events) => expect(events.some((e) => e.event_type === "request" && e.conversation_id === conversationId)).toBe(true));
 
     ui.api.conversations.rename(conversationId, "Price list");
     await eventually(() =>
@@ -216,7 +226,7 @@ describe("desktop app against the real backend", () => {
   it("chat: a message too large for the model is refused and recorded", async () => {
     const result = await ui.api.conversations.send(conversationId, "word ".repeat(20_000));
     expect(result).toMatchObject({ ok: false, reason: "too_large" });
-    expect(store().events.some((e) => e.event_type === "refusal")).toBe(true);
+    await activitySoon((events) => expect(events.some((e) => e.event_type === "refusal")).toBe(true));
   });
 
   it("chat: a conversation whose AI model was removed asks which one carries on (K-06)", async () => {
@@ -324,7 +334,7 @@ describe("desktop app against the real backend", () => {
     expect(picture).toMatchObject({ status: "failed", collection: "Client contracts" });
     expect(picture?.problem).toMatch(/picture/);
     expect(docs().filter((d) => d.name === "notes.txt")).toHaveLength(1); // the same file keeps one copy
-    expect(store().events.filter((e) => e.event_type === "knowledge_added")).toHaveLength(2);
+    await activitySoon((events) => expect(events.filter((e) => e.event_type === "knowledge_added")).toHaveLength(2));
 
     const notes = docs().find((d) => d.name === "notes.txt")!;
     expect(await ui.api.conversations.send(conversationId, "When is the rent review?", [notes.id])).toEqual({ ok: true });
@@ -359,12 +369,12 @@ describe("desktop app against the real backend", () => {
 
     await ui.api.skills.remove("minutes");
     expect(x().installedSkills.map((s) => s.id)).toEqual(["own-invoice-reader"]);
-    expect(store().events.filter((e) => e.event_type === "skill_installed")).toHaveLength(2);
+    await activitySoon((events) => expect(events.filter((e) => e.event_type === "skill_installed")).toHaveLength(2));
   });
 
-  it("a new recovery key: shown once, nine groups, recorded without the key (D4)", async () => {
+  it("a new recovery key: shown once, eight groups, recorded without the key (D4)", async () => {
     const key = await ui.api.recoveryKey.createNew();
-    expect(key).toMatch(/^([0-9A-Z]{4}-){8}[0-9A-Z]{4}$/);
+    expect(key).toMatch(/^([0-9A-Z]{4}-){7}[0-9A-Z]{4}$/);
     expect(store().settings.recovery_key_issued_at).not.toBeNull();
     expect(JSON.stringify(store().events)).not.toContain(key!.replace(/-/g, ""));
   });
@@ -385,7 +395,7 @@ describe("desktop app against the real backend", () => {
     expect(store().settings.last_backup_at).not.toBeNull();
     expect(store().settings.last_backup_size).toBe(done.result.size_bytes);
     // Shown in Activity as the design's "Backed up your AIOS" (an export of kind backup).
-    expect(store().events.some((e) => e.event_type === "export" && e.payload?.kind === "backup")).toBe(true);
+    await activitySoon((events) => expect(events.some((e) => e.event_type === "export" && e.payload?.kind === "backup")).toBe(true));
   });
 
   it("deleting a conversation and a project removes them everywhere", async () => {
