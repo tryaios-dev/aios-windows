@@ -121,5 +121,13 @@ export const SIM_HARDWARE: Hardware = {
   os: "Windows 11 Pro 24H2 (build 26100)",
   recommended_tier: "medium",
   recommended_entry_id: "ornith-1.5-9b-q4_k_m-ornith-gguf",
+  memory: "DDR5-5200",
+  // What the backend works out for this computer (apps/models/fit.py).
+  models: [
+    { entry_id: "minicpm5-2b-q4_k_m-openbmb-gguf", fit: "well", runs_on: "card", reason: null, tokens_per_second: 140.2, first_word_s: 0.2, measured: false },
+    { entry_id: "ornith-1.5-9b-q4_k_m-ornith-gguf", fit: "well", runs_on: "card", reason: null, tokens_per_second: 38.4, first_word_s: 0.7, measured: true },
+    { entry_id: "sage-a1.5-q4_k_m-mradermacher-gguf", fit: "no", runs_on: null, reason: "memory", tokens_per_second: null, first_word_s: null, measured: false },
+    { entry_id: "qwen3.8-27b-ud-q4_k_m-unsloth-gguf", fit: "slowly", runs_on: "split", reason: "slow", tokens_per_second: 2.3, first_word_s: 46.8, measured: false },
+  ],
   benchmark: { model_id: "ornith-1.5-9b-q4_k_m-ornith-gguf", engine: "vulkan", tokens_per_second: 38.4, time_to_first_token_ms: 420, run_at: new Date(Date.now() - 19 * 86400000).toISOString() },
 };

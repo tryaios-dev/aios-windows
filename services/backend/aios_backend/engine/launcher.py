@@ -7,6 +7,7 @@ the engine's options. Engine output is discarded: it is never logged (SR-07).
 The process manager (``manager.py``) decides when to call ``start()`` and with which build.
 """
 
+import re
 import socket
 import subprocess
 import time
@@ -57,8 +58,19 @@ def minimal_env(engine_dir: Path, temp_dir: Path) -> dict[str, str]:
     return platforms.current().child_env(engine_dir, temp_dir)
 
 
-def list_gpus(engine_dir: Path, temp_dir: Path) -> list[str]:
-    """Devices this build can offload to (``--list-devices``), e.g. ``["Vulkan0"]``.
+@dataclass(frozen=True)
+class Device:
+    """A device the GPU build can offload to, as ``--list-devices`` reports it."""
+
+    name: str  # e.g. "Vulkan0"
+    total_mib: int
+    free_mib: int
+    # Built-in graphics that share system memory (Vulkan "uma: 1"); None if not reported.
+    integrated: bool | None = None
+
+
+def probe_devices(engine_dir: Path, temp_dir: Path) -> list[Device]:
+    """Devices this build can offload to (``--list-devices``), with their free memory.
 
     The CPU build lists none. Any failure counts as no GPU, so the CPU build is used. The
     output holds only device names and memory sizes and is not logged.
@@ -82,17 +94,40 @@ def list_gpus(engine_dir: Path, temp_dir: Path) -> list[str]:
         return []
     if out.returncode != 0:
         return []
-    return parse_device_list(out.stdout.decode("utf-8", "replace"))
+    return parse_devices(
+        out.stdout.decode("utf-8", "replace"), out.stderr.decode("utf-8", "replace")
+    )
+
+
+def list_gpus(engine_dir: Path, temp_dir: Path) -> list[str]:
+    """Names of the devices this build can offload to, e.g. ``["Vulkan0"]``."""
+    return [d.name for d in probe_devices(engine_dir, temp_dir)]
+
+
+_DEVICE = re.compile(r"^\s*(\w+):\s.*\((\d+) MiB, (\d+) MiB free\)\s*$")
+_VULKAN_INFO = re.compile(r"ggml_vulkan: (\d+) = .*\|\s*uma: ([01])\b")
+
+
+def parse_devices(listing: str, log_text: str = "") -> list[Device]:
+    """``  Vulkan0: NVIDIA GeForce ... (8192 MiB, 7000 MiB free)`` lines, plus whether each is
+    built-in graphics from the Vulkan start-up lines (``ggml_vulkan: 0 = ... | uma: 1 | ...``)."""
+    uma = {
+        f"Vulkan{m.group(1)}": m.group(2) == "1"
+        for m in map(_VULKAN_INFO.search, (listing + "\n" + log_text).splitlines())
+        if m
+    }
+    devices = []
+    for line in listing.splitlines():
+        m = _DEVICE.match(line)
+        if m:
+            name = m.group(1)
+            devices.append(Device(name, int(m.group(2)), int(m.group(3)), uma.get(name)))
+    return devices
 
 
 def parse_device_list(text: str) -> list[str]:
     """``  Vulkan0: NVIDIA GeForce ... (8192 MiB, 7000 MiB free)`` -> ``Vulkan0``."""
-    devices = []
-    for line in text.splitlines():
-        name, sep, _ = line.strip().partition(":")
-        if sep and name and " " not in name and name != "Available devices":
-            devices.append(name)
-    return devices
+    return [d.name for d in parse_devices(text)]
 
 
 def _free_port() -> int:

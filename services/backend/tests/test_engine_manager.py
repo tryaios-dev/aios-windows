@@ -18,7 +18,7 @@ import pytest
 from aios_backend.components import Components, ComponentState
 from aios_backend.engine import Engine, EngineBusy, EngineError, EngineManager, NoModel
 from aios_backend.engine.job import ChildJob
-from aios_backend.engine.launcher import EXE, parse_device_list
+from aios_backend.engine.launcher import EXE, Device, parse_device_list, parse_devices
 
 
 class FakeEngines:
@@ -271,6 +271,25 @@ def test_device_list_parsing() -> None:
     assert parse_device_list("") == []
 
 
+def test_devices_report_free_memory_and_built_in_graphics() -> None:
+    listing = (
+        "Available devices:\n"
+        "  Vulkan0: NVIDIA GeForce RTX 3070 Ti Laptop GPU (8192 MiB, 7800 MiB free)\n"
+        "  Vulkan1: AMD Radeon(TM) Graphics (8192 MiB, 8000 MiB free)\n"
+    )
+    log = (
+        "ggml_vulkan: Found 2 Vulkan devices:\n"
+        "ggml_vulkan: 0 = NVIDIA GeForce RTX 3070 Ti Laptop GPU (NVIDIA) | uma: 0 | fp16: 1 |"
+        " bf16: 0 | warp size: 32 | shared memory: 49152 | int dot: 1 | matrix cores: KHR_coopmat\n"
+        "ggml_vulkan: 1 = AMD Radeon(TM) Graphics (AMD proprietary driver) | uma: 1 | fp16: 1\n"
+    )
+    assert parse_devices(listing, log) == [
+        Device("Vulkan0", 8192, 7800, integrated=False),
+        Device("Vulkan1", 8192, 8000, integrated=True),
+    ]
+    assert parse_devices(listing)[0].integrated is None  # not reported: unknown
+
+
 def test_d06_turning_safe_mode_on_stops_an_idle_gpu_engine(tmp_path: Path) -> None:
     fakes = FakeEngines(gpus=["Vulkan0"])
     m, c = setup(tmp_path, fakes, vulkan=True)
@@ -404,3 +423,20 @@ def test_i04_unload_refuses_while_an_answer_uses_the_model(tmp_path: Path) -> No
         assert not engine.alive()
 
     run(fakes, m, body)
+
+
+def test_free_graphics_memory_is_read_only_when_it_means_something(tmp_path: Path) -> None:
+    fakes = FakeEngines(gpus=["Vulkan0"])
+    card = Device("Vulkan0", 8192, 7800, integrated=False)
+    m, _ = setup(tmp_path, fakes, vulkan=True, devices_fn=lambda d, t: [card])
+    seen: list[object] = []
+
+    async def body() -> None:
+        seen.append(await m.devices())  # nothing loaded: the card's free memory
+        async with m.use():  # a GPU engine holds memory: no reading
+            seen.append(await m.devices())
+        await m.set_safe_mode(True)  # the GPU build is never started
+        seen.append(await m.devices())
+
+    run(fakes, m, body)
+    assert seen == [[card], None, []]

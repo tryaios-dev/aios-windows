@@ -1,7 +1,7 @@
 import type { CatalogueEntry, Hardware, ModelTier } from '@/lib/types'
 import { CATALOGUE, catalogueEntry, installable } from '@/data/catalogue'
 import { useStore } from '@/lib/store'
-import { fitOnThisComputer } from '@/lib/words'
+import { fitOnThisComputer, modelFit } from '@/lib/words'
 
 export const TIERS: ModelTier[] = ['small', 'medium', 'large']
 
@@ -41,9 +41,10 @@ export function usableTier(recommended: ModelTier | null, hw: Hardware): ModelTi
 
 /** Why a size cannot be used here, as a person would say it. Null when it can. */
 export function cannotRunReason(entry: CatalogueEntry, hw: Hardware): string | null {
+  const f = modelFit(entry, hw)
   if (fitOnThisComputer(entry, hw).fit !== 'no') return null
   const need = spaceNeededGb(entry)
-  if (hw.free_disk_gb < need) return `Needs ${need} GB of free space. This computer has ${hw.free_disk_gb} GB.`
-  if (entry.min_vram_gb > 0) return `Needs ${entry.min_ram_gb} GB of memory, or a graphics card with ${entry.min_vram_gb} GB. This computer has ${hw.ram_gb} GB of memory.`
-  return `Needs ${entry.min_ram_gb} GB of memory. This computer has ${hw.ram_gb} GB.`
+  if (f?.reason === 'disk') return `Needs ${need} GB of free space. This computer has ${hw.free_disk_gb} GB.`
+  if (!f) return 'Not checked on this computer yet.'
+  return `Needs more memory than this computer has (${hw.ram_gb} GB${hw.gpu ? `, and ${hw.gpu.vram_gb} GB on the graphics card` : ''}).`
 }

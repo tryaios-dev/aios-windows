@@ -166,7 +166,7 @@ function InUse({ installed }: { installed: InstalledModel[] }) {
   }
 
   const entry = catalogueEntry(model.catalogue_entry_id)
-  const fit = entry ? fitFor(entry, hardware, true) : undefined
+  const fit = entry ? fitFor(entry, hardware) : undefined
   // A speed test belongs to the AI model it ran on.
   const measured = hardware.benchmark?.model_id === model.id ? hardware.benchmark : undefined
   const speed = speedWords(measured)

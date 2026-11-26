@@ -59,6 +59,14 @@ class HardwareProfile(Timestamps, Base):
     free_disk_gb: Mapped[int] = mapped_column(Integer)
     os: Mapped[str] = mapped_column(String(200))
     checked_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    # For choosing a model (apps/models/fit.py); None on a profile read before they existed.
+    usable_ram_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    memory_label: Mapped[str | None] = mapped_column(String(32))  # e.g. "DDR5-5600"
+    memory_bandwidth_gbs: Mapped[float | None] = mapped_column(Float)
+    gpu_bandwidth_gbs: Mapped[float | None] = mapped_column(Float)
+    # The engine's GPU device: free memory when last measured, and built-in graphics or not.
+    card_free_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    card_integrated: Mapped[bool | None] = mapped_column(Boolean)
 
 
 class Benchmark(Base):

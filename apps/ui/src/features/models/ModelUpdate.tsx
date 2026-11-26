@@ -48,7 +48,7 @@ export function ModelUpdate({ update, sectionRef }: { update: ModelUpdateState; 
 
 function Offer({ entry, current }: { entry: CatalogueEntry; current: InstalledModel }) {
   const hardware = useStore((s) => s.hardware)
-  const fit = fitFor(entry, hardware, false)
+  const fit = fitFor(entry, hardware)
   const canInstall = fit.fit !== 'no'
 
   const start = () => {

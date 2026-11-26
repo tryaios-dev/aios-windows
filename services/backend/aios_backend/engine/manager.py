@@ -26,10 +26,12 @@ from aios_backend.components import Components, ComponentState
 from aios_backend.engine.job import ChildJob, kill_on_close_job
 from aios_backend.engine.launcher import (
     EXE,
+    Device,
     Engine,
     EngineError,
     find_model,
     list_gpus,
+    probe_devices,
     start,
 )
 from aios_backend.engine.orphans import kill_orphans
@@ -59,6 +61,7 @@ class EngineBusy(Exception):
 
 StartFn = Callable[[Path, Path, Path, ChildJob, str], Engine]
 ProbeFn = Callable[[Path, Path], list[str]]
+DevicesFn = Callable[[Path, Path], list[Device]]
 
 
 class EngineManager:
@@ -74,6 +77,7 @@ class EngineManager:
         watch_interval_s: float = WATCH_INTERVAL_S,
         start_fn: StartFn = start,
         probe_fn: ProbeFn = list_gpus,
+        devices_fn: DevicesFn = probe_devices,
         model_fn: Callable[[], Path | None] | None = None,
     ) -> None:
         self._root = engine_root  # holds cpu/ and vulkan/
@@ -85,6 +89,7 @@ class EngineManager:
         self._watch_interval_s = watch_interval_s
         self._start_fn = start_fn
         self._probe_fn = probe_fn
+        self._devices_fn = devices_fn
         # Which model file to load when none is asked for: the default installed model
         # (aios_backend.local), else the first .gguf in the models folder.
         self._model_fn = model_fn or (lambda: find_model(self._models_dir))
@@ -130,6 +135,21 @@ class EngineManager:
         """A GPU was found and its build has not failed this session (the voice engine follows
         the chat engine's choice; it does not probe on its own)."""
         return bool(self._has_gpu) and not self._cpu_fallback
+
+    async def devices(self) -> list[Device] | None:
+        """The GPU build's devices and their free memory, for choosing a model. [] when the
+        engine would run on the CPU build (safe mode, no GPU build, an earlier GPU failure).
+        None while a GPU engine is running: its model holds memory, so free memory now would
+        be wrong, and the caller keeps what it measured before."""
+        async with self._lock:
+            if self._safe_mode or self._cpu_fallback:
+                return []
+            if self._engine is not None and self._engine.build == Build.VULKAN:
+                return None
+            gpu_dir = self._root / Build.VULKAN
+            if not (gpu_dir / EXE).is_file():
+                return []
+            return await asyncio.to_thread(self._devices_fn, gpu_dir, self._temp_dir)
 
     async def set_safe_mode(self, on: bool) -> None:
         async with self._lock:

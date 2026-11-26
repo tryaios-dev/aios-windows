@@ -23,7 +23,13 @@ from typing import Any
 from sqlalchemy import select
 
 from aios_backend.apps.chat.answers import ModelInfo
-from aios_backend.apps.models.engine import BenchmarkRun, EngineBusy, EngineState, Fallback
+from aios_backend.apps.models.engine import (
+    BenchmarkRun,
+    EngineBusy,
+    EngineState,
+    Fallback,
+    GpuDevice,
+)
 from aios_backend.apps.models.models import InstalledModel
 from aios_backend.components import Components, ComponentState
 from aios_backend.engine import EngineBusy as ManagerBusy
@@ -35,6 +41,7 @@ from db.base import utcnow
 from db.lookups import default_model_id
 from db.session import Database
 
+MIB = 1024**2
 WAIT_S = 300.0  # starting a large model from a slow disk
 COUNTS_KEPT = 4096  # token counts remembered per text digest (no text is kept)
 # Sent before every local conversation (the chat app reserves room for it: SYSTEM_PROMPT_TOKENS).
@@ -236,6 +243,14 @@ class LocalModels:
 
     def acknowledge_fallback(self) -> None:
         self._fallback_at = None
+
+    def devices(self) -> list[GpuDevice] | None:
+        if self._loop is None:
+            return None
+        found = self._call(self._manager.devices())
+        if found is None:
+            return None
+        return [GpuDevice(d.total_mib * MIB, d.free_mib * MIB, d.integrated) for d in found]
 
     # ---- the event loop -------------------------------------------------------------------
 

@@ -25,6 +25,14 @@ class Hardware:
     gpu_driver_ok: bool
     free_disk_gb: int
     os: str
+    # What Windows (or the OS) can use: installed memory minus what the firmware and built-in
+    # graphics keep. Installed memory (``ram_gb``) is only for the 8 GB minimum.
+    usable_ram_bytes: int = 0
+    # The memory's type and speed ("DDR5-5600") and peak bandwidth in GB/s, None if unknown.
+    memory_label: str | None = None
+    memory_bandwidth_gbs: float | None = None
+    # The graphics card's memory bandwidth in GB/s, None if unknown.
+    gpu_bandwidth_gbs: float | None = None
 
 
 class ChildJob:

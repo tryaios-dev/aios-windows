@@ -178,6 +178,20 @@ export interface Hardware {
   /** The one model AIOS suggests for this computer (catalogue entry id); null below the minimum. */
   recommended_entry_id?: string | null
   benchmark?: Benchmark
+  /** Memory type and speed, e.g. "DDR5-5600", when the firmware says. */
+  memory?: string | null
+  /** How each catalogue model runs here, worked out by the backend. The app only shows it. */
+  models?: ModelFit[]
+}
+
+export interface ModelFit {
+  entry_id: string
+  fit: 'well' | 'slowly' | 'no'
+  runs_on: 'card' | 'split' | 'processor' | null
+  reason: 'disk' | 'memory' | 'slow' | 'first_word' | null
+  tokens_per_second: number | null
+  first_word_s: number | null
+  measured: boolean
 }
 
 export type EventType =

@@ -240,6 +240,8 @@ export const toHardware = (h: LiveHardware, previous: Hardware): Hardware => ({
   os: h.os,
   recommended_tier: h.recommended_tier,
   recommended_entry_id: h.recommended_entry_id ?? null,
+  memory: h.memory ?? null,
+  models: h.models ?? [],
   benchmark: h.benchmark === undefined ? previous.benchmark : (h.benchmark ?? undefined),
 });
 

@@ -38,6 +38,15 @@ class EngineState:
 
 
 @dataclass(frozen=True)
+class GpuDevice:
+    """A device the engine's GPU build can use, and its free memory now."""
+
+    total_bytes: int
+    free_bytes: int
+    integrated: bool | None  # built-in graphics sharing system memory; None if unknown
+
+
+@dataclass(frozen=True)
 class BenchmarkRun:
     tokens_per_second: float
     time_to_first_token_ms: int
@@ -58,6 +67,11 @@ class LocalEngine(Protocol):
         ...
 
     def acknowledge_fallback(self) -> None: ...
+
+    def devices(self) -> list[GpuDevice] | None:
+        """The GPU devices the engine would use ([] if it would run on the CPU build), or None
+        while a GPU engine is loaded and free memory cannot be measured."""
+        ...
 
 
 def get_local_engine(request: Request) -> LocalEngine | None:

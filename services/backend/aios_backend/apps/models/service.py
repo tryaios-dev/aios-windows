@@ -14,10 +14,10 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from aios_backend.apps.models import catalogue, hardware
+from aios_backend.apps.models import catalogue, fit, hardware
 from aios_backend.apps.models import repository as repo
 from aios_backend.apps.models.downloads import Downloads, Job
-from aios_backend.apps.models.engine import EngineBusy, LocalEngine
+from aios_backend.apps.models.engine import EngineBusy, GpuDevice, LocalEngine
 from aios_backend.apps.models.mirror import ModelMirror
 from aios_backend.apps.models.models import Benchmark, EngineFallback, InstalledModel
 from aios_backend.apps.models.schemas import (
@@ -34,6 +34,7 @@ from aios_backend.apps.models.schemas import (
     InstalledModelDetail,
     InstalledModelOut,
     ModelChecks,
+    ModelFit,
     PackageFile,
 )
 from aios_backend.components import Components, ComponentState
@@ -282,38 +283,44 @@ def delete_model(
     )
 
 
-def get_hardware(session: Session, settings: Settings, refresh: bool) -> HardwareOut:
+def get_hardware(
+    session: Session, settings: Settings, engine: LocalEngine | None, refresh: bool
+) -> HardwareOut:
     row = repo.hardware(session)
     if row is None or refresh:
         hw = hardware.detect(settings.models_dir)
-        row = repo.save_hardware(
-            session,
-            {
-                "cpu": hw.cpu[:200],
-                "cores": hw.cores,
-                "ram_gb": hw.ram_gb,
-                "gpu_name": hw.gpu_name[:200] if hw.gpu_name else None,
-                "vram_gb": hw.vram_gb,
-                "gpu_driver_ok": hw.gpu_driver_ok,
-                "free_disk_gb": hw.free_disk_gb,
-                "os": hw.os[:200],
-                "checked_at": utcnow(),
-            },
-        )
+        values: dict[str, object] = {
+            "cpu": hw.cpu[:200],
+            "cores": hw.cores,
+            "ram_gb": hw.ram_gb,
+            "gpu_name": hw.gpu_name[:200] if hw.gpu_name else None,
+            "vram_gb": hw.vram_gb,
+            "gpu_driver_ok": hw.gpu_driver_ok,
+            "free_disk_gb": hw.free_disk_gb,
+            "os": hw.os[:200],
+            "checked_at": utcnow(),
+            "usable_ram_bytes": hw.usable_ram_bytes or None,
+            "memory_label": hw.memory_label[:32] if hw.memory_label else None,
+            "memory_bandwidth_gbs": hw.memory_bandwidth_gbs,
+            "gpu_bandwidth_gbs": hw.gpu_bandwidth_gbs,
+        }
+        devices = _devices(engine)
+        if devices is not None:  # None: a GPU engine holds memory now; keep the last reading
+            values["card_free_bytes"], values["card_integrated"] = hardware.card(devices)
+        row = repo.save_hardware(session, values)
     gpu = (
         Gpu(name=row.gpu_name, vram_gb=row.vram_gb or 0, driver_ok=row.gpu_driver_ok)
         if row.gpu_name
         else None
     )
-    suggested = hardware.recommend(
-        row.ram_gb,
-        row.free_disk_gb,
-        row.vram_gb,
-        row.gpu_driver_ok,
-        catalogue.entries(),
-        catalogue.installable,
-    )
     bench = repo.latest_benchmark(session)
+    machine = hardware.machine(row)
+    measured = (
+        fit.Measured(bench.model_id, bench.tokens_per_second, bench.engine_build) if bench else None
+    )
+    installed = [m.id for m in repo.installed(session)]
+    estimates = fit.estimate(machine, catalogue.entries(), measured, installed)
+    suggested = fit.pick(machine, estimates, catalogue.installable)
     return HardwareOut(
         benchmark=_benchmark_out(bench) if bench else None,
         cpu=row.cpu,
@@ -322,9 +329,36 @@ def get_hardware(session: Session, settings: Settings, refresh: bool) -> Hardwar
         gpu=gpu,
         free_disk_gb=row.free_disk_gb,
         os=row.os,
-        recommended_tier=suggested.tier if suggested else None,
-        recommended_entry_id=suggested.id if suggested else None,
+        recommended_tier=suggested.entry.tier if suggested else None,
+        recommended_entry_id=suggested.entry.id if suggested else None,
         checked_at=row.checked_at,
+        memory=row.memory_label,
+        models=[_fit_out(x) for x in estimates],
+    )
+
+
+def _devices(engine: LocalEngine | None) -> list[GpuDevice] | None:
+    if engine is None:
+        return []
+    try:
+        return engine.devices()
+    except Exception:  # the engine is not ready: no reading this time
+        return None
+
+
+def _fit_out(x: fit.Estimate) -> ModelFit:
+    reason: str | None = x.problem
+    if x.runs_on is not None and not x.fast_enough:
+        slow = (x.tokens_per_second or 0) < fit.MIN_TOKENS_PER_SECOND
+        reason = "slow" if slow else "first_word"
+    return ModelFit(
+        entry_id=x.entry.id,
+        fit="no" if x.runs_on is None else "well" if x.fast_enough else "slowly",
+        runs_on=x.runs_on,
+        reason=reason,
+        tokens_per_second=round(x.tokens_per_second, 1) if x.tokens_per_second else None,
+        first_word_s=round(x.first_word_s, 1) if x.first_word_s is not None else None,
+        measured=x.measured,
     )
 
 

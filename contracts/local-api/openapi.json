@@ -1895,6 +1895,25 @@
               }
             ]
           },
+          "memory": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory"
+          },
+          "models": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ModelFit"
+            },
+            "title": "Models",
+            "type": "array"
+          },
           "os": {
             "title": "Os",
             "type": "string"
@@ -2970,6 +2989,94 @@
           }
         },
         "title": "ModelChoiceIn",
+        "type": "object"
+      },
+      "ModelFit": {
+        "description": "How one catalogue model runs on this computer (apps/models/fit.py); the app shows it.",
+        "properties": {
+          "entry_id": {
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "first_word_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Word S"
+          },
+          "fit": {
+            "enum": [
+              "well",
+              "slowly",
+              "no"
+            ],
+            "title": "Fit",
+            "type": "string"
+          },
+          "measured": {
+            "title": "Measured",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "disk",
+                  "memory",
+                  "slow",
+                  "first_word"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "runs_on": {
+            "anyOf": [
+              {
+                "enum": [
+                  "card",
+                  "split",
+                  "processor"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runs On"
+          },
+          "tokens_per_second": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tokens Per Second"
+          }
+        },
+        "required": [
+          "entry_id",
+          "fit",
+          "runs_on",
+          "reason",
+          "tokens_per_second",
+          "first_word_s",
+          "measured"
+        ],
+        "title": "ModelFit",
         "type": "object"
       },
       "ModelStatus": {

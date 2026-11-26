@@ -53,4 +53,5 @@ class GenericPlatform(Platform):
             gpu_driver_ok=False,
             free_disk_gb=shutil.disk_usage(disk).free // GIB,
             os=f"{platform.system()} {platform.release()}".strip(),
+            usable_ram_bytes=ram,
         )

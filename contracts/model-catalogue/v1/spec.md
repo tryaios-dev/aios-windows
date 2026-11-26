@@ -49,6 +49,15 @@ The file bytes must equal `JCS(parsed object)` (no trailing newline). `entries` 
 | `min_ram_gb` | integer ≥ 1 | Minimum installed RAM |
 | `context_length` | integer ≥ 512 | Context window AIOS configures |
 
+Optional fields, used to work out where a model fits and how fast it writes on this computer
+(an entry without them is estimated from its size):
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `context_bytes_per_token` | integer ≥ 0 | Memory one token of context takes in the engine (KV cache at the engine's cache type) |
+| `expert_bytes` | integer ≥ 0 | Mixture-of-experts only: bytes of the expert weights in the artefact |
+| `expert_share_per_token` | number in (0, 1] | Mixture-of-experts only: share of `expert_bytes` read for each token (experts used ÷ experts) |
+
 ## 4 `source_weights_digest`
 
 1. Take every `*.safetensors` file of `upstream.repo` at `upstream.revision`.

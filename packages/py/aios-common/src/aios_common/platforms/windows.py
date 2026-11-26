@@ -13,12 +13,15 @@ import sys
 from pathlib import Path
 
 from aios_common.platforms.base import ChildJob, Hardware, Platform
+from aios_common.platforms.smbios import Memory, parse_memory
 
 GIB = 1024**3
 CPU_KEY = r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
 # Display adapters (Windows device class GUID).
 GPU_CLASS = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
 SKIP_ADAPTERS = ("Basic Display", "Remote")
+RSMB = 0x52534D42  # 'RSMB': the raw SMBIOS table
+NVML_CLOCK_MEM = 2
 
 
 class _MemoryStatus(ctypes.Structure):
@@ -71,15 +74,21 @@ class WindowsPlatform(Platform):
     def hardware(self, disk: Path) -> Hardware:
         disk.mkdir(parents=True, exist_ok=True)
         gpu_name, vram_gb, driver_ok = _gpu()
+        usable = _usable_bytes()
+        memory = _memory()
         return Hardware(
             cpu=_cpu_name(),
             cores=os.cpu_count() or 1,
-            ram_gb=ram_gb(_installed_kib(), _usable_bytes()),
+            ram_gb=ram_gb(_installed_kib(), usable),
             gpu_name=gpu_name,
             vram_gb=vram_gb,
             gpu_driver_ok=driver_ok,
             free_disk_gb=shutil.disk_usage(disk).free // GIB,
             os=_os_name(),
+            usable_ram_bytes=usable,
+            memory_label=memory.label if memory else None,
+            memory_bandwidth_gbs=memory.bandwidth_gbs if memory else None,
+            gpu_bandwidth_gbs=_nvidia_bandwidth_gbs(),
         )
 
 
@@ -115,6 +124,65 @@ def _usable_bytes() -> int:
     if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
         return int(status.ullTotalPhys)
     return 0
+
+
+def _memory() -> Memory | None:
+    """Memory type, speed and width from the firmware's SMBIOS table; None if unreadable."""
+    if sys.platform != "win32":
+        return None
+    get = ctypes.windll.kernel32.GetSystemFirmwareTable
+    get.restype = ctypes.c_uint
+    get.argtypes = (ctypes.c_uint, ctypes.c_uint, ctypes.c_void_p, ctypes.c_uint)
+    size = get(RSMB, 0, None, 0)
+    if not size:
+        return None
+    buf = ctypes.create_string_buffer(size)
+    if get(RSMB, 0, buf, size) != size:
+        return None
+    raw = buf.raw
+    # RawSMBIOSData: 4 version bytes, a 32-bit length, then the table.
+    length = int.from_bytes(raw[4:8], "little")
+    try:
+        return parse_memory(raw[8 : 8 + length])
+    except (ValueError, IndexError):
+        return None
+
+
+def _nvidia_bandwidth_gbs() -> float | None:
+    """The fastest NVIDIA card's memory bandwidth from the driver's NVML, None without one.
+
+    Bus width (bits) / 8 x memory clock (MHz) x 2: GDDR moves data twice per reported clock.
+    NVML ships with the NVIDIA driver in System32; it is loaded by full path, never searched.
+    """
+    if sys.platform != "win32":
+        return None
+    path = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "nvml.dll"
+    if not path.is_file():
+        return None
+    try:
+        nvml = ctypes.WinDLL(str(path))
+    except OSError:
+        return None
+    if nvml.nvmlInit_v2() != 0:
+        return None
+    best = None
+    try:
+        count = ctypes.c_uint(0)
+        if nvml.nvmlDeviceGetCount_v2(ctypes.byref(count)) != 0:
+            return None
+        for i in range(count.value):
+            handle = ctypes.c_void_p()
+            width, clock = ctypes.c_uint(0), ctypes.c_uint(0)
+            if (
+                nvml.nvmlDeviceGetHandleByIndex_v2(i, ctypes.byref(handle)) == 0
+                and nvml.nvmlDeviceGetMemoryBusWidth(handle, ctypes.byref(width)) == 0
+                and nvml.nvmlDeviceGetMaxClockInfo(handle, NVML_CLOCK_MEM, ctypes.byref(clock)) == 0
+            ):
+                gbs = width.value / 8 * clock.value * 2 / 1000
+                best = max(best or 0.0, gbs) or None
+    finally:
+        nvml.nvmlShutdown()
+    return best
 
 
 def _cpu_name() -> str:

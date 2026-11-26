@@ -1,6 +1,6 @@
 import type { CatalogueEntry, Hardware, InstalledModel } from '@/lib/types'
 import { formatBytes } from '@/lib/format'
-import { fitOnThisComputer, type Fit } from '@/lib/words'
+import { fitOnThisComputer, modelFit, wordsPerSecond, type Fit } from '@/lib/words'
 import type { DotTone } from '@/components/ui/chips'
 
 export const GB = 1024 ** 3
@@ -11,21 +11,27 @@ export const FIT_TONE: Record<Fit, DotTone> = { well: 'green', slowly: 'brass', 
 export const WORKING_SPACE_BYTES = 2 * GB
 
 /**
- * How an entry runs here. A model that is already installed has paid for its
- * disk space, so the free-space half of the check is taken out for it.
+ * How an entry runs here, as the backend worked it out. An installed model already has its
+ * space on the drive; the backend leaves the free-space check out for it.
  */
-export function fitFor(entry: CatalogueEntry, hw: Hardware, installed: boolean): { fit: Fit; line: string } {
-  if (!installed) return fitOnThisComputer(entry, hw)
-  return fitOnThisComputer(entry, { ...hw, free_disk_gb: hw.free_disk_gb + (entry.size_bytes + WORKING_SPACE_BYTES) / GB })
+export function fitFor(entry: CatalogueEntry, hw: Hardware): { fit: Fit; line: string } {
+  return fitOnThisComputer(entry, hw)
 }
 
 /** Why Install is unavailable, with the figures a person can act on. */
 export function cannotInstallReason(entry: CatalogueEntry, hw: Hardware): string {
   const needed = entry.size_bytes + WORKING_SPACE_BYTES
-  if (hw.free_disk_gb * GB < needed) return `It needs ${formatBytes(needed)} free. This computer has ${hw.free_disk_gb} GB.`
-  return entry.min_vram_gb > 0
-    ? `It needs ${entry.min_ram_gb} GB of memory, or a graphics card with ${entry.min_vram_gb} GB. This computer has ${hw.ram_gb} GB of memory.`
-    : `It needs ${entry.min_ram_gb} GB of memory. This computer has ${hw.ram_gb} GB.`
+  if (modelFit(entry, hw)?.reason === 'disk') return `It needs ${formatBytes(needed)} free. This computer has ${hw.free_disk_gb} GB.`
+  return `It needs more memory than this computer has (${hw.ram_gb} GB${hw.gpu ? `, and ${hw.gpu.vram_gb} GB on the graphics card` : ''}).`
+}
+
+/** Where the model runs on this computer, in everyday words. */
+export function runsOnWords(entry: CatalogueEntry, hw: Hardware): string {
+  const f = modelFit(entry, hw)
+  if (!f || !f.runs_on) return 'It does not fit on this computer'
+  const where = f.runs_on === 'card' ? 'On the graphics card' : f.runs_on === 'split' ? 'Partly on the graphics card, partly in memory' : 'On the processor'
+  if (!f.tokens_per_second) return where
+  return `${where}, about ${wordsPerSecond(f.tokens_per_second)} words a second (${f.measured ? 'measured' : 'estimated'})`
 }
 
 /** Where an AI model's file is downloaded from: its publisher's own address, for example "huggingface.co". */
@@ -42,9 +48,13 @@ export function sourceWords(source: InstalledModel['source'], entry?: Pick<Catal
   return entry ? `Downloaded directly from its publisher, ${publisherHost(entry)}` : 'Downloaded directly from its publisher'
 }
 
-/** Technical requirement line for the Details record. */
-export function requirementText(entry: CatalogueEntry): string {
-  return entry.min_vram_gb > 0 ? `${entry.min_ram_gb} GB RAM, or a GPU with ${entry.min_vram_gb} GB VRAM` : `${entry.min_ram_gb} GB RAM`
+/** Technical line for the Details record: where it runs here and how fast. */
+export function requirementText(entry: CatalogueEntry, hw: Hardware): string {
+  const f = modelFit(entry, hw)
+  if (!f || !f.runs_on) return f?.reason === 'disk' ? 'Not enough free disk space' : 'Not enough memory'
+  const where = f.runs_on === 'card' ? 'GPU' : f.runs_on === 'split' ? 'GPU + RAM' : 'CPU'
+  const speed = f.tokens_per_second ? `, ${f.tokens_per_second} tokens/s${f.measured ? ' (measured)' : ' (estimated)'}` : ''
+  return `${where}${speed}`
 }
 
 /**
@@ -56,11 +66,9 @@ export function sizeExample(tier: CatalogueEntry['tier']): string {
 }
 
 /** What a computer needs to run an entry, in everyday words. */
-export function needsWords(entry: CatalogueEntry): string {
+export function needsWords(entry: CatalogueEntry, hw: Hardware): string {
   const space = formatBytes(entry.size_bytes + WORKING_SPACE_BYTES, 0)
-  return entry.min_vram_gb > 0
-    ? `${entry.min_ram_gb} GB of memory, or a graphics card with ${entry.min_vram_gb} GB. ${space} of free space.`
-    : `${entry.min_ram_gb} GB of memory. ${space} of free space.`
+  return `${space} of free space. ${runsOnWords(entry, hw)}.`
 }
 
 /**

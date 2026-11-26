@@ -48,6 +48,10 @@ class Entry:
     min_vram_gb: int
     mirror_url: str
     description: str
+    # For working out how fast the model runs (optional; see contract section 3):
+    context_bytes_per_token: int | None = None  # memory one token of context takes
+    expert_bytes: int = 0  # mixture-of-experts: bytes of the expert weights in the file
+    expert_share_per_token: float = 1.0  # ...and the share of them read for each word
 
 
 def _entry(raw: dict[str, Any]) -> Entry:
@@ -75,6 +79,9 @@ def _entry(raw: dict[str, Any]) -> Entry:
         min_vram_gb=raw.get("min_vram_gb", 0),
         mirror_url=art["mirror_url"],
         description=raw.get("description", ""),
+        context_bytes_per_token=raw.get("context_bytes_per_token"),
+        expert_bytes=raw.get("expert_bytes", 0),
+        expert_share_per_token=raw.get("expert_share_per_token", 1.0),
     )
 
 
