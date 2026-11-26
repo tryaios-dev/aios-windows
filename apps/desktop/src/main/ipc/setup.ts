@@ -18,6 +18,7 @@ import type { Handler } from "./index.js";
 export const setupHandlers: Record<string, Handler> = {
   "setup.status": async (b) => SetupStatus.parse(await b.client.request("GET", "/setup/status")),
   "setup.createStore": async (b) => StoreCreated.parse(await b.client.request("POST", "/setup/store")),
+  "setup.createProject": async (b) => Completed.parse(await b.client.request("POST", "/setup/project")),
   "setup.complete": async (b) => Completed.parse(await b.client.request("POST", "/setup/complete")),
   "setup.restore": async (b, input) =>
     Restored.parse(await b.client.request("POST", "/restore", RestoreInput.parse(input))),

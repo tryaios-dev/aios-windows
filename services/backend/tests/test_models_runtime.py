@@ -278,6 +278,9 @@ def test_d07_the_download_waits_for_the_network_to_come_back(
 ) -> None:
     """While the network is gone the download keeps trying (not failed); when it is back the
     download finishes."""
+    # A window long enough that a slow CI runner never reaches it: this test is about trying
+    # again, not about giving up (the 0.3 s window made it fail on a busy runner).
+    runtime.app.state.downloads.retry = RetryPolicy(delays=FAST_RETRY.delays, give_up_after=5.0)  # type: ignore[attr-defined]
     mirror.down = True
     runtime.post("/models/downloads", json={"entry_id": tiny_entry.id})
     time.sleep(0.1)  # several attempts, still inside the 0.3 s window

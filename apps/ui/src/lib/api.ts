@@ -640,6 +640,17 @@ export const api = {
         }))
         return { ok: true, key: created.recovery_key }
       } catch (err) {
+        // The storage was created while setting up (or before AIOS was closed) and its key is not
+        // in this window any more: the keys are wrapped again under a new key, shown once.
+        if (errorCode(err) === 'store_exists') {
+          try {
+            const fresh = await bridge().setup.newRecoveryKey()
+            useStore.setState({ recoveryKey: fresh.recovery_key })
+            return { ok: true, key: fresh.recovery_key }
+          } catch (again) {
+            return { ok: false, alreadyIssued: true, error: messageFor(again) }
+          }
+        }
         return { ok: false, alreadyIssued: errorCode(err) === 'store_exists', error: messageFor(err) }
       }
     },

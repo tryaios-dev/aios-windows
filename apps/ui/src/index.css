@@ -361,6 +361,8 @@
   animation-fill-mode: both;
   animation-iteration-count: 1;
 }
+/* Setting up: the drawing of the part being added keeps playing until it is done. */
+.vg-loop .vg [class*="vg-"],
 .group\/vg:hover .vg [class*="vg-"],
 .group\/vg:focus-visible .vg [class*="vg-"],
 .group\/vg:focus-within .vg [class*="vg-"] {

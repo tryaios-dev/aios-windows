@@ -35,6 +35,14 @@ def create_store(
     return service.create_store(session, db, settings, request.app.state.writer)
 
 
+@router.post(
+    "/setup/project",
+    summary="Create the default project once (a Setting up step); first run goes on",
+)
+def create_project(session: DbSession) -> Completed:
+    return service.create_project(session)
+
+
 @router.post("/setup/complete", summary="Finish first run and create the default project")
 def complete(session: DbSession) -> Completed:
     return service.complete(session)

@@ -100,6 +100,22 @@ def test_recovery_key_is_returned_once_and_never_recorded(
 
 def test_complete_needs_a_store(client: TestClient) -> None:
     assert client.post("/setup/complete").json() == {"error": "store_not_created"}
+    assert client.post("/setup/project").json() == {"error": "store_not_created"}
+
+
+def test_setting_up_creates_the_first_project_once_and_first_run_goes_on(
+    client: TestClient,
+) -> None:
+    client.post("/setup/store")
+    first = client.post("/setup/project")
+    assert first.status_code == 200
+    project_id = first.json()["default_project_id"]
+    assert client.post("/setup/project").json() == {"default_project_id": project_id}
+    status = client.get("/setup/status").json()
+    assert status["first_run_complete"] is False  # the recovery key is still to be saved
+    assert client.post("/setup/complete").json() == {"default_project_id": project_id}
+    assert client.get("/setup/status").json()["first_run_complete"] is True
+    assert [p["id"] for p in client.get("/projects").json()] == [project_id]
 
 
 # ------------------------------------------------------------------ restore
