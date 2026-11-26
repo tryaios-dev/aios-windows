@@ -93,11 +93,13 @@ def register_error_handlers(app: FastAPI) -> None:
         return JSONResponse({"error": "internal_error"}, status_code=500)
 
 
-def reread_hardware(database: Database, settings: Settings, engine: LocalEngine | None) -> None:
+def reread_hardware(
+    database: Database, settings: Settings, engine: LocalEngine | None, devices: bool
+) -> None:
     """This computer's hardware, read again at start-up; the last reading stays if it fails."""
     try:
         with database.session() as session:
-            if models_service.reread_hardware(session, settings, engine):
+            if models_service.reread_hardware(session, settings, engine, devices):
                 session.commit()
     except Exception as exc:
         log_event(log, "hardware_unreadable", error_code=type(exc).__name__)
@@ -182,9 +184,12 @@ def create_app(
         await asyncio.to_thread(choose_only_model, database)
         await manager.startup()  # ends orphaned engines (IPC-52), starts the watcher
         await voice.startup()  # the same for whisper-server (IPC-38)
-        # In the background: the engine's device list takes a few seconds, start-up does not wait.
+        # Memory, processor, disk: milliseconds, read before the app asks, so it shows them.
+        engine_api = app.state.local_engine
+        await asyncio.to_thread(reread_hardware, database, settings, engine_api, False)
+        # The engine's device list takes a few seconds: in the background, start-up does not wait.
         reading = asyncio.create_task(
-            asyncio.to_thread(reread_hardware, database, settings, app.state.local_engine)
+            asyncio.to_thread(reread_hardware, database, settings, engine_api, True)
         )
         child = None
         if app.state.writer is None and start_writer:

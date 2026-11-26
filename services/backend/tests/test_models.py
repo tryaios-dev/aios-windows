@@ -3,7 +3,6 @@
 import dataclasses
 import hashlib
 import re
-import time
 from pathlib import Path
 
 import pytest
@@ -355,16 +354,6 @@ def _computer(ram_gb: int) -> Hardware:
     )  # fmt: skip
 
 
-def _ram_gb_soon(c: TestClient, expected: int) -> int:
-    """The start-up reading runs in the background: wait for it briefly."""
-    for _ in range(100):
-        ram = c.get("/system/hardware").json()["ram_gb"]
-        if ram == expected:
-            break
-        time.sleep(0.05)
-    return int(ram)
-
-
 def test_hardware_is_read_again_each_time_aios_starts(
     client: TestClient, settings: Settings, db: Database, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -372,8 +361,8 @@ def test_hardware_is_read_again_each_time_aios_starts(
     monkeypatch.setattr(hardware, "detect", lambda disk: _computer(16))
     assert client.get("/system/hardware").json()["ram_gb"] == 16  # setup's reading
     monkeypatch.setattr(hardware, "detect", lambda disk: _computer(32))
-    with _restart(settings, db) as again:
-        assert _ram_gb_soon(again, 32) == 32
+    with _restart(settings, db) as again:  # read before the app asks: the first look shows it
+        assert again.get("/system/hardware").json()["ram_gb"] == 32
 
 
 def test_a_failed_reading_at_start_up_keeps_the_last_one(
@@ -387,5 +376,4 @@ def test_a_failed_reading_at_start_up_keeps_the_last_one(
 
     monkeypatch.setattr(hardware, "detect", unreadable)
     with _restart(settings, db) as again:
-        time.sleep(0.3)
         assert again.get("/system/hardware").json()["ram_gb"] == 16

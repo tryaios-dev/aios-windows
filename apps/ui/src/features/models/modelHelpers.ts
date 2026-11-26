@@ -22,7 +22,9 @@ export function fitFor(entry: CatalogueEntry, hw: Hardware): { fit: Fit; line: s
 export function cannotInstallReason(entry: CatalogueEntry, hw: Hardware): string {
   const needed = entry.size_bytes + WORKING_SPACE_BYTES
   if (modelFit(entry, hw)?.reason === 'disk') return `It needs ${formatBytes(needed)} free. This computer has ${hw.free_disk_gb} GB.`
-  return `It needs more memory than this computer has (${hw.ram_gb} GB${hw.gpu ? `, and ${hw.gpu.vram_gb} GB on the graphics card` : ''}).`
+  // A display adapter without memory of its own (a VM's, or basic graphics) is not worth naming.
+  const card = hw.gpu && hw.gpu.vram_gb > 0 ? `, and ${hw.gpu.vram_gb} GB on the graphics card` : ''
+  return `It needs more memory than this computer has (${hw.ram_gb} GB${card}).`
 }
 
 /** Where the model runs on this computer, in everyday words. */

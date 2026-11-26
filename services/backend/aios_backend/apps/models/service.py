@@ -297,8 +297,14 @@ def delete_model(
 
 
 def get_hardware(
-    session: Session, settings: Settings, engine: LocalEngine | None, refresh: bool
+    session: Session,
+    settings: Settings,
+    engine: LocalEngine | None,
+    refresh: bool,
+    devices: bool = True,
 ) -> HardwareOut:
+    """``devices``: also ask the engine for the card's free memory (a few seconds); without
+    it, the last reading of the card is kept."""
     row = repo.hardware(session)
     if row is None or refresh:
         hw = hardware.detect(settings.models_dir)
@@ -318,9 +324,9 @@ def get_hardware(
             "gpu_bandwidth_gbs": hw.gpu_bandwidth_gbs,
             "physical_cores": hw.physical_cores or None,
         }
-        devices = _devices(engine)
-        if devices is not None:  # None: a GPU engine holds memory now; keep the last reading
-            values["card_free_bytes"], values["card_integrated"] = hardware.card(devices)
+        found = _devices(engine) if devices else None
+        if found is not None:  # None: a GPU engine holds memory now; keep the last reading
+            values["card_free_bytes"], values["card_integrated"] = hardware.card(found)
         row = repo.save_hardware(session, values)
     gpu = (
         Gpu(name=row.gpu_name, vram_gb=row.vram_gb or 0, driver_ok=row.gpu_driver_ok)
@@ -358,13 +364,15 @@ def get_hardware(
     )
 
 
-def reread_hardware(session: Session, settings: Settings, engine: LocalEngine | None) -> bool:
+def reread_hardware(
+    session: Session, settings: Settings, engine: LocalEngine | None, devices: bool
+) -> bool:
     """At start-up: read the hardware again, so added memory or a new card count (Settings says
     AIOS reads it when it starts). Only once a profile exists; on the first run setup reads it.
-    True if it was read."""
+    ``devices``: also the engine's device list (see get_hardware). True if it was read."""
     if repo.hardware(session) is None:
         return False
-    get_hardware(session, settings, engine, refresh=True)
+    get_hardware(session, settings, engine, refresh=True, devices=devices)
     return True
 
 
