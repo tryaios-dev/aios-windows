@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from tests.conftest import LAUNCH_TOKEN, LOOPBACK
 
 from aios_backend.apps.models import catalogue, hardware
+from aios_backend.apps.models import service as models_service
 from aios_backend.config import Settings
 from aios_backend.main import create_app
 from aios_common.platforms import Hardware
@@ -171,6 +172,83 @@ def test_deleting_the_default_model_removes_the_file_and_clears_the_default(
     assert client.delete(f"/models/{tiny_entry.id}").json() == {"error": "model_not_found"}
 
 
+# ------------------------------------------------------------------ issue 11: a model is chosen
+def test_the_first_ai_model_installed_is_the_one_chat_uses(
+    client: TestClient, tmp_path: Path, tiny_entry: catalogue.Entry
+) -> None:
+    assert client.get("/settings").json()["default_model_id"] is None
+    client.post("/models/import", json={"path": str(gguf(tmp_path))})
+    assert client.get("/settings").json()["default_model_id"] == tiny_entry.id
+    # Chosen by the person: installing never changes it.
+    client.patch("/settings", json={"default_model_id": SMALL})
+    client.delete(f"/models/{tiny_entry.id}")
+    client.post("/models/import", json={"path": str(gguf(tmp_path))})
+    assert client.get("/settings").json()["default_model_id"] == SMALL
+
+
+def _restart(settings: Settings, db: Database) -> TestClient:
+    headers = {"Authorization": f"Bearer {LAUNCH_TOKEN}"}
+    return TestClient(create_app(settings, db), client=LOOPBACK, headers=headers)
+
+
+def test_opening_aios_with_one_model_and_none_chosen_chooses_it(
+    client: TestClient,
+    settings: Settings,
+    db: Database,
+    tmp_path: Path,
+    tiny_entry: catalogue.Entry,
+) -> None:
+    """Installations from before the fix: the model is installed, nothing is chosen."""
+    client.post("/models/import", json={"path": str(gguf(tmp_path))})
+    client.patch("/settings", json={"default_model_id": None})
+    with _restart(settings, db) as again:
+        assert again.get("/settings").json()["default_model_id"] == tiny_entry.id
+    with _restart(settings, db) as later:  # and it stays chosen
+        assert later.get("/settings").json()["default_model_id"] == tiny_entry.id
+
+
+def test_with_two_models_and_none_chosen_aios_does_not_guess(
+    client: TestClient,
+    settings: Settings,
+    db: Database,
+    tmp_path: Path,
+    tiny_entry: catalogue.Entry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client.post("/models/import", json={"path": str(gguf(tmp_path))})
+    other_content = b"GGUF" + b"\x01" * 60
+    other = dataclasses.replace(
+        tiny_entry,
+        id="tiny-two-q4km",
+        file_name="tiny-two.gguf",
+        size_bytes=len(other_content),
+        artifact_digest=hashlib.sha256(other_content).hexdigest(),
+    )
+    real = catalogue.entries()
+    monkeypatch.setattr(catalogue, "entries", lambda: (*real, other))
+    path = gguf(tmp_path, other_content, name="two.gguf")
+    assert client.post("/models/import", json={"path": str(path)}).status_code in (200, 201)
+    client.patch("/settings", json={"default_model_id": None})
+    with _restart(settings, db) as again:
+        assert again.get("/settings").json()["default_model_id"] is None
+
+
+def test_aios_still_opens_when_the_model_choice_cannot_be_read(
+    client: TestClient,
+    settings: Settings,
+    db: Database,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """chats.db locked or unreadable at start-up: the choice is skipped, AIOS still opens."""
+
+    def unreadable(session: object) -> None:
+        raise RuntimeError("chats.db unreadable")
+
+    monkeypatch.setattr(models_service, "choose_only_model", unreadable)
+    with _restart(settings, db) as again:
+        assert again.get("/settings").status_code == 200
+
+
 def test_download_is_not_available_in_this_build(client: TestClient) -> None:
     r = client.post(f"/models/download/{SMALL}")
     assert (r.status_code, r.json()) == (503, {"error": "mirror_unavailable"})
@@ -277,11 +355,6 @@ def _computer(ram_gb: int) -> Hardware:
     )  # fmt: skip
 
 
-def _opened_again(settings: Settings, db: Database) -> TestClient:
-    headers = {"Authorization": f"Bearer {LAUNCH_TOKEN}"}
-    return TestClient(create_app(settings, db), client=LOOPBACK, headers=headers)
-
-
 def _ram_gb_soon(c: TestClient, expected: int) -> int:
     """The start-up reading runs in the background: wait for it briefly."""
     for _ in range(100):
@@ -299,7 +372,7 @@ def test_hardware_is_read_again_each_time_aios_starts(
     monkeypatch.setattr(hardware, "detect", lambda disk: _computer(16))
     assert client.get("/system/hardware").json()["ram_gb"] == 16  # setup's reading
     monkeypatch.setattr(hardware, "detect", lambda disk: _computer(32))
-    with _opened_again(settings, db) as again:
+    with _restart(settings, db) as again:
         assert _ram_gb_soon(again, 32) == 32
 
 
@@ -313,6 +386,6 @@ def test_a_failed_reading_at_start_up_keeps_the_last_one(
         raise OSError("firmware table unreadable")
 
     monkeypatch.setattr(hardware, "detect", unreadable)
-    with _opened_again(settings, db) as again:
+    with _restart(settings, db) as again:
         time.sleep(0.3)
         assert again.get("/system/hardware").json()["ram_gb"] == 16

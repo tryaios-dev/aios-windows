@@ -214,6 +214,8 @@ def _install(session: Session, entry: catalogue.Entry, target: Path, source: str
         installed_at=utcnow(),
     )
     repo.add(session, model)
+    # The first AI model on this computer is the one chat uses, with nothing to choose (issue 11).
+    repo.choose_default_model(session, entry.id)
     repo.record_event(
         session,
         "model_installed",
@@ -225,6 +227,17 @@ def _install(session: Session, entry: catalogue.Entry, target: Path, source: str
         },
     )
     return model
+
+
+def choose_only_model(session: Session) -> str | None:
+    """At start-up: with no model chosen and exactly one installed, that one is chosen, so
+    installations from before issue 11 was fixed get chat back. Returns the chosen id."""
+    if repo.default_model_id(session) is not None:
+        return None
+    models = repo.installed(session)
+    if len(models) != 1 or not repo.choose_default_model(session, models[0].id):
+        return None
+    return models[0].id
 
 
 def get_model(session: Session, model_id: str) -> InstalledModelDetail:

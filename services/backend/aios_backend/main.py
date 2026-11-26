@@ -103,6 +103,17 @@ def reread_hardware(database: Database, settings: Settings, engine: LocalEngine 
         log_event(log, "hardware_unreadable", error_code=type(exc).__name__)
 
 
+def choose_only_model(database: Database) -> None:
+    """With no AI model chosen and exactly one installed, choose it (test findings, issue 11)."""
+    try:
+        with database.session() as session:
+            if models_service.choose_only_model(session) is not None:
+                session.commit()
+                log_event(log, "default_model_chosen")
+    except Exception as exc:  # chats.db locked or unreadable: nothing to choose from
+        log_event(log, "default_model_unreadable", error_code=type(exc).__name__)
+
+
 def load_safe_mode(database: Database) -> bool:
     """Saved Safe mode; off if chats.db cannot be read (then nothing else works either)."""
     try:
@@ -168,6 +179,7 @@ def create_app(
         if local_models is not None:
             local_models.bind(asyncio.get_running_loop())
         await manager.set_safe_mode(load_safe_mode(database))  # before any engine can start
+        await asyncio.to_thread(choose_only_model, database)
         await manager.startup()  # ends orphaned engines (IPC-52), starts the watcher
         await voice.startup()  # the same for whisper-server (IPC-38)
         # In the background: the engine's device list takes a few seconds, start-up does not wait.
