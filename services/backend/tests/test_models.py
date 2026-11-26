@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from tests.conftest import LAUNCH_TOKEN, LOOPBACK
 
 from aios_backend.apps.models import catalogue
+from aios_backend.apps.models import service as models_service
 from aios_backend.config import Settings
 from aios_backend.main import create_app
 from db.session import Database
@@ -228,6 +229,22 @@ def test_with_two_models_and_none_chosen_aios_does_not_guess(
     client.patch("/settings", json={"default_model_id": None})
     with _restart(settings, db) as again:
         assert again.get("/settings").json()["default_model_id"] is None
+
+
+def test_aios_still_opens_when_the_model_choice_cannot_be_read(
+    client: TestClient,
+    settings: Settings,
+    db: Database,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """chats.db locked or unreadable at start-up: the choice is skipped, AIOS still opens."""
+
+    def unreadable(session: object) -> None:
+        raise RuntimeError("chats.db unreadable")
+
+    monkeypatch.setattr(models_service, "choose_only_model", unreadable)
+    with _restart(settings, db) as again:
+        assert again.get("/settings").status_code == 200
 
 
 def test_download_is_not_available_in_this_build(client: TestClient) -> None:
