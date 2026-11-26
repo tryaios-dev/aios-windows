@@ -2,7 +2,7 @@
 name = "aios-common"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["keyring>=25", "starlette>=0.40"]
+dependencies = ["keyring>=25", "psutil>=6.1", "starlette>=0.40"]
 
 [build-system]
 requires = ["hatchling"]

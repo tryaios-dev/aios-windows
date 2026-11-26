@@ -559,6 +559,20 @@ export type PackageFile = z.infer<typeof PackageFile>;
 /** A file name in the offline package folder: no folders, a .gguf file. */
 export const PackageFileName = z.string().regex(/^[^\\/:*?"<>|]{1,250}\.gguf$/i);
 
+/** How one catalogue model runs on this computer, worked out by the backend (apps/models/fit.py). */
+export const ModelFit = z.object({
+  entry_id: z.string(),
+  fit: z.enum(["well", "slowly", "no"]),
+  runs_on: z.enum(["card", "split", "processor"]).nullable(),
+  /** Why it does not run well: drive or memory too small, writes slowly, or slow to start. */
+  reason: z.enum(["disk", "memory", "slow", "first_word"]).nullable(),
+  tokens_per_second: z.number().nullable(),
+  first_word_s: z.number().nullable(),
+  /** The speed is this computer's speed test, not an estimate. */
+  measured: z.boolean(),
+});
+export type ModelFit = z.infer<typeof ModelFit>;
+
 export const Hardware = z.object({
   cpu: z.string(),
   cores: z.number().int(),
@@ -570,6 +584,10 @@ export const Hardware = z.object({
   /** The one model AIOS suggests for this machine (catalogue entry id); null below the minimum. */
   recommended_entry_id: z.string().nullable().optional(),
   checked_at: z.string(),
+  /** Memory type and speed, e.g. "DDR5-5600", when the firmware says. */
+  memory: z.string().nullable().optional(),
+  /** Every catalogue model on this computer. */
+  models: z.array(ModelFit).optional(),
   /** The latest benchmark on this machine; null until one has run. */
   benchmark: z
     .object({

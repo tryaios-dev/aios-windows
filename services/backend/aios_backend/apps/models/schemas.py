@@ -97,6 +97,21 @@ class BenchmarkOut(BaseModel):
     run_at: datetime
 
 
+class ModelFit(BaseModel):
+    """How one catalogue model runs on this computer (apps/models/fit.py); the app shows it."""
+
+    entry_id: str
+    # well: fast enough | slowly: runs, but slower than the limits | no: does not fit
+    fit: Literal["well", "slowly", "no"]
+    runs_on: Literal["card", "split", "processor"] | None
+    # Why it does not run well: no room on the drive or in memory, writes slower than the
+    # app's "Slow" limit, or the first word takes longer than about 10 s.
+    reason: Literal["disk", "memory", "slow", "first_word"] | None
+    tokens_per_second: float | None  # writing speed
+    first_word_s: float | None  # wait for the first word of a short answer, model loaded
+    measured: bool  # the speed is this computer's speed test, not an estimate
+
+
 class HardwareOut(BaseModel):
     cpu: str
     cores: int
@@ -109,6 +124,8 @@ class HardwareOut(BaseModel):
     recommended_entry_id: str | None = None
     checked_at: datetime
     benchmark: BenchmarkOut | None = None  # the latest run on this machine
+    memory: str | None = None  # memory type and speed, e.g. "DDR5-5600", if the firmware says
+    models: list[ModelFit] = []  # every catalogue model on this computer
 
 
 EngineStateName = Literal[

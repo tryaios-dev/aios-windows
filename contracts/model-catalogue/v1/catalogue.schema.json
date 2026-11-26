@@ -223,6 +223,19 @@
           "type": "integer",
           "minimum": 512,
           "maximum": 1048576
+        },
+        "context_bytes_per_token": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expert_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expert_share_per_token": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
         }
       },
       "allOf": [

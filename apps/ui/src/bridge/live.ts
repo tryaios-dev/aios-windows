@@ -240,6 +240,8 @@ export const toHardware = (h: LiveHardware, previous: Hardware): Hardware => ({
   os: h.os,
   recommended_tier: h.recommended_tier,
   recommended_entry_id: h.recommended_entry_id ?? null,
+  memory: h.memory ?? null,
+  models: h.models ?? [],
   benchmark: h.benchmark === undefined ? previous.benchmark : (h.benchmark ?? undefined),
 });
 
@@ -492,7 +494,19 @@ export async function refreshResources(): Promise<void> {
   useExtras.setState({ linkedResources: linked });
 }
 
-export async function refreshEvents(): Promise<void> {
+// The newest events refresh; an older one that is overtaken waits for it (see below).
+let latestEvents: Promise<void> = Promise.resolve();
+
+/** Reloads the record. When it returns, the store shows at least what the backend had when it
+ * was called: an overtaken refresh (a background check started after it) does not write its
+ * older answer, and waits for the newer one instead of returning early. */
+export function refreshEvents(): Promise<void> {
+  const run = loadEvents();
+  latestEvents = run.catch(() => undefined);
+  return run;
+}
+
+async function loadEvents(): Promise<void> {
   const newest = ticket("events");
   const [events, status, checkpoints] = await Promise.all([
     bridge().evidence.list(),
@@ -500,7 +514,7 @@ export async function refreshEvents(): Promise<void> {
     // A writer that has not run yet: the record shows without checkpoints.
     bridge().evidence.checkpoints().catch(() => []),
   ]);
-  if (!newest()) return;
+  if (!newest()) return latestEvents;
   const streamId = useStore.getState().stream.stream_id;
   useStore.setState((s) => ({
     events: events.map((e) => toEvent(e, streamId)).sort((a, b) => a.seq - b.seq),

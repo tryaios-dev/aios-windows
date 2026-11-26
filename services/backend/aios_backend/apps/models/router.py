@@ -179,8 +179,10 @@ def delete_model(
 
 # ------------------------------------------------------------------ hardware and benchmark
 @router.get("/system/hardware", summary="This machine's hardware, recommended tier, last benchmark")
-def get_hardware(session: DbSession, settings: AppSettings, refresh: bool = False) -> HardwareOut:
-    return service.get_hardware(session, settings, refresh)
+def get_hardware(
+    session: DbSession, settings: AppSettings, engine: LocalEngineDep, refresh: bool = False
+) -> HardwareOut:
+    return service.get_hardware(session, settings, engine, refresh)
 
 
 @router.post("/system/benchmark", summary="Run a short benchmark on the local engine")

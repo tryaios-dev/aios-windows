@@ -55,7 +55,7 @@ export function ModelCard({
   // The tick draws itself only when the switch was made here, never when the page opens.
   const [switchedHere, setSwitchedHere] = useState(false)
 
-  const fit = fitFor(entry, hardware, !!installed)
+  const fit = fitFor(entry, hardware)
   const active = download && download.status !== 'done' ? download : null
   const label = modelLabel(entry)
 
@@ -151,7 +151,7 @@ export function ModelCard({
           </div>
         </div>
 
-        <Details entry={entry} installed={installed} />
+        <Details entry={entry} installed={installed} hardware={hardware} />
       </article>
       {installed && (
         <DeleteModelDialog open={removing} onOpenChange={setRemoving} model={installed} successor={successor} onRemoved={supersededBy ? () => useUpdateJourney.getState().settle(supersededBy.entry_id) : undefined} />
@@ -257,7 +257,7 @@ export function DownloadArea({ entry, download }: { entry: CatalogueEntry; downl
 
 /* ---------------- Details, and the technical record inside it ---------------- */
 
-function Details({ entry, installed }: { entry: CatalogueEntry; installed?: InstalledModel }) {
+function Details({ entry, installed, hardware }: { entry: CatalogueEntry; installed?: InstalledModel; hardware: Hardware }) {
   const [open, setOpen] = useState(false)
   const [record, setRecord] = useState(false)
   const id = useId()
@@ -267,7 +267,7 @@ function Details({ entry, installed }: { entry: CatalogueEntry; installed?: Inst
   const facts: Array<{ k: ReactNode; v: ReactNode }> = [
     { k: 'AI model', v: entry.name },
     { k: 'Size on disk', v: <span className="tabular">{formatBytes(entry.size_bytes)}</span> },
-    { k: 'What it needs', v: needsWords(entry) },
+    { k: 'What it needs', v: needsWords(entry, hardware) },
     { k: 'Licence', v: entry.licence },
   ]
   if (entry.released_at) facts.push({ k: 'Listed', v: <span className="tabular">{formatDate(entry.released_at)}</span> })
@@ -298,7 +298,7 @@ function Details({ entry, installed }: { entry: CatalogueEntry; installed?: Inst
       ),
     },
     { k: 'Context length', v: <Mono className="tabular text-ink">{entry.context_length.toLocaleString('en-GB')} tokens</Mono> },
-    { k: 'Minimum hardware', v: requirementText(entry) },
+    { k: 'On this computer', v: requirementText(entry, hardware) },
     {
       k: 'Licence',
       v: (

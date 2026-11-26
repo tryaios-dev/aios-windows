@@ -9,10 +9,11 @@ import pytest
 from fastapi.testclient import TestClient
 from tests.conftest import LAUNCH_TOKEN, LOOPBACK
 
-from aios_backend.apps.models import catalogue
+from aios_backend.apps.models import catalogue, hardware
 from aios_backend.apps.models import service as models_service
 from aios_backend.config import Settings
 from aios_backend.main import create_app
+from aios_common.platforms import Hardware
 from db.session import Database
 
 CONTENT = b"GGUF" + b"\x00" * 1020  # a tiny stand-in for a model file
@@ -287,50 +288,92 @@ def test_ac_02_a_third_party_entry_without_a_passed_review_is_not_downloaded(
 
 
 # ------------------------------------------------------------------ the one suggested model
-def _suggest(ram: int, vram: int | None, disk: int = 500, driver_ok: bool = True) -> str | None:
-    from aios_backend.apps.models import hardware
+# The rules themselves are tested in test_model_fit.py; these check the profiles catalogue v3
+# was written for still get its pick.
+def _suggest(
+    ram: int, card_gb: float = 0, disk: int = 500, card_gbs: float | None = None
+) -> str | None:
+    from aios_backend.apps.models import fit
 
-    entry = hardware.recommend(ram, disk, vram, driver_ok, catalogue.entries(), lambda e: True)
-    return entry.id if entry else None
+    gib = 1024**3
+    machine = fit.Machine(ram, int((ram - 0.5) * gib), disk, 8, None, int(card_gb * gib), card_gbs)
+    found = fit.pick(machine, fit.estimate(machine, catalogue.entries()), lambda e: True)
+    return found.entry.id if found else None
 
 
 @pytest.mark.parametrize(
-    ("ram", "vram", "expected"),
+    ("ram", "card_gb", "expected"),
     [
-        (8, None, SMALL),  # 8 GB RAM, no dedicated GPU
-        (16, None, SMALL),  # 16 GB RAM, no dedicated GPU: still the CPU pick (catalogue v3)
-        (16, 8, MEDIUM),  # 8 GB GPU, 16 GB RAM
-        (32, 8, SAGE),  # 8 GB GPU, 32 GB RAM: experts in system memory
-        (32, 16, SAGE),  # 16 GB GPU, 32 GB RAM
-        (64, 24, QWEN27),  # 24 GB GPU, 64 GB RAM
-        (64, 32, QWEN27),
-        (16, 4, SMALL),  # a 4 GB GPU counts as no dedicated GPU
+        (8, 0, SMALL),  # 8 GB, no graphics card
+        (16, 0, SMALL),  # 16 GB, no card: Standard writes too slowly on the processor
+        (16, 7.5, MEDIUM),  # an 8 GB card (7.5 GB free)
+        (32, 7.5, SAGE),  # an 8 GB card and 32 GB: experts in system memory
+        (16, 23, QWEN27),  # a 24 GB card: Qwen 27B no longer needs 64 GB of memory
+        (64, 31, QWEN27),
+        (16, 3.6, SMALL),  # a 4 GB card: Standard would be split and slow
     ],
 )
-def test_ac_02_one_model_is_suggested_per_catalogue_v3_windows_profile(
-    ram: int, vram: int | None, expected: str
-) -> None:
-    assert _suggest(ram, vram) == expected
+def test_ac_02_one_model_is_suggested_per_computer(ram: int, card_gb: float, expected: str) -> None:
+    assert _suggest(ram, card_gb) == expected
 
 
 def test_ac_02_nothing_is_suggested_below_the_minimum() -> None:
-    assert _suggest(4, None) is None
-    assert _suggest(16, None, disk=9) is None
-
-
-def test_ac_02_a_gpu_without_a_driver_counts_as_no_gpu() -> None:
-    assert _suggest(16, 8, driver_ok=False) == SMALL
+    assert _suggest(4) is None
+    assert _suggest(16, disk=9) is None
 
 
 def test_ac_02_the_next_model_is_suggested_when_the_drive_is_too_small() -> None:
-    # 64 GB RAM and a 24 GB GPU, but only 12 GB free: Qwen (16.6 GB) and Ornith (5.8 GB + 2 GB
-    # working space fits) -> Ornith
-    assert _suggest(64, 24, disk=12) == MEDIUM
+    # A 24 GB card but only 12 GB free: Qwen (16.6 GB) does not fit, Ornith (5.8 GB + 2 GB) does
+    assert _suggest(64, 23, disk=12) == MEDIUM
 
 
-def test_ac_02_only_reviewed_models_are_suggested() -> None:
+def test_ac_02_only_reviewed_models_are_suggested(client: TestClient) -> None:
     """MVP 9.6: a third-party file needs a passed review; the large entries have none yet."""
-    from aios_backend.apps.models import hardware
+    from aios_backend.apps.models import fit
 
-    entry = hardware.recommend(64, 500, 24, True, catalogue.entries(), catalogue.installable)
-    assert entry is not None and entry.id == MEDIUM
+    gib = 1024**3
+    machine = fit.Machine(64, 63 * gib, 500, 8, None, 23 * gib, None)
+    found = fit.pick(machine, fit.estimate(machine, catalogue.entries()), catalogue.installable)
+    assert found is not None and found.entry.id == MEDIUM
+
+
+def test_hardware_lists_every_model_with_its_fit(client: TestClient) -> None:
+    hw = client.get("/system/hardware").json()
+    assert [m["entry_id"] for m in hw["models"]] == [e.id for e in catalogue.entries()]
+    for m in hw["models"]:
+        assert m["fit"] in ("well", "slowly", "no")
+        assert (m["runs_on"] is None) == (m["fit"] == "no")
+
+
+# ------------------------------------------------------------------ hardware read at start-up
+def _computer(ram_gb: int) -> Hardware:
+    return Hardware(
+        cpu="Test CPU", cores=8, ram_gb=ram_gb, gpu_name=None, vram_gb=None,
+        gpu_driver_ok=False, free_disk_gb=200, os="Windows 11",
+        usable_ram_bytes=(ram_gb - 1) * 1024**3, physical_cores=4,
+    )  # fmt: skip
+
+
+def test_hardware_is_read_again_each_time_aios_starts(
+    client: TestClient, settings: Settings, db: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Settings says AIOS reads the hardware when it starts: memory added later counts."""
+    monkeypatch.setattr(hardware, "detect", lambda disk: _computer(16))
+    assert client.get("/system/hardware").json()["ram_gb"] == 16  # setup's reading
+    monkeypatch.setattr(hardware, "detect", lambda disk: _computer(32))
+    with _restart(settings, db) as again:  # read before the app asks: the first look shows it
+        assert again.get("/system/hardware").json()["ram_gb"] == 32
+
+
+def test_a_failed_reading_at_start_up_keeps_the_last_one(
+    client: TestClient, settings: Settings, db: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(hardware, "detect", lambda disk: _computer(16))
+    client.get("/system/hardware")
+
+    def unreadable(disk: object) -> Hardware:
+        raise OSError("firmware table unreadable")
+
+    monkeypatch.setattr(hardware, "detect", unreadable)
+    with _restart(settings, db) as again:
+        assert again.get("/system/hardware").json()["ram_gb"] == 16

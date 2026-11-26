@@ -182,6 +182,7 @@ def count_tokens(engine: Engine, text: str) -> int:
 class Measured:
     tokens_per_second: float
     time_to_first_token_ms: int
+    prompt_tokens_per_second: float | None = None  # None: the reading pass gave no figure
 
 
 BENCHMARK_PROMPT = [
@@ -221,4 +222,45 @@ def benchmark(engine: Engine, max_tokens: int = 64) -> Measured:
     if per_second is None:
         elapsed = max(time.monotonic() - first, 1e-3)
         per_second = pieces / elapsed
-    return Measured(per_second, round((first - began) * 1000))
+    return Measured(per_second, round((first - began) * 1000), reading_speed(engine))
+
+
+# About 100 tokens: long enough for a steady reading speed, short enough to add only a few
+# seconds to the speed test on a slow processor. Plain text, nothing about the person.
+READING_PROMPT = [
+    {
+        "role": "user",
+        "content": (
+            "Read this and reply with one word. A small bakery opens at seven every morning. "
+            "The owner bakes bread, rolls and two kinds of cake. On Mondays the shop is closed "
+            "so the ovens can be cleaned. Most customers come before nine, on their way to work, "
+            "and buy a loaf and a coffee. At noon a few office workers come for sandwiches. In "
+            "the afternoon the shop is quiet, and the owner writes the orders for the next day."
+        ),
+    }
+]
+MIN_READING_TOKENS = 64  # fewer (most of it cached, or a template that drops text): no figure
+
+
+def reading_speed(engine: Engine) -> float | None:
+    """How fast the engine reads a prompt, in tokens a second, from its own timings. Read in
+    full (``cache_prompt`` off) with a one-token answer. None if the engine gives no figure; a
+    failure here never fails the speed test."""
+    body = {**_body(READING_PROMPT, 1), "stream": False, "cache_prompt": False}
+    body.pop("stream_options", None)
+    try:
+        with httpx.Client(timeout=httpx.Timeout(120.0, connect=5.0), trust_env=False) as client:
+            resp = client.post(
+                f"{engine.base_url}/v1/chat/completions",
+                json=body,
+                headers={"Authorization": f"Bearer {engine.key}"},
+            )
+        timings = resp.json().get("timings") if resp.status_code == 200 else None
+    except (httpx.HTTPError, ValueError):
+        return None
+    if not isinstance(timings, dict):
+        return None
+    tokens, speed = timings.get("prompt_n"), timings.get("prompt_per_second")
+    if not isinstance(tokens, int) or tokens < MIN_READING_TOKENS:
+        return None
+    return float(speed) if isinstance(speed, int | float) and speed > 0 else None

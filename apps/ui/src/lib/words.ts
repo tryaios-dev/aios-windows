@@ -2,8 +2,8 @@
  * Plain-language helpers shared by every screen. The vocabulary is fixed in
  * docs/GLOSSARY.md; change words there first, then here.
  */
-import type { Benchmark, CatalogueEntry, Hardware, InstalledModel, ModelTier, Settings } from './types'
-import { catalogueEntry, hardwareSupports } from '@/data/catalogue'
+import type { Benchmark, CatalogueEntry, Hardware, InstalledModel, ModelFit, ModelTier, Settings } from './types'
+import { catalogueEntry } from '@/data/catalogue'
 import { relativeTime } from './format'
 
 /** Size word people see instead of "small tier" / "medium tier". */
@@ -31,15 +31,32 @@ export function sizeBlurb(tier: ModelTier): string {
 
 export type Fit = 'well' | 'slowly' | 'no'
 
-/** How a model will run on this computer, as a person would say it. */
+/** The backend's verdict for one model on this computer (GET /system/hardware). */
+export function modelFit(entry: Pick<CatalogueEntry, 'entry_id'>, hw: Hardware): ModelFit | undefined {
+  return hw.models?.find((m) => m.entry_id === entry.entry_id)
+}
+
+/** Writing speed in words a second (about three words for every four tokens). */
+export function wordsPerSecond(tokensPerSecond: number): number {
+  return Math.max(1, Math.round(tokensPerSecond * 0.75))
+}
+
+/**
+ * How a model will run on this computer, as a person would say it. The backend decides
+ * (where it fits, how fast it writes); this only words it.
+ */
 export function fitOnThisComputer(entry: CatalogueEntry, hw: Hardware): { fit: Fit; line: string } {
-  if (!hardwareSupports(entry, hw)) {
-    const needsDisk = hw.free_disk_gb * 1024 ** 3 < entry.size_bytes + 2 * 1024 ** 3
-    return { fit: 'no', line: needsDisk ? 'Not enough free space on this computer' : 'This computer cannot run it' }
+  const f = modelFit(entry, hw)
+  if (!f) return { fit: 'no', line: 'Not checked on this computer yet' }
+  if (f.fit === 'no') {
+    return { fit: 'no', line: f.reason === 'disk' ? 'Not enough free space on this computer' : 'Not enough memory on this computer' }
   }
-  const strongGpu = !!hw.gpu && hw.gpu.vram_gb >= Math.max(entry.min_vram_gb, 6)
-  if (strongGpu || entry.tier === 'small') return { fit: 'well', line: 'Runs well on this computer' }
-  return { fit: 'slowly', line: 'Runs on this computer, slowly' }
+  const words = f.tokens_per_second ? `about ${wordsPerSecond(f.tokens_per_second)} words a second` : ''
+  if (f.fit === 'well') return { fit: 'well', line: words ? `Runs well on this computer, ${words}` : 'Runs well on this computer' }
+  if (f.reason === 'first_word' && f.first_word_s) {
+    return { fit: 'slowly', line: `Runs on this computer, but answers take about ${Math.round(f.first_word_s)} seconds to start` }
+  }
+  return { fit: 'slowly', line: words ? `Runs on this computer, slowly: ${words}` : 'Runs on this computer, slowly' }
 }
 
 /** Speed in words. The raw figures stay in Details. */

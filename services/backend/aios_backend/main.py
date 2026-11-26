@@ -93,6 +93,18 @@ def register_error_handlers(app: FastAPI) -> None:
         return JSONResponse({"error": "internal_error"}, status_code=500)
 
 
+def reread_hardware(
+    database: Database, settings: Settings, engine: LocalEngine | None, devices: bool
+) -> None:
+    """This computer's hardware, read again at start-up; the last reading stays if it fails."""
+    try:
+        with database.session() as session:
+            if models_service.reread_hardware(session, settings, engine, devices):
+                session.commit()
+    except Exception as exc:
+        log_event(log, "hardware_unreadable", error_code=type(exc).__name__)
+
+
 def choose_only_model(database: Database) -> None:
     """With no AI model chosen and exactly one installed, choose it (test findings, issue 11)."""
     try:
@@ -172,6 +184,13 @@ def create_app(
         await asyncio.to_thread(choose_only_model, database)
         await manager.startup()  # ends orphaned engines (IPC-52), starts the watcher
         await voice.startup()  # the same for whisper-server (IPC-38)
+        # Memory, processor, disk: milliseconds, read before the app asks, so it shows them.
+        engine_api = app.state.local_engine
+        await asyncio.to_thread(reread_hardware, database, settings, engine_api, False)
+        # The engine's device list takes a few seconds: in the background, start-up does not wait.
+        reading = asyncio.create_task(
+            asyncio.to_thread(reread_hardware, database, settings, engine_api, True)
+        )
         child = None
         if app.state.writer is None and start_writer:
             try:
@@ -188,6 +207,7 @@ def create_app(
             components.evidence_writer = ComponentState.STARTING
             pumping = asyncio.create_task(pump.run(database, app.state.writer, components))
         yield
+        await asyncio.wait([reading], timeout=10)  # a reading still running finishes first
         # A summary still being written after the last answer: let it finish briefly (G-05).
         await asyncio.to_thread(app.state.generations.background.wait, 5.0)
         if pumping is not None:
