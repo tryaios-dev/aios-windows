@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AiosBridge, DownloadState, Exchange, Health, InstalledModel, Settings, SetupStatus } from "@aios/bridge-contract";
 import { RECOVERY_KEY_LENGTH, api } from "@/lib/api";
-import { ANSWER_POLL_MS, hydrate, refreshDownloads, refreshHealth, resetEngineMemory, stopWatchingDownloads, watchAnswer } from "./live";
+import { ANSWER_POLL_MS, hydrate, refreshDownloads, refreshEvents, refreshHealth, resetEngineMemory, stopWatchingDownloads, watchAnswer } from "./live";
 import { selectRecommendedEntry, useStore } from "@/lib/store";
 
 const STATUS: SetupStatus = {
@@ -397,6 +397,23 @@ describe("desktop app: Settings read the backend, not the simulation", () => {
     fake.bridge.evidence.checkpoints = vi.fn(async () => [checkpoint]);
     await hydrate();
     expect(useStore.getState().checkpoints).toEqual([checkpoint]);
+  });
+
+  it("a refresh overtaken by a background one returns only once the record is shown", async () => {
+    const event = (id: number) => ({ id, seq: id, ts: "2026-11-26T09:00:00Z", event_type: "knowledge_added", actor: "user", project_id: null, conversation_id: null, payload: {}, pending: false });
+    let release = () => {};
+    const later = new Promise<void>((resolve) => (release = resolve));
+    const answers = [async () => [event(1), event(2)], async () => (await later, [event(1), event(2)])];
+    fake.bridge.evidence.list = vi.fn(() => answers.shift()!()) as never;
+    const mine = refreshEvents();
+    const background = refreshEvents(); // started after mine, answers after it
+    let done = false;
+    void mine.then(() => (done = true));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(done).toBe(false); // waits for the newer refresh instead of returning with nothing shown
+    release();
+    await Promise.all([mine, background]);
+    expect(useStore.getState().events.map((e) => e.seq)).toEqual([1, 2]);
   });
 
   it("shows the bundled catalogue version and the backend's last check, never simulated ones", async () => {
