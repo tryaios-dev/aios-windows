@@ -112,6 +112,13 @@ export function ProtectStep({ note, reissue, onIssued, confirmed, newKeyNotice, 
             ))}
           </ul>
 
+          {!key && (
+            <p className="flex items-center gap-2.5 text-sm leading-5 text-ink-soft" role="status">
+              <span aria-hidden className="size-3 animate-spin rounded-full border-[1.5px] border-green border-t-transparent" />
+              Creating your recovery key…
+            </p>
+          )}
+
           {key && (
             <motion.div className="flex flex-col gap-8" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24, ease: EASE }}>
               <section aria-label="Your recovery key">

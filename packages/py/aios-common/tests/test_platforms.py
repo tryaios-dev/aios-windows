@@ -8,6 +8,7 @@ import pytest
 
 from aios_common import keystore, platforms
 from aios_common.platforms import GenericPlatform, UnsupportedPlatform, WindowsPlatform
+from aios_common.platforms.windows import GIB, ram_gb
 
 ROOT = Path(__file__).resolve().parents[4]
 PLATFORM_DIR = ROOT / "packages/py/aios-common/src/aios_common/platforms"
@@ -63,6 +64,34 @@ def test_hardware_of_this_machine(tmp_path: Path) -> None:
     assert hw.cores >= 1 and hw.ram_gb >= 0 and hw.free_disk_gb >= 0 and hw.cpu and hw.os
     if sys.platform == "win32":
         assert hw.os.startswith("Windows") and hw.ram_gb > 0
+
+
+@pytest.mark.parametrize(
+    ("installed_gib", "usable_gib", "expected"),
+    [
+        (8, 7.4, 8),  # 8 GB laptop, graphics take a share: still 8 GB (test findings, issue 2)
+        (8, 6.0, 8),  # 2 GB kept for the graphics
+        (16, 15.8, 16),
+        (20, 19.7, 20),
+        (4, 3.6, 4),  # still under the 8 GB minimum
+        (None, 7.4, 8),  # Windows cannot say what is installed: usable, rounded up
+        (None, 3.6, 4),
+    ],
+)
+def test_memory_is_what_is_installed_not_what_windows_can_use(
+    installed_gib: int | None, usable_gib: float, expected: int
+) -> None:
+    installed_kib = installed_gib * 1024 * 1024 if installed_gib else None
+    assert ram_gb(installed_kib, int(usable_gib * GIB)) == expected
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="reads this Windows machine")
+def test_installed_memory_is_at_least_the_usable_memory() -> None:
+    from aios_common.platforms import windows
+
+    usable = windows._usable_bytes()
+    assert usable > 0
+    assert windows.ram_gb(windows._installed_kib(), usable) >= usable // GIB
 
 
 def test_os_specific_code_lives_only_in_the_platform_layer() -> None:

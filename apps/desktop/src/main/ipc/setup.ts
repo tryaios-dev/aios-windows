@@ -50,6 +50,7 @@ export const setupHandlers: Record<string, Handler> = {
     await writeFile(target, recoveryKeyFile(parsed.data, new Date()), { encoding: "utf8", flag: "w" });
     return true;
   },
+  "setup.createProject": async (b) => Completed.parse(await b.client.request("POST", "/setup/project")),
   "setup.complete": async (b) => Completed.parse(await b.client.request("POST", "/setup/complete")),
   "setup.restore": async (b, input) =>
     Restored.parse(await b.client.request("POST", "/restore", RestoreInput.parse(input))),

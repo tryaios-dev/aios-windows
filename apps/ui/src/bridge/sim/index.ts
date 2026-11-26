@@ -358,6 +358,7 @@ export const simBridge: AiosBridge = {
       record("recovery_key_issued", { actor: "app" });
       return { recovery_key: key, package_id: newId(), stream_id: SEED_STREAM.stream_id, signing_key_id: SEED_STREAM.signer_key_id };
     },
+    createProject: async () => ({ default_project_id: SEED_DEFAULT_PROJECT_ID }),
     complete: async () => {
       state.firstRunComplete = true;
       return { default_project_id: SEED_DEFAULT_PROJECT_ID };
@@ -643,6 +644,7 @@ export const simBridge: AiosBridge = {
     },
     hardware: async () => ({ ...SIM_HARDWARE, gpu: SIM_HARDWARE.gpu ?? null, recommended_entry_id: SIM_HARDWARE.recommended_entry_id ?? null, checked_at: now(), benchmark: SIM_HARDWARE.benchmark ?? null }),
     engine: async () => ({ state: state.models.length ? "not_started" : "no_model", installed: state.models.length, build: null, loaded_model_id: null }),
+    startEngine: async (modelId) => ({ state: "ready", installed: state.models.length, build: "vulkan", loaded_model_id: modelId }),
     benchmark: async () => {
       await wait(2600);
       const run = { model_id: state.settings.default_model_id ?? "", engine: "vulkan" as const, tokens_per_second: 36 + Math.random(), time_to_first_token_ms: 450, run_at: now() };

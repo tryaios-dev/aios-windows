@@ -90,6 +90,7 @@ function fakeBridge() {
           signing_key_id: "key-1",
         };
       }),
+      createProject: vi.fn(async () => ({ default_project_id: "proj-1" })),
       complete: vi.fn(async () => {
         state.status = { ...state.status, first_run_complete: true, default_project_id: "proj-1" };
         return { default_project_id: "proj-1" };
@@ -190,13 +191,16 @@ describe("desktop app: setup and settings come from the backend", () => {
     expect(useStore.getState().settings.update_check).toBe(false);
   });
 
-  it("issues the recovery key once; a second store is refused", async () => {
+  it("issues the recovery key once; once the store exists, a key is a new one that replaces it (D13)", async () => {
     const first = await api.firstRun.issueRecoveryKey();
     expect(first).toEqual({ ok: true, key: "AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH" });
     expect(useStore.getState().recoveryKey).toBe(first.ok && first.key);
+    expect(fake.bridge.setup.newRecoveryKey).not.toHaveBeenCalled();
+    // The store is never created twice: the keys are wrapped again under a new key.
     const second = await api.firstRun.issueRecoveryKey();
-    expect(second.ok).toBe(false);
-    expect(!second.ok && second.alreadyIssued).toBe(true);
+    expect(second).toEqual({ ok: true, key: "AAAA-BBBB" });
+    expect(fake.bridge.setup.newRecoveryKey).toHaveBeenCalledOnce();
+    expect(useStore.getState().recoveryKey).toBe("AAAA-BBBB");
   });
 
   it("finishes first run in the backend before opening the app", async () => {
