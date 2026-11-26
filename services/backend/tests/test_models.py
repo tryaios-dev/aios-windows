@@ -3,13 +3,18 @@
 import dataclasses
 import hashlib
 import re
+import time
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from tests.conftest import LAUNCH_TOKEN, LOOPBACK
 
-from aios_backend.apps.models import catalogue
+from aios_backend.apps.models import catalogue, hardware
 from aios_backend.config import Settings
+from aios_backend.main import create_app
+from aios_common.platforms import Hardware
+from db.session import Database
 
 CONTENT = b"GGUF" + b"\x00" * 1020  # a tiny stand-in for a model file
 
@@ -261,3 +266,53 @@ def test_hardware_lists_every_model_with_its_fit(client: TestClient) -> None:
     for m in hw["models"]:
         assert m["fit"] in ("well", "slowly", "no")
         assert (m["runs_on"] is None) == (m["fit"] == "no")
+
+
+# ------------------------------------------------------------------ hardware read at start-up
+def _computer(ram_gb: int) -> Hardware:
+    return Hardware(
+        cpu="Test CPU", cores=8, ram_gb=ram_gb, gpu_name=None, vram_gb=None,
+        gpu_driver_ok=False, free_disk_gb=200, os="Windows 11",
+        usable_ram_bytes=(ram_gb - 1) * 1024**3, physical_cores=4,
+    )  # fmt: skip
+
+
+def _opened_again(settings: Settings, db: Database) -> TestClient:
+    headers = {"Authorization": f"Bearer {LAUNCH_TOKEN}"}
+    return TestClient(create_app(settings, db), client=LOOPBACK, headers=headers)
+
+
+def _ram_gb_soon(c: TestClient, expected: int) -> int:
+    """The start-up reading runs in the background: wait for it briefly."""
+    for _ in range(100):
+        ram = c.get("/system/hardware").json()["ram_gb"]
+        if ram == expected:
+            break
+        time.sleep(0.05)
+    return int(ram)
+
+
+def test_hardware_is_read_again_each_time_aios_starts(
+    client: TestClient, settings: Settings, db: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Settings says AIOS reads the hardware when it starts: memory added later counts."""
+    monkeypatch.setattr(hardware, "detect", lambda disk: _computer(16))
+    assert client.get("/system/hardware").json()["ram_gb"] == 16  # setup's reading
+    monkeypatch.setattr(hardware, "detect", lambda disk: _computer(32))
+    with _opened_again(settings, db) as again:
+        assert _ram_gb_soon(again, 32) == 32
+
+
+def test_a_failed_reading_at_start_up_keeps_the_last_one(
+    client: TestClient, settings: Settings, db: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(hardware, "detect", lambda disk: _computer(16))
+    client.get("/system/hardware")
+
+    def unreadable(disk: object) -> Hardware:
+        raise OSError("firmware table unreadable")
+
+    monkeypatch.setattr(hardware, "detect", unreadable)
+    with _opened_again(settings, db) as again:
+        time.sleep(0.3)
+        assert again.get("/system/hardware").json()["ram_gb"] == 16

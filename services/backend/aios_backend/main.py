@@ -16,6 +16,7 @@ from aios_backend.apps.chat.router import router as chat_router
 from aios_backend.apps.evidence.router import router as evidence_router
 from aios_backend.apps.knowledge.router import router as knowledge_router
 from aios_backend.apps.media.router import router as media_router
+from aios_backend.apps.models import service as models_service
 from aios_backend.apps.models.downloads import Downloads
 from aios_backend.apps.models.engine import LocalEngine
 from aios_backend.apps.models.mirror import ModelMirror
@@ -92,6 +93,16 @@ def register_error_handlers(app: FastAPI) -> None:
         return JSONResponse({"error": "internal_error"}, status_code=500)
 
 
+def reread_hardware(database: Database, settings: Settings, engine: LocalEngine | None) -> None:
+    """This computer's hardware, read again at start-up; the last reading stays if it fails."""
+    try:
+        with database.session() as session:
+            if models_service.reread_hardware(session, settings, engine):
+                session.commit()
+    except Exception as exc:
+        log_event(log, "hardware_unreadable", error_code=type(exc).__name__)
+
+
 def load_safe_mode(database: Database) -> bool:
     """Saved Safe mode; off if chats.db cannot be read (then nothing else works either)."""
     try:
@@ -159,6 +170,10 @@ def create_app(
         await manager.set_safe_mode(load_safe_mode(database))  # before any engine can start
         await manager.startup()  # ends orphaned engines (IPC-52), starts the watcher
         await voice.startup()  # the same for whisper-server (IPC-38)
+        # In the background: the engine's device list takes a few seconds, start-up does not wait.
+        reading = asyncio.create_task(
+            asyncio.to_thread(reread_hardware, database, settings, app.state.local_engine)
+        )
         child = None
         if app.state.writer is None and start_writer:
             try:
@@ -175,6 +190,7 @@ def create_app(
             components.evidence_writer = ComponentState.STARTING
             pumping = asyncio.create_task(pump.run(database, app.state.writer, components))
         yield
+        await asyncio.wait([reading], timeout=10)  # a reading still running finishes first
         # A summary still being written after the last answer: let it finish briefly (G-05).
         await asyncio.to_thread(app.state.generations.background.wait, 5.0)
         if pumping is not None:

@@ -345,6 +345,16 @@ def get_hardware(
     )
 
 
+def reread_hardware(session: Session, settings: Settings, engine: LocalEngine | None) -> bool:
+    """At start-up: read the hardware again, so added memory or a new card count (Settings says
+    AIOS reads it when it starts). Only once a profile exists; on the first run setup reads it.
+    True if it was read."""
+    if repo.hardware(session) is None:
+        return False
+    get_hardware(session, settings, engine, refresh=True)
+    return True
+
+
 def _devices(engine: LocalEngine | None) -> list[GpuDevice] | None:
     if engine is None:
         return []
