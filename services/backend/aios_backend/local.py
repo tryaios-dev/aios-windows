@@ -231,7 +231,12 @@ class LocalModels:
             run = engine_client.benchmark(engine)
         finally:
             self._release()
-        return BenchmarkRun(run.tokens_per_second, run.time_to_first_token_ms, engine.build)
+        return BenchmarkRun(
+            run.tokens_per_second,
+            run.time_to_first_token_ms,
+            engine.build,
+            run.prompt_tokens_per_second,
+        )
 
     def unload(self, model_path: str) -> None:
         if self._loop is None:  # the engine never ran in this process

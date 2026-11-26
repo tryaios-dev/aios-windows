@@ -10,7 +10,7 @@ import platform
 import shutil
 from pathlib import Path
 
-from aios_common.platforms.base import Hardware, Platform
+from aios_common.platforms.base import Hardware, Platform, physical_cores
 
 GIB = 1024**3
 
@@ -47,6 +47,7 @@ class GenericPlatform(Platform):
         return Hardware(
             cpu=platform.processor() or platform.machine() or "Unknown processor",
             cores=os.cpu_count() or 1,
+            physical_cores=physical_cores(),
             ram_gb=round(ram / GIB),
             gpu_name=None,
             vram_gb=None,

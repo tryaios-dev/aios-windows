@@ -135,6 +135,29 @@ def test_a_speed_test_does_not_carry_over_to_models_that_run_differently() -> No
     assert on_cpu_build == before  # Light ran on the processor, but it would run on the card
 
 
+def test_a_speed_test_that_read_a_prompt_sets_the_first_word_wait() -> None:
+    m = machine(usable_ram_bytes=31 * GIB)
+    small, medium = entry(SMALL), entry(MEDIUM)
+    guessed = fit.estimate(m, [small, medium])
+    found = fit.estimate(m, [small, medium], fit.Measured(SMALL, 27.0, "cpu", 200.0))
+    tested, other = found
+    assert tested.first_word_s == pytest.approx(fit.TYPICAL_PROMPT_TOKENS / 200.0)
+    assert other.first_word_s == pytest.approx(  # reads more bytes per token, so slower
+        fit.TYPICAL_PROMPT_TOKENS / (200.0 * small.size_bytes / medium.size_bytes)
+    )
+    assert other.first_word_s != guessed[1].first_word_s
+
+
+def test_the_first_word_counts_physical_cores() -> None:
+    row = HardwareProfile(
+        cpu="x", cores=4, ram_gb=8, gpu_name=None, vram_gb=None, gpu_driver_ok=False,
+        free_disk_gb=50, os="x", usable_ram_bytes=7 * GIB, physical_cores=4,
+    )  # fmt: skip
+    assert hardware.machine(row).cores == 4  # a VM: one thread per core
+    row.physical_cores = None
+    assert hardware.machine(row).cores == 2  # not known: two threads a core
+
+
 def test_ac_04_the_first_word_waits_for_the_prompt_to_be_read() -> None:
     e = entry(MEDIUM)
     few, many = one(machine(cores=4), e), one(machine(cores=16), e)

@@ -67,6 +67,7 @@ class HardwareProfile(Timestamps, Base):
     # The engine's GPU device: free memory when last measured, and built-in graphics or not.
     card_free_bytes: Mapped[int | None] = mapped_column(BigInteger)
     card_integrated: Mapped[bool | None] = mapped_column(Boolean)
+    physical_cores: Mapped[int | None] = mapped_column(Integer)
 
 
 class Benchmark(Base):
@@ -77,6 +78,8 @@ class Benchmark(Base):
     engine_build: Mapped[str] = mapped_column(String(16))  # cpu | vulkan
     tokens_per_second: Mapped[float] = mapped_column(Float)
     time_to_first_token_ms: Mapped[int] = mapped_column(Integer)
+    # How fast the engine read a prompt (tokens a second); None on a test from before it existed.
+    prompt_tokens_per_second: Mapped[float | None] = mapped_column(Float)
     run_at: Mapped[datetime] = mapped_column(UTCDateTime)
 
 

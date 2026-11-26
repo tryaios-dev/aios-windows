@@ -303,6 +303,7 @@ def get_hardware(
             "memory_label": hw.memory_label[:32] if hw.memory_label else None,
             "memory_bandwidth_gbs": hw.memory_bandwidth_gbs,
             "gpu_bandwidth_gbs": hw.gpu_bandwidth_gbs,
+            "physical_cores": hw.physical_cores or None,
         }
         devices = _devices(engine)
         if devices is not None:  # None: a GPU engine holds memory now; keep the last reading
@@ -316,7 +317,14 @@ def get_hardware(
     bench = repo.latest_benchmark(session)
     machine = hardware.machine(row)
     measured = (
-        fit.Measured(bench.model_id, bench.tokens_per_second, bench.engine_build) if bench else None
+        fit.Measured(
+            bench.model_id,
+            bench.tokens_per_second,
+            bench.engine_build,
+            bench.prompt_tokens_per_second,
+        )
+        if bench
+        else None
     )
     installed = [m.id for m in repo.installed(session)]
     estimates = fit.estimate(machine, catalogue.entries(), measured, installed)
@@ -513,6 +521,9 @@ def run_benchmark(
         engine_build="vulkan" if run.build == "vulkan" else "cpu",
         tokens_per_second=round(run.tokens_per_second, 2),
         time_to_first_token_ms=run.time_to_first_token_ms,
+        prompt_tokens_per_second=(
+            round(run.prompt_tokens_per_second, 2) if run.prompt_tokens_per_second else None
+        ),
         run_at=utcnow(),
     )
     repo.add(session, row)

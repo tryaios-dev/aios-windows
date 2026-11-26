@@ -10,6 +10,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 
+import psutil
+
 
 class UnsupportedPlatform(RuntimeError):
     """The shipped app was started on an OS that AIOS does not ship for."""
@@ -33,6 +35,17 @@ class Hardware:
     memory_bandwidth_gbs: float | None = None
     # The graphics card's memory bandwidth in GB/s, None if unknown.
     gpu_bandwidth_gbs: float | None = None
+    # Physical processor cores (``cores`` counts logical processors); 0 if unknown.
+    physical_cores: int = 0
+
+
+def physical_cores() -> int:
+    """Physical cores, 0 if the OS does not say. A laptop usually runs two threads on each
+    core; a virtual machine often gives one thread per core."""
+    try:
+        return psutil.cpu_count(logical=False) or 0
+    except Exception:  # an OS psutil cannot read: counted from the logical processors later
+        return 0
 
 
 class ChildJob:

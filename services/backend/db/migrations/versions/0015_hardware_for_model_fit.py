@@ -24,10 +24,16 @@ def upgrade() -> None:
         batch_op.add_column(sa.Column("gpu_bandwidth_gbs", sa.Float(), nullable=True))
         batch_op.add_column(sa.Column("card_free_bytes", sa.BigInteger(), nullable=True))
         batch_op.add_column(sa.Column("card_integrated", sa.Boolean(), nullable=True))
+        batch_op.add_column(sa.Column("physical_cores", sa.Integer(), nullable=True))
+    with op.batch_alter_table("benchmarks", schema=None) as batch_op:
+        batch_op.add_column(sa.Column("prompt_tokens_per_second", sa.Float(), nullable=True))
 
 
 def downgrade() -> None:
+    with op.batch_alter_table("benchmarks", schema=None) as batch_op:
+        batch_op.drop_column("prompt_tokens_per_second")
     with op.batch_alter_table("hardware_profile", schema=None) as batch_op:
+        batch_op.drop_column("physical_cores")
         batch_op.drop_column("card_integrated")
         batch_op.drop_column("card_free_bytes")
         batch_op.drop_column("gpu_bandwidth_gbs")

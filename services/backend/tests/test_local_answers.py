@@ -22,12 +22,24 @@ class FakeEngine(BaseHTTPRequestHandler):
     """llama-server's streaming chat API, as far as the backend uses it."""
 
     requests: list[dict[str, object]] = []
+    reading: dict[str, object] | None = {"prompt_n": 130, "prompt_per_second": 95.0}
 
     def do_POST(self) -> None:  # noqa: N802
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         FakeEngine.requests.append({"auth": self.headers["Authorization"], **body})
         if self.path == "/tokenize":  # one token per word
             out = json.dumps({"tokens": list(range(len(body["content"].split())))}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(out)))
+            self.end_headers()
+            self.wfile.write(out)
+            return
+        if body.get("stream") is False:  # the speed test's reading pass
+            reply: dict[str, object] = {"choices": [{"message": {"content": "Bread"}}]}
+            if FakeEngine.reading is not None:
+                reply["timings"] = FakeEngine.reading
+            out = json.dumps(reply).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(out)))
@@ -66,6 +78,7 @@ class FakeProcess:
 @pytest.fixture
 def engine_port() -> Iterator[int]:
     FakeEngine.requests = []
+    FakeEngine.reading = {"prompt_n": 130, "prompt_per_second": 95.0}
     server = ThreadingHTTPServer(("127.0.0.1", 0), FakeEngine)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     yield server.server_address[1]
@@ -107,6 +120,19 @@ def test_ac_04_answers_stream_from_the_engine(engine_port: int, tmp_path: Path) 
 def test_benchmark_reads_the_engine_speed(engine_port: int, tmp_path: Path) -> None:
     run = benchmark(fake_engine(engine_port, tmp_path / "m.gguf"))
     assert run.tokens_per_second == 14.5 and run.time_to_first_token_ms >= 0
+    assert run.prompt_tokens_per_second == 95.0
+    reading = FakeEngine.requests[-1]
+    assert reading["cache_prompt"] is False and reading["max_tokens"] == 1  # read in full
+
+
+@pytest.mark.parametrize("timings", [None, {"prompt_n": 12, "prompt_per_second": 400.0}])
+def test_a_speed_test_without_a_reading_figure_still_counts(
+    engine_port: int, tmp_path: Path, timings: dict[str, object] | None
+) -> None:
+    """No timings, or too few tokens read (cached) for a steady figure: writing speed only."""
+    FakeEngine.reading = timings
+    run = benchmark(fake_engine(engine_port, tmp_path / "m.gguf"))
+    assert run.tokens_per_second == 14.5 and run.prompt_tokens_per_second is None
 
 
 def test_g_02_local_models_answer_with_the_installed_model(

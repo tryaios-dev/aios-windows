@@ -41,7 +41,8 @@ def machine(row: HardwareProfile) -> Machine:
         ram_gb=row.ram_gb,
         usable_ram_bytes=row.usable_ram_bytes or row.ram_gb * GIB,
         free_disk_gb=row.free_disk_gb,
-        cores=row.cores,
+        # Two threads a core when the OS does not say (most laptops); a VM often has one.
+        cores=row.physical_cores or max(1, row.cores // 2),
         memory_gbs=row.memory_bandwidth_gbs,
         card_free_bytes=on_card,
         card_gbs=row.gpu_bandwidth_gbs,

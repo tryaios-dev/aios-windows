@@ -51,6 +51,7 @@ class BenchmarkRun:
     tokens_per_second: float
     time_to_first_token_ms: int
     build: str  # the build that ran it
+    prompt_tokens_per_second: float | None = None  # reading the prompt; None if not measured
 
 
 class LocalEngine(Protocol):

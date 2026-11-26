@@ -12,7 +12,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from aios_common.platforms.base import ChildJob, Hardware, Platform
+from aios_common.platforms.base import ChildJob, Hardware, Platform, physical_cores
 from aios_common.platforms.smbios import Memory, parse_memory
 
 GIB = 1024**3
@@ -79,6 +79,7 @@ class WindowsPlatform(Platform):
         return Hardware(
             cpu=_cpu_name(),
             cores=os.cpu_count() or 1,
+            physical_cores=physical_cores(),
             ram_gb=ram_gb(_installed_kib(), usable),
             gpu_name=gpu_name,
             vram_gb=vram_gb,

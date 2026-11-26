@@ -41,9 +41,11 @@ DEFAULT_CONTEXT_BYTES_PER_TOKEN = 32 * 1024  # an entry that does not say
 
 MIN_TOKENS_PER_SECOND = 8.0  # the app shows "Slow" below this (about 6 words a second)
 FIRST_WORD_LIMIT_S = 10.0  # AC-04
-# AC-04 times "a short answer": the system prompt (220 tokens), a short question and a little
-# context. A long document excerpt waits longer, as the app already says.
-TYPICAL_PROMPT_TOKENS = 500
+# AC-04 times "a short answer": what the engine has not read yet when a question arrives. The
+# system prompt with the chat template (about 50 tokens), a short question (about 20) and the
+# earlier turns of a short conversation (about 80). The engine keeps what it already read, so
+# later questions wait less; a long document excerpt waits longer, as the app already says.
+TYPICAL_PROMPT_TOKENS = 150
 
 # Share of the peak bandwidth the engine reaches when writing.
 PROCESSOR_EFFICIENCY = 0.5
@@ -51,9 +53,10 @@ CARD_EFFICIENCY = 0.7
 # When the hardware does not say: DDR4-3200 with two channels; a mid-range graphics card.
 DEFAULT_MEMORY_GBS = 51.2
 DEFAULT_CARD_GBS = 200.0
-# Reading the prompt: bytes of weights processed a second, per processor core (Light read
-# about 75 tokens a second on 4 cores of an i9 laptop) and on a graphics card.
-PROCESSOR_READ_BYTES_PER_CORE = 29 * GB
+# Reading the prompt: bytes of weights processed a second, per physical processor core (Light
+# read about 44 tokens a second on 4 cores of an i9-12900H, llama-server, CPU only) and on a
+# graphics card. Used until a speed test measures this computer's own reading speed.
+PROCESSOR_READ_BYTES_PER_CORE = 17 * GB
 CARD_READ_BYTES = 4000 * GB
 
 RunsOn = Literal["card", "split", "processor"]
@@ -66,7 +69,7 @@ class Machine:
     ram_gb: int  # installed: only for the minimum
     usable_ram_bytes: int
     free_disk_gb: int
-    cores: int  # logical processors
+    cores: int  # physical processor cores
     memory_gbs: float | None  # system memory peak bandwidth
     card_free_bytes: int  # free memory on the graphics card the engine uses; 0 = none
     card_gbs: float | None  # the card's peak bandwidth
@@ -79,6 +82,7 @@ class Measured:
     entry_id: str
     tokens_per_second: float
     build: str  # cpu | vulkan
+    prompt_tokens_per_second: float | None = None  # reading the prompt; None if not measured
 
 
 @dataclass(frozen=True)
@@ -105,6 +109,8 @@ class Estimate:
 class _Speeds:
     card: float  # effective bytes a second when writing
     memory: float
+    card_read: float  # bytes of weights a second when reading the prompt
+    memory_read: float
 
 
 def _active(entry: Entry) -> tuple[int, float]:
@@ -153,6 +159,8 @@ def _speeds(m: Machine) -> _Speeds:
     return _Speeds(
         card=(m.card_gbs or DEFAULT_CARD_GBS) * GB * CARD_EFFICIENCY,
         memory=(m.memory_gbs or DEFAULT_MEMORY_GBS) * GB * PROCESSOR_EFFICIENCY,
+        card_read=CARD_READ_BYTES,
+        memory_read=PROCESSOR_READ_BYTES_PER_CORE * max(1, m.cores),
     )
 
 
@@ -161,9 +169,7 @@ def _estimate(entry: Entry, m: Machine, s: _Speeds, installed: frozenset[str]) -
     if runs_on is None:
         return Estimate(entry, None, problem, None, None, False, 0.0, 0.0)
     seconds = card_bytes / s.card + memory_bytes / s.memory
-    reading = card_bytes / CARD_READ_BYTES + memory_bytes / (
-        PROCESSOR_READ_BYTES_PER_CORE * max(1, m.cores // 2)  # physical cores
-    )
+    reading = card_bytes / s.card_read + memory_bytes / s.memory_read
     return Estimate(
         entry,
         runs_on,
@@ -182,9 +188,10 @@ def estimate(
     measured: Measured | None = None,
     installed: Iterable[str] = (),
 ) -> list[Estimate]:
-    """Every entry on this machine. A speed test calibrates the bandwidth of the part it ran
-    on (the card for a model fully on the card on the GPU build, system memory for a model on
-    the processor on the CPU build); a split model's test calibrates nothing."""
+    """Every entry on this machine. A speed test calibrates the part it ran on (the card for a
+    model fully on the card on the GPU build, system memory for a model on the processor on the
+    CPU build): its writing speed, and its prompt reading speed when the test measured it. A
+    split model's test calibrates nothing."""
     entries = list(entries)
     have = frozenset(installed)
     speeds = _speeds(machine)
@@ -192,10 +199,15 @@ def estimate(
     if measured is None:
         return found
     tested = next((x for x in found if x.entry.id == measured.entry_id), None)
+    reads = measured.prompt_tokens_per_second
     if tested is not None and tested.runs_on == "card" and measured.build == "vulkan":
         speeds = replace(speeds, card=measured.tokens_per_second * tested.card_bytes)
+        if reads:
+            speeds = replace(speeds, card_read=reads * tested.card_bytes)
     elif tested is not None and tested.runs_on == "processor" and measured.build == "cpu":
         speeds = replace(speeds, memory=measured.tokens_per_second * tested.memory_bytes)
+        if reads:
+            speeds = replace(speeds, memory_read=reads * tested.memory_bytes)
     else:
         return found
     found = [_estimate(e, machine, speeds, have) for e in entries]

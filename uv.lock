@@ -66,12 +66,14 @@ version = "0.1.0"
 source = { editable = "packages/py/aios-common" }
 dependencies = [
     { name = "keyring" },
+    { name = "psutil" },
     { name = "starlette" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "keyring", specifier = ">=25" },
+    { name = "psutil", specifier = ">=6.1" },
     { name = "starlette", specifier = ">=0.40" },
 ]
 
