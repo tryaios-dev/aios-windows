@@ -41,7 +41,7 @@ def test_ac_17_a_new_key_opens_the_package_and_the_old_one_no_longer_does(
     old = first_run(client)["recovery_key"]
     out = new_key(client)
     assert out["recovery_key"] != old
-    assert len(out["recovery_key"]) == len(old)  # 9 groups of 4, like the first one
+    assert len(out["recovery_key"]) == len(old)  # 8 groups of 4, like the first one
 
     pkg = rp.read(settings.recovery_pkg.read_bytes())
     assert pkg["package_id"] == out["package_id"]

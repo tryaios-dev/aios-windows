@@ -362,7 +362,7 @@ describe("desktop app against the real backend", () => {
     expect(store().events.filter((e) => e.event_type === "skill_installed")).toHaveLength(2);
   });
 
-  it("a new recovery key: shown once, nine groups, recorded without the key (D4)", async () => {
+  it("a new recovery key: shown once, eight groups, recorded without the key (D4)", async () => {
     const key = await ui.api.recoveryKey.createNew();
     expect(key).toMatch(/^([0-9A-Z]{4}-){7}[0-9A-Z]{4}$/);
     expect(store().settings.recovery_key_issued_at).not.toBeNull();
