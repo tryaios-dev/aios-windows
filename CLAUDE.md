@@ -21,6 +21,10 @@
   its dialog; moving to Local never asks.
 - (3) Also never in settings, environment variables or browser storage. The renderer keeps no
   conversation content in `localStorage` in the desktop app.
+  One exception, asked for in the 0.1.0 test findings (issue 10) and awaiting the spec owner's
+  confirmation in the MVP spec: the recovery key goes into a file only when the user saves it
+  with "Save as a file", in the place the user picks, written once by Electron main with no
+  copy, temporary file or log line (`setup.saveRecoveryKey`; recovery-package v1 §3).
 - (4) The per-launch token is generated in Electron main and sent over stdin. Never argv, env,
   logs or files. Only Electron main and the backend ever hold it. How every process starts,
   authenticates and gets its secret (including the engine key and the evidence writer):

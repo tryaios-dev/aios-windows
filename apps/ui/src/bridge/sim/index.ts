@@ -354,10 +354,11 @@ export const simBridge: AiosBridge = {
       last_backup_size: state.lastBackupSize,
     }),
     createStore: async () => {
-      const key = Array.from({ length: 9 }, () => Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, "X")).join("-");
+      const key = Array.from({ length: 8 }, () => Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, "X")).join("-");
       record("recovery_key_issued", { actor: "app" });
       return { recovery_key: key, package_id: newId(), stream_id: SEED_STREAM.stream_id, signing_key_id: SEED_STREAM.signer_key_id };
     },
+    createProject: async () => ({ default_project_id: SEED_DEFAULT_PROJECT_ID }),
     complete: async () => {
       state.firstRunComplete = true;
       return { default_project_id: SEED_DEFAULT_PROJECT_ID };
@@ -368,8 +369,9 @@ export const simBridge: AiosBridge = {
       state.backupLocation = folder;
       return simBridge.setup.status();
     },
+    saveRecoveryKey: async () => true,
     newRecoveryKey: async () => {
-      const key = Array.from({ length: 9 }, () => Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, "X")).join("-");
+      const key = Array.from({ length: 8 }, () => Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, "X")).join("-");
       record("recovery_package_written", { actor: "app" });
       record("recovery_key_issued", { actor: "user" });
       return { recovery_key: key, package_id: newId(), issued_at: now() };
@@ -642,6 +644,7 @@ export const simBridge: AiosBridge = {
     },
     hardware: async () => ({ ...SIM_HARDWARE, gpu: SIM_HARDWARE.gpu ?? null, recommended_entry_id: SIM_HARDWARE.recommended_entry_id ?? null, checked_at: now(), benchmark: SIM_HARDWARE.benchmark ?? null }),
     engine: async () => ({ state: state.models.length ? "not_started" : "no_model", installed: state.models.length, build: null, loaded_model_id: null }),
+    startEngine: async (modelId) => ({ state: "ready", installed: state.models.length, build: "vulkan", loaded_model_id: modelId }),
     benchmark: async () => {
       await wait(2600);
       const run = { model_id: state.settings.default_model_id ?? "", engine: "vulkan" as const, tokens_per_second: 36 + Math.random(), time_to_first_token_ms: 450, run_at: now() };

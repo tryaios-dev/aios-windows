@@ -6,6 +6,7 @@ import type { Hardware, ModelTier } from '@/lib/types'
 import { catalogueEntry } from '@/data/catalogue'
 import { SetupFrame, type RailStep } from './SetupFrame'
 import { tierEntry, usableTier } from './tiers'
+import { beginSetup } from './setupRun'
 import { WelcomeStep } from './steps/WelcomeStep'
 import { ComputerStep } from './steps/ComputerStep'
 import { SettingUpStep } from './steps/SettingUpStep'
@@ -145,6 +146,8 @@ export function SetupWizard() {
             setMachineChecked(true)
             // Hold the size from here on: free space changes once the AI model is on disk.
             if (tier) setChoice(tier)
+            // Setting up starts now, so the AI model is already downloading when its screen opens.
+            if (tier) beginSetup(skippedModel ? null : tierEntry(tier).entry_id)
             next()
           }}
         />

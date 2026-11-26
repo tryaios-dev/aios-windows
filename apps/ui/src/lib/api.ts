@@ -63,8 +63,10 @@ export type ImportOutcome = { ok: true; result: ImportResult } | { ok: false; er
 /** The settings a person can change; the rest are results of checks. */
 export type SettingsChange = Partial<Pick<Settings, 'update_check' | 'catalogue_check' | 'safe_mode_cpu' | 'default_model_id' | 'voice_languages'>>
 
-/** Characters in a recovery key without hyphens: 9 groups of 4 (Recovery Package v1). */
-export const RECOVERY_KEY_LENGTH = 36
+/** Characters in a recovery key without hyphens: 8 groups of 4 (Recovery Package v1, §3). */
+export const RECOVERY_KEY_LENGTH = 32
+/** A key issued by AIOS 0.1.0: 9 groups of 4. Restore still accepts it. */
+export const LEGACY_RECOVERY_KEY_LENGTH = 36
 
 /** Suggested file name for a project file: the project name, safe as a file name on every OS. */
 function packageFileName(projectId: string): string {
@@ -486,6 +488,17 @@ export const api = {
 
   /** Recovery key (decision D4): POST /recovery-key. The key is shown once and kept nowhere. */
   recoveryKey: {
+    /** "Save as a file" (test findings, issue 10): the system Save dialog, one .txt file. */
+    saveAsFile: async (key: string): Promise<boolean> => {
+      try {
+        const saved = await bridge().setup.saveRecoveryKey(key)
+        if (saved) s().toast({ kind: 'success', title: 'Recovery key saved', description: 'AIOS keeps no copy. Keep the file somewhere safe, not next to your backups.' })
+        return saved
+      } catch (err) {
+        reportFailure(err, 'The recovery key was not saved')
+        return false
+      }
+    },
     createNew: async (): Promise<string | null> => {
       try {
         const created = await bridge().setup.newRecoveryKey()
@@ -640,6 +653,17 @@ export const api = {
         }))
         return { ok: true, key: created.recovery_key }
       } catch (err) {
+        // The storage was created while setting up (or before AIOS was closed) and its key is not
+        // in this window any more: the keys are wrapped again under a new key, shown once.
+        if (errorCode(err) === 'store_exists') {
+          try {
+            const fresh = await bridge().setup.newRecoveryKey()
+            useStore.setState({ recoveryKey: fresh.recovery_key })
+            return { ok: true, key: fresh.recovery_key }
+          } catch (again) {
+            return { ok: false, alreadyIssued: true, error: messageFor(again) }
+          }
+        }
         return { ok: false, alreadyIssued: errorCode(err) === 'store_exists', error: messageFor(err) }
       }
     },

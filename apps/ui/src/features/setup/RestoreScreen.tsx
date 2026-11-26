@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { motion } from 'motion/react'
 import { FolderOpen, KeyRound } from 'lucide-react'
-import { RECOVERY_KEY_LENGTH, api } from '@/lib/api'
+import { LEGACY_RECOVERY_KEY_LENGTH, RECOVERY_KEY_LENGTH, api } from '@/lib/api'
 import { useStore } from '@/lib/store'
 import { ZERO_HASH } from '@/lib/hash'
 import { cn } from '@/lib/cn'
@@ -30,12 +30,12 @@ const STEPS = ['Checking your key', 'Opening your backup', 'Checking nothing is 
 const MARKS = [2300, 3100, 3600]
 const KEY_LENGTH = RECOVERY_KEY_LENGTH
 const GROUPS = KEY_LENGTH / 4
-const GROUP_WORDS: Record<number, string> = { 8: 'Eight', 9: 'Nine' }
 const EASE: [number, number, number, number] = [0.2, 0.7, 0.2, 1]
 
 /** Uppercase, letters and digits only, a hyphen after every four characters. */
 function formatKey(raw: string): string {
-  const clean = raw.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, KEY_LENGTH)
+  // Room for a key from AIOS 0.1.0 (nine groups): restore accepts both.
+  const clean = raw.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, LEGACY_RECOVERY_KEY_LENGTH)
   return clean.match(/.{1,4}/g)?.join('-') ?? ''
 }
 
@@ -78,7 +78,9 @@ export function RestoreScreen() {
   useEffect(() => clearTimers, [])
 
   const keyLength = key.replace(/-/g, '').length
-  const keyComplete = keyLength === KEY_LENGTH
+  // Eight groups, or nine for a key from AIOS 0.1.0.
+  const keyTarget = keyLength > KEY_LENGTH ? LEGACY_RECOVERY_KEY_LENGTH : KEY_LENGTH
+  const keyComplete = keyLength === keyTarget
   const running = phase === 'running'
   const finished = phase === 'done'
   const canSubmit = !!folder && keyComplete && !running && !finished
@@ -167,7 +169,7 @@ export function RestoreScreen() {
 
               <div className="h-px bg-line-soft" role="separator" />
 
-              <Field label="Recovery key" htmlFor="recovery-key" hint={`${GROUP_WORDS[GROUPS] ?? GROUPS} groups of four characters. Hyphens are added as you type.`}>
+              <Field label="Recovery key" htmlFor="recovery-key" hint="Eight groups of four characters (nine for a key from AIOS 0.1.0). Spaces and hyphens are fine.">
                 <div className="mt-1 flex items-center gap-3">
                   <IconTile className="size-9">
                     <KeyRound strokeWidth={1.75} />
@@ -190,13 +192,13 @@ export function RestoreScreen() {
                       aria-describedby="recovery-key-count"
                       className="h-12 pr-16 text-md tracking-[0.08em]"
                     />
-                    <span id="recovery-key-count" className={cn('pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 font-mono text-2xs tabular', keyComplete ? 'text-green' : 'text-ink-50')} aria-label={`${keyLength} of ${KEY_LENGTH} characters`}>
-                      {keyLength}/{KEY_LENGTH}
+                    <span id="recovery-key-count" className={cn('pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 font-mono text-2xs tabular', keyComplete ? 'text-green' : 'text-ink-50')} aria-label={`${keyLength} of ${keyTarget} characters`}>
+                      {keyLength}/{keyTarget}
                     </span>
                   </div>
                 </div>
                 <div className="mt-1.5 flex gap-1 pl-12" aria-hidden>
-                  {Array.from({ length: GROUPS }, (_, i) => {
+                  {Array.from({ length: keyTarget / 4 }, (_, i) => {
                     const fill = Math.max(0, Math.min(1, (keyLength - i * 4) / 4))
                     return (
                       <span key={i} className="relative h-1 flex-1 overflow-hidden rounded-[1px] bg-ink-12">

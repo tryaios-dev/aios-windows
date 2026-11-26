@@ -164,8 +164,10 @@ def create_store(
     )
 
 
-def complete(session: Session) -> Completed:
-    """Finish first run: mark it done and create the default Restricted project once."""
+def create_project(session: Session) -> Completed:
+    """The default Restricted project, created once: a Setting up step, before first run is done.
+
+    Calling it again returns the same project."""
     if repo.store(session) is None:
         raise AppError("store_not_created", 409)
     project = repo.first_project(session)
@@ -186,8 +188,14 @@ def complete(session: Session) -> Completed:
             project_id=project.id,
             body={"project_id": project.id, "classification": "restricted", "default": True},
         )
-    repo.set_first_run_complete(session, project.id)
     return Completed(default_project_id=project.id)
+
+
+def complete(session: Session) -> Completed:
+    """Finish first run: mark it done (creating the default project if Setting up has not)."""
+    done = create_project(session)
+    repo.set_first_run_complete(session, done.default_project_id)
+    return done
 
 
 # ------------------------------------------------------------------ new recovery key (D4)

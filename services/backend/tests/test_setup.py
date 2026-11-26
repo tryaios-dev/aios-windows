@@ -31,10 +31,23 @@ def first_run(client: TestClient) -> dict:
 
 # ------------------------------------------------------------------ recovery key and package
 def test_recovery_key_display_and_parse() -> None:
+    """Test findings, issue 9: 8 groups of 4, typed with or without spaces or dashes."""
     key = rp.new_recovery_key()
     text = rp.format_recovery_key(key)
-    assert len(text) == 44 and text.count("-") == 8  # 9 groups of 4
+    assert len(text) == 39 and text.count("-") == 7  # 8 groups of 4: 28 key + 4 checksum
+    assert len(key) == 18 and key[0] < 16  # 140 random bits
     assert rp.parse_recovery_key(text.lower().replace("-", " ")) == key
+    assert rp.parse_recovery_key(text.replace("-", "")) == key
+    assert rp.parse_recovery_key(f"  {text}  ") == key
+
+
+def test_a_key_from_0_1_0_still_opens_its_backups() -> None:
+    """Keys issued before issue 9 have 9 groups (160 bits): restore keeps accepting them."""
+    old = bytes(range(1, 21))
+    text = rp.format_recovery_key(old)
+    assert len(text) == 44 and text.count("-") == 8
+    assert rp.parse_recovery_key(text) == old
+    assert rp.parse_recovery_key(text.replace("-", " ").lower()) == old
 
 
 def test_recovery_key_typing_error_is_caught_before_the_kdf() -> None:
@@ -100,6 +113,22 @@ def test_recovery_key_is_returned_once_and_never_recorded(
 
 def test_complete_needs_a_store(client: TestClient) -> None:
     assert client.post("/setup/complete").json() == {"error": "store_not_created"}
+    assert client.post("/setup/project").json() == {"error": "store_not_created"}
+
+
+def test_setting_up_creates_the_first_project_once_and_first_run_goes_on(
+    client: TestClient,
+) -> None:
+    client.post("/setup/store")
+    first = client.post("/setup/project")
+    assert first.status_code == 200
+    project_id = first.json()["default_project_id"]
+    assert client.post("/setup/project").json() == {"default_project_id": project_id}
+    status = client.get("/setup/status").json()
+    assert status["first_run_complete"] is False  # the recovery key is still to be saved
+    assert client.post("/setup/complete").json() == {"default_project_id": project_id}
+    assert client.get("/setup/status").json()["first_run_complete"] is True
+    assert [p["id"] for p in client.get("/projects").json()] == [project_id]
 
 
 # ------------------------------------------------------------------ restore

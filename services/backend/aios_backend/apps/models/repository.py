@@ -19,6 +19,7 @@ from db import lookups, outbox
 record_event = outbox.record
 default_model_id = lookups.default_model_id
 clear_default_model = lookups.clear_default_model
+choose_default_model = lookups.choose_default_model
 setting_flag = lookups.setting_flag
 record_catalogue_check = lookups.record_catalogue_check
 last_catalogue_version = lookups.catalogue_version

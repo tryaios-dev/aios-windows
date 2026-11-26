@@ -22,7 +22,11 @@ from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from aios_common.canonical import b64url, b64url_decode, jcs, tagged_hash, utc_time
 
 CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
-KEY_BYTES = 20  # 160-bit recovery key
+KEY_BITS = 140  # recovery key: 28 Crockford characters, 8 groups of 4 with the checksum
+KEY_BYTES = 18  # the 140 bits, top 4 bits zero: the KDF input
+LEGACY_KEY_BYTES = 20  # 0.1.0 keys (160 bits, 9 groups): still accepted by restore
+# Characters of key (before the 4 checksum characters) -> key bytes.
+KEY_FORMS = {28: KEY_BYTES, 32: LEGACY_KEY_BYTES}
 WRITE_KDF = {"memory_kib": 65536, "iterations": 3, "parallelism": 4}  # RFC 9106 second option
 KDF_BOUNDS = {"memory_kib": (65536, 1048576), "iterations": (1, 10), "parallelism": (1, 16)}
 UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
@@ -53,25 +57,32 @@ def _check_chars(key: bytes) -> str:
 
 
 def new_recovery_key() -> bytes:
-    return secrets.token_bytes(KEY_BYTES)
+    return secrets.randbits(KEY_BITS).to_bytes(KEY_BYTES)
 
 
 def format_recovery_key(key: bytes) -> str:
-    """36 characters as 9 groups of 4: 32 for the key, 4 checksum characters."""
-    text = _base32(int.from_bytes(key), 32) + _check_chars(key)
-    return "-".join(text[i : i + 4] for i in range(0, 36, 4))
+    """32 characters as 8 groups of 4: 28 for the key, 4 checksum characters.
+
+    A 0.1.0 key (20 bytes) keeps its own form: 36 characters, 9 groups."""
+    chars = next(c for c, n in KEY_FORMS.items() if n == len(key))
+    text = _base32(int.from_bytes(key), chars) + _check_chars(key)
+    return "-".join(text[i : i + 4] for i in range(0, len(text), 4))
 
 
 def parse_recovery_key(text: str) -> bytes:
-    """Normalise what the user typed; a wrong checksum is a typing error before any KDF runs."""
+    """Normalise what the user typed (spaces and dashes or none, any case); a wrong checksum is
+    a typing error before any KDF runs. Both the 8-group key and the 0.1.0 9-group key work."""
     clean = re.sub(r"[\s-]", "", text).upper().translate(str.maketrans("OIL", "011"))
-    if len(clean) != 36 or any(c not in CROCKFORD for c in clean):  # also rejects U
+    size = KEY_FORMS.get(len(clean) - 4)
+    if size is None or any(c not in CROCKFORD for c in clean):  # also rejects U
         raise RecoveryError("R_CHECKSUM")
     value = 0
-    for c in clean[:32]:
+    for c in clean[:-4]:
         value = (value << 5) | CROCKFORD.index(c)
-    key = value.to_bytes(KEY_BYTES)
-    if _check_chars(key) != clean[32:]:
+    if value.bit_length() > size * 8:
+        raise RecoveryError("R_CHECKSUM")
+    key = value.to_bytes(size)
+    if _check_chars(key) != clean[-4:]:
         raise RecoveryError("R_CHECKSUM")
     return key
 

@@ -46,5 +46,7 @@ export const modelsHandlers: Record<string, Handler> = {
   "models.hardware": async (b, refresh) =>
     Hardware.parse(await b.client.request("GET", `/system/hardware?refresh=${z.boolean().parse(refresh)}`)),
   "models.engine": async (b) => EngineStatus.parse(await b.client.request("GET", "/engine/status")),
+  "models.startEngine": async (b, modelId) =>
+    EngineStatus.parse(await b.client.request("POST", "/engine/start", { model_id: Id.parse(modelId) })),
   "models.benchmark": async (b) => BenchmarkRun.parse(await b.client.request("POST", "/system/benchmark")),
 };
