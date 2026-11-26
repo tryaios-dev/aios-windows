@@ -220,6 +220,8 @@ export const BackupResult = z.object({
 export type BackupResult = z.infer<typeof BackupResult>;
 
 /** A new recovery key (POST /recovery-key). `recovery_key` is in this reply exactly once. */
+/** A recovery key as shown: 8 groups of 4 (or 9, from AIOS 0.1.0), Crockford base32. */
+export const RecoveryKeyText = z.string().regex(/^([0-9A-HJKMNP-TV-Z]{4}-){7,8}[0-9A-HJKMNP-TV-Z]{4}$/);
 export const NewRecoveryKey = z.object({ recovery_key: z.string(), package_id: z.string(), issued_at: z.string() });
 export type NewRecoveryKey = z.infer<typeof NewRecoveryKey>;
 
@@ -778,6 +780,11 @@ export interface AiosBridge {
     backup(): Promise<BackupResult>;
     /** POST /recovery-key: the keys are wrapped again under a new recovery key, returned once. */
     newRecoveryKey(): Promise<NewRecoveryKey>;
+    /**
+     * "Save as a file" (test findings, issue 10): the system Save dialog, then one .txt file with
+     * the key where the person chose. AIOS keeps no copy. False when the dialog is cancelled.
+     */
+    saveRecoveryKey(recoveryKey: string): Promise<boolean>;
     restore(input: RestoreInput): Promise<Restored>;
   };
   settings: {

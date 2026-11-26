@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { motion } from 'motion/react'
-import { Check, Copy, Printer } from 'lucide-react'
+import { Check, Copy, FileDown, Printer } from 'lucide-react'
 import { ART } from '@/assets/icons'
 import { ArtTile } from '@/components/ui/art'
 import { api } from '@/lib/api'
@@ -74,14 +74,10 @@ export function ProtectStep({ note, reissue, onIssued, confirmed, newKeyNotice, 
   // The system print dialog for this page, with the key on it. Nothing is saved to a file.
   const print = () => window.print()
 
-  // AIOS never writes the recovery key to a file (secrets live only in the keystore and the
-  // wrapped Recovery Package, FR-30), so this choice explains that and offers Print or Copy.
-  const saveAsFile = () =>
-    useStore.getState().toast({
-      kind: 'info',
-      title: 'Saving the key as a file is not in this build',
-      description: 'AIOS does not write your recovery key to a file. Print it, or copy it into a password manager or a file on a USB drive yourself.',
-    })
+  // "Save as a file" (test findings, issue 10): the system Save dialog; AIOS keeps no copy.
+  const saveAsFile = () => {
+    if (key) void api.recoveryKey.saveAsFile(key)
+  }
 
   const LATER = 'later'
   const CHOOSE = 'choose'
@@ -143,14 +139,9 @@ export function ProtectStep({ note, reissue, onIssued, confirmed, newKeyNotice, 
                       <Button leading={<Printer className="size-3.5" />} onClick={print}>
                         Print
                       </Button>
-                      <Select
-                        aria-label="Save as a file"
-                        value={undefined}
-                        onValueChange={saveAsFile}
-                        placeholder="Save as a file"
-                        className="h-8.5 w-auto min-w-[168px] flex-1 border-line bg-paper-raised text-sm font-medium data-[placeholder]:text-ink sm:flex-none"
-                        options={[{ value: 'file', label: 'Choose where to save it', description: 'A USB drive keeps it apart from this computer' }]}
-                      />
+                      <Button leading={<FileDown className="size-3.5" />} onClick={saveAsFile}>
+                        Save as a file
+                      </Button>
                       <span className="ml-auto hidden font-mono text-xs leading-4.5 tabular text-ink-50 sm:inline">{groups.length} groups of 4</span>
                     </div>
                   </div>

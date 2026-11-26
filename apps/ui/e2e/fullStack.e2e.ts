@@ -106,11 +106,11 @@ describe("desktop app against the real backend", () => {
 
   it("setup: creates the store, shows the recovery key once (a new one if asked again), finishes with the default project", async () => {
     const issued = await ui.api.firstRun.issueRecoveryKey();
-    expect(issued.ok && issued.key).toMatch(/^([0-9A-Z]{4}-){8}[0-9A-Z]{4}$/);
+    expect(issued.ok && issued.key).toMatch(/^([0-9A-Z]{4}-){7}[0-9A-Z]{4}$/);
     // The store is never created twice: asked again (AIOS closed before the key was saved, D13),
     // the backend wraps the keys under a new key and the first one stops working.
     const again = await ui.api.firstRun.issueRecoveryKey();
-    expect(again.ok && again.key).toMatch(/^([0-9A-Z]{4}-){8}[0-9A-Z]{4}$/);
+    expect(again.ok && again.key).toMatch(/^([0-9A-Z]{4}-){7}[0-9A-Z]{4}$/);
     expect(again.ok && again.key).not.toBe(issued.ok && issued.key);
 
     expect(await ui.api.firstRun.complete()).toBe(true);
@@ -362,9 +362,9 @@ describe("desktop app against the real backend", () => {
     expect(store().events.filter((e) => e.event_type === "skill_installed")).toHaveLength(2);
   });
 
-  it("a new recovery key: shown once, nine groups, recorded without the key (D4)", async () => {
+  it("a new recovery key: shown once, eight groups, recorded without the key (D4)", async () => {
     const key = await ui.api.recoveryKey.createNew();
-    expect(key).toMatch(/^([0-9A-Z]{4}-){8}[0-9A-Z]{4}$/);
+    expect(key).toMatch(/^([0-9A-Z]{4}-){7}[0-9A-Z]{4}$/);
     expect(store().settings.recovery_key_issued_at).not.toBeNull();
     expect(JSON.stringify(store().events)).not.toContain(key!.replace(/-/g, ""));
   });

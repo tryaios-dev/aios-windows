@@ -1,5 +1,5 @@
 import { useId, useState } from 'react'
-import { Copy } from 'lucide-react'
+import { Copy, FileDown } from 'lucide-react'
 import { ART } from '@/assets/icons'
 import { ArtTile } from '@/components/ui/art'
 import { api } from '@/lib/api'
@@ -128,9 +128,14 @@ export function RecoveryKeyDialog({ open, onOpenChange, hasDestination, onBackUp
             <div className="mt-4 flex items-center justify-between gap-3 border-t border-line-soft pt-3">
               <span className="label-mono">Shown once</span>
               {/* Fixed width, so the label changing to "Copied" does not move anything. */}
-              <Button size="sm" className="w-24" leading={copied ? <DrawnCheck className="size-3.5 text-green" /> : <Copy className="size-3.5" />} onClick={() => copy(recoveryKey)} aria-label={copied ? 'Copied recovery key' : 'Copy recovery key'}>
-                {copied ? 'Copied' : 'Copy'}
-              </Button>
+<div className="flex items-center gap-2">
+                <Button size="sm" leading={<FileDown className="size-3.5" />} onClick={() => void api.recoveryKey.saveAsFile(recoveryKey)}>
+                  Save as a file
+                </Button>
+                <Button size="sm" className="w-24" leading={copied ? <DrawnCheck className="size-3.5 text-green" /> : <Copy className="size-3.5" />} onClick={() => copy(recoveryKey)} aria-label={copied ? 'Copied recovery key' : 'Copy recovery key'}>
+                  {copied ? 'Copied' : 'Copy'}
+                </Button>
+              </div>
             </div>
           </div>
         </div>

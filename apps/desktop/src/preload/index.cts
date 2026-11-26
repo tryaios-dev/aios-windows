@@ -27,6 +27,7 @@ const bridge: AiosBridge = {
     setBackupLocation: (folder) => invoke("setup.setBackupLocation", folder),
     backup: () => invoke("setup.backup"),
     newRecoveryKey: () => invoke("setup.newRecoveryKey"),
+    saveRecoveryKey: (recoveryKey) => invoke("setup.saveRecoveryKey", recoveryKey),
     restore: (input) => invoke("setup.restore", input),
   },
   settings: {
