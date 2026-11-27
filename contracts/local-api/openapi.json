@@ -2386,6 +2386,15 @@
             "title": "Id",
             "type": "string"
           },
+          "kind": {
+            "default": "chat",
+            "enum": [
+              "chat",
+              "video"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
           "linked_at": {
             "format": "date-time",
             "title": "Linked At",
@@ -2394,6 +2403,14 @@
           "model_id": {
             "title": "Model Id",
             "type": "string"
+          },
+          "models": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResourceModelOut"
+            },
+            "title": "Models",
+            "type": "array"
           },
           "monthly_limit": {
             "anyOf": [
@@ -2410,12 +2427,54 @@
             "title": "Name",
             "type": "string"
           },
+          "price_in": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price In"
+          },
+          "price_out": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Out"
+          },
           "spent": {
             "title": "Spent",
             "type": "number"
           },
+          "tokens_in": {
+            "default": 0,
+            "title": "Tokens In",
+            "type": "integer"
+          },
+          "tokens_out": {
+            "default": 0,
+            "title": "Tokens Out",
+            "type": "integer"
+          },
           "uses": {
             "title": "Uses",
+            "type": "integer"
+          },
+          "video_seconds": {
+            "default": 0.0,
+            "title": "Video Seconds",
+            "type": "number"
+          },
+          "videos": {
+            "default": 0,
+            "title": "Videos",
             "type": "integer"
           }
         },
@@ -3385,6 +3444,30 @@
             "title": "Confirmed",
             "type": "boolean"
           },
+          "model_id": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Id"
+          },
+          "resource_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Id"
+          },
           "to": {
             "enum": [
               "local",
@@ -3612,6 +3695,67 @@
           }
         },
         "title": "RegenerateIn",
+        "type": "object"
+      },
+      "ResourceModelOut": {
+        "description": "One model of a linked resource: what the person can pick in a conversation, and what it\nused this calendar month (UTC) at the company's price for it.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "price_in": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price In"
+          },
+          "price_out": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Out"
+          },
+          "spent": {
+            "default": 0.0,
+            "title": "Spent",
+            "type": "number"
+          },
+          "tokens_in": {
+            "default": 0,
+            "title": "Tokens In",
+            "type": "integer"
+          },
+          "tokens_out": {
+            "default": 0,
+            "title": "Tokens Out",
+            "type": "integer"
+          },
+          "uses": {
+            "default": 0,
+            "title": "Uses",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ResourceModelOut",
         "type": "object"
       },
       "RestoreIn": {
@@ -5179,7 +5323,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Move between Local and Company (Company needs confirmation)",
+        "summary": "Move between Local, Company and a linked resource (leaving Local needs confirmation)",
         "tags": [
           "chat"
         ]

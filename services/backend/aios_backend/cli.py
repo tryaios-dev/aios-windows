@@ -231,11 +231,11 @@ def company_models(settings: Settings) -> company.CompanyModels:
     return company.CompanyModels(settings)
 
 
-def _typed_or_piped_key() -> str:
+def _typed_or_piped_key(label: str = "the Company AI server") -> str:
     """The key from stdin, or typed without echo. Never an argument, an environment variable or
     a file AIOS reads (invariant 3)."""
     if sys.stdin.isatty():
-        value = getpass.getpass("API key of the Company AI server (not shown): ")
+        value = getpass.getpass(f"API key of {label} (paste it, it is not shown): ")
     else:
         value = sys.stdin.readline()
     # Windows PowerShell 5.1 puts a byte-order mark in front of text it pipes to a program.
@@ -283,15 +283,21 @@ def cmd_company_key(args: argparse.Namespace) -> int:
     return 0
 
 
+def _linkable_ids() -> list[str]:
+    from aios_backend import linked_config
+
+    return [*linked_config.RESOURCES, *linked_config.MEDIA]
+
+
 def cmd_resource_key(args: argparse.Namespace) -> int:
     """Store the API key for a linkable resource on this computer (operator, invariant 3): the
     person then only presses Link. Checked with the provider first; never printed."""
     from aios_backend import linked, linked_config
 
-    if args.id not in linked_config.RESOURCES:
-        print(f"unknown resource: {args.id} (known: {', '.join(linked_config.RESOURCES)})")
+    if not linked_config.linkable(args.id):
+        print(f"unknown resource: {args.id} (known: {', '.join(_linkable_ids())})")
         return 1
-    value = _typed_or_piped_key()
+    value = _typed_or_piped_key(linked_config.NAMES.get(args.id, args.id))
     if not linked_config.valid_key(value):
         print("refused: the key must be 16-512 printable characters, no spaces", file=sys.stderr)
         return 1
@@ -316,6 +322,81 @@ def cmd_resource_clear(args: argparse.Namespace) -> int:
 
     linked_config.remove_provisioned(args.id)
     print(f"removed the stored key for {args.id}")
+    return 0
+
+
+def cmd_resource_models(args: argparse.Namespace) -> int:
+    """List the model names a key can use at a resource (to find the right one). The key is typed
+    or piped as for ``resource key``, never printed and not stored."""
+    from aios_backend import linked, linked_config
+
+    if args.id not in linked_config.SPECS:
+        print(f"unknown resource: {args.id} (known: {', '.join(linked_config.SPECS)})")
+        return 1
+    value = _typed_or_piped_key(linked_config.NAMES.get(args.id, args.id))
+    if not linked_config.valid_key(value):
+        print("refused: the key must be 16-512 printable characters, no spaces", file=sys.stderr)
+        return 1
+    found = linked.listed_models(args.id, value)
+    if isinstance(found, str):
+        print(f"could not list models: {found}", file=sys.stderr)
+        return 1
+    wanted = linked_config.model_ids(args.id)
+    for name in found:
+        print(("* " if name in wanted else "  ") + name)
+    missing = [m for m in wanted if m not in found]
+    if missing:
+        print(f"AIOS offers {', '.join(missing)}, which this key cannot use.", file=sys.stderr)
+    return 0
+
+
+def cmd_resource_price(args: argparse.Namespace) -> int:
+    """Set what the company charges for a linked resource, per million tokens read and written
+    (a video resource: per second of video). AIOS then shows the month's cost and stops at the
+    monthly limit. --clear: count tokens (or seconds) only."""
+    from aios_backend import linked_config
+    from aios_backend.apps.resources import service as resources
+    from aios_backend.errors import AppError
+
+    if not linked_config.linkable(args.id):
+        print(f"unknown resource: {args.id} (known: {', '.join(_linkable_ids())})")
+        return 1
+    video = args.id in linked_config.MEDIA
+    if args.clear:
+        price_in, price_out = None, None
+    elif video:
+        if args.per_second is None:
+            print(f"{args.id} makes videos: give --per-second (or --clear)", file=sys.stderr)
+            return 1
+        price_in, price_out = args.per_second, None
+    else:
+        price_in, price_out = args.per_million_in, args.per_million_out
+        if price_in is None or price_out is None:
+            print("give both --in and --out (or --clear)", file=sys.stderr)
+            return 1
+    model = getattr(args, "model", None)
+    if model is not None and model not in linked_config.model_ids(args.id):
+        known = ", ".join(linked_config.model_ids(args.id)) or "none"
+        print(f"{args.id} has no model {model} (its models: {known})", file=sys.stderr)
+        return 1
+    try:
+        with _db(args).session() as session:
+            resources.set_price(session, args.id, price_in, price_out, model)
+            session.commit()
+    except AppError:
+        print(f"{args.id} is not linked yet: link it on the Resources page first", file=sys.stderr)
+        return 1
+    name = linked_config.NAMES.get(args.id, args.id) + (f" {model}" if model else "")
+    print(
+        f"{name}: "
+        + (
+            "price cleared"
+            if args.clear
+            else f"{price_in} per second of video"
+            if video
+            else f"{price_in} in / {price_out} out per million tokens"
+        )
+    )
     return 0
 
 
@@ -441,6 +522,18 @@ def build_parser() -> argparse.ArgumentParser:
     c = rsub.add_parser("clear", help="remove the stored API key")
     c.add_argument("--id", default="deepseek-v4", help="default: deepseek-v4")
     c.set_defaults(func=cmd_resource_clear)
+    c = rsub.add_parser("models", help="list the model names a key can use (stdin or typed)")
+    c.add_argument("--id", default="deepseek-v4", help="default: deepseek-v4")
+    c.set_defaults(func=cmd_resource_models)
+    c = rsub.add_parser("price", help="what the company charges per million tokens")
+    c.add_argument("--id", default="deepseek-v4", help="default: deepseek-v4")
+    c.add_argument("--in", dest="per_million_in", type=float, help="per million tokens read")
+    c.add_argument("--out", dest="per_million_out", type=float, help="per million tokens written")
+    c.add_argument("--per-second", dest="per_second", type=float, help="video: per second")
+    c.add_argument("--model", help="one model of the resource (default: the whole resource)")
+    c.add_argument("--clear", action="store_true", help="no price: count tokens only")
+    c.add_argument("--profile", choices=profiles, default=Profile.DESKTOP.value)
+    c.set_defaults(func=cmd_resource_price)
     sub.add_parser(
         "rebuild-search", help="rebuild the full-text search index from the messages (H-02)"
     ).set_defaults(func=cmd_rebuild_search)

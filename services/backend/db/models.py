@@ -9,7 +9,17 @@ Field names follow MVP 9.1 and the UI types in ``apps/ui/src/lib/types.ts``.
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, ForeignKey, Index, Integer, LargeBinary, String, Text
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.base import ID, Base, Timestamps, UTCDateTime, utcnow
@@ -200,3 +210,36 @@ class Skill(Timestamps, Base):
     instruction: Mapped[str] = mapped_column(Text)
     own: Mapped[bool] = mapped_column(Boolean, default=False)  # added from a file
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class LinkedResource(Timestamps, Base):
+    """A cloud AI model linked on the Resources page. Shared: the resources app links it and shows
+    its usage, chat stops sending once its monthly limit is reached. Its API key is not here: it
+    lives only in the OS key store (``aios_backend.linked_config.key_name``, invariant 3)."""
+
+    __tablename__ = "linked_resources"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    # Monthly spending limit; None: no limit was set.
+    monthly_limit: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # What the company charges per million tokens read (in) and written (out); None: not set,
+    # only tokens are counted. Set by an operator (``aios-backend resource price``).
+    price_in: Mapped[float | None] = mapped_column(Float, nullable=True)
+    price_out: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # The chat models its key can use, as the provider listed them at link time: a JSON list of
+    # model ids (None: not known; the resource's own models are offered).
+    models: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class LinkedModelPrice(Timestamps, Base):
+    """What the company charges for one model of a linked resource (Claude Opus, GPT-6.2 Sol, ...),
+    per million tokens read (in) and written (out). A model without a row is charged at its
+    resource's price (``LinkedResource``). Set by an operator (``aios-backend resource price
+    --model``); kept when the resource is unlinked and linked again."""
+
+    __tablename__ = "linked_model_prices"
+
+    model_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    resource_id: Mapped[str] = mapped_column(String(64))
+    price_in: Mapped[float | None] = mapped_column(Float, nullable=True)
+    price_out: Mapped[float | None] = mapped_column(Float, nullable=True)

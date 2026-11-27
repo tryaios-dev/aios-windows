@@ -12,6 +12,7 @@ import {
   Exchange,
   GenerationState,
   Id,
+  ModelName,
   KnowledgeIds,
   Message,
   Provider,
@@ -38,11 +39,13 @@ export const chatHandlers: Record<string, Handler> = {
   "conversations.remove": async (b, id) => {
     await b.client.request("DELETE", conv(id));
   },
-  "conversations.setProvider": async (b, id, to, confirmed) =>
+  "conversations.setProvider": async (b, id, to, confirmed, resourceId, modelId) =>
     Conversation.parse(
       await b.client.request("POST", `${conv(id)}/provider`, {
         to: Provider.parse(to),
         confirmed: z.boolean().parse(confirmed),
+        resource_id: resourceId === undefined ? null : Id.parse(resourceId),
+        model_id: modelId === undefined ? null : ModelName.parse(modelId),
       }),
     ),
   "conversations.messages": async (b, id) =>

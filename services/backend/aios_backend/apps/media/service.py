@@ -21,6 +21,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from aios_backend import linked_config as linked
 from aios_backend.apps.media import repository as repo
 from aios_backend.apps.media.models import MediaItem
 from aios_backend.apps.media.schemas import (
@@ -91,7 +92,8 @@ def _item(session: Session, media_id: str) -> MediaItem:
 
 # ------------------------------------------------------------------ what can be made
 def status(settings: Settings, media: MediaSource | None) -> MediaStatusOut:
-    if not settings.company_ai:
+    linked_video = any(linked.is_linked(rid) for rid in linked.MEDIA)
+    if not settings.company_ai and not linked_video:
         return MediaStatusOut(available=False, reason="company_provider_disabled", models=[])
     if media is None:
         return MediaStatusOut(available=False, reason="media_unavailable", models=[])
@@ -99,6 +101,8 @@ def status(settings: Settings, media: MediaSource | None) -> MediaStatusOut:
         models = media.media_models()
     except MediaError as exc:
         return MediaStatusOut(available=False, reason=exc.code, models=[])
+    if not settings.company_ai:  # only what a linked resource makes
+        models = [m for m in models if m.id in linked.MEDIA]
     return MediaStatusOut(
         available=bool(models),
         reason=None if models else "media_not_offered",
@@ -119,13 +123,21 @@ def create(
         raise not_found("project")
     if project.archived:
         raise AppError("project_archived", 409)
-    if not settings.company_ai:
+    resource = body.model in linked.MEDIA
+    if resource:
+        # A linked video resource: it must be linked, within its monthly limit, and the person
+        # allows every video (Allow once, the same rule as a chat sent to a linked resource).
+        if not linked.is_linked(body.model):
+            raise AppError("resource_not_linked", 409)
+        _within_limit(session, body.model)
+    elif not settings.company_ai:
         raise AppError("company_provider_disabled", 409)
     if media is None:
         raise AppError("media_unavailable", 503)
-    asked_now = not project.company_ai_enabled
+    asked_now = resource or not project.company_ai_enabled
     if asked_now and not body.confirmed:
         raise AppError("confirmation_required", 400)
+    provider = linked.PROVIDER if resource else "company"
     job = MediaJob(
         kind=body.kind,
         model=body.model,
@@ -166,7 +178,7 @@ def create(
             project_id=project_id,
             body={
                 "project_id": project_id,
-                "provider": "company",
+                "provider": provider,
                 "purpose": "media",
                 "classification": project.classification,
             },
@@ -178,7 +190,7 @@ def create(
         "model": item.model,
         "width": item.width,
         "height": item.height,
-        "provider": "company",
+        "provider": provider,
     }
     if item.frames is not None:
         body_fields["frames"] = item.frames
@@ -186,6 +198,17 @@ def create(
     if remote.status not in PENDING:  # the server answered with a finished job at once
         _refresh(session, media, item)
     return _out(item)
+
+
+def _within_limit(session: Session, resource_id: str) -> None:
+    """A linked video resource whose spend this month reached its monthly limit makes no more."""
+    row = repo.linked_resource(session, resource_id)
+    if row is None or row.monthly_limit is None:
+        return
+    made = repo.videos_made(session, resource_id, linked.month_start(utcnow()))
+    seconds = made * linked.VIDEO_SECONDS.get(resource_id, 0.0)
+    if linked.media_cost(seconds, row.price_in) >= row.monthly_limit:
+        raise AppError("resource_limit_reached", 409)
 
 
 # ------------------------------------------------------------------ follow

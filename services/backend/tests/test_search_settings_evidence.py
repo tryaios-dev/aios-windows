@@ -54,7 +54,8 @@ def test_network_list_matches_the_contract(
         (a[0], a[1], a[2]) for a in ALLOWLIST
     ]
     flows = client.get("/system/network").json()
-    off = {"company-server", "linked-deepseek-v4"}  # Company off, DeepSeek not linked
+    # Company off, no resource linked
+    off = {"company-server"} | {a[0] for a in ALLOWLIST if a[4] == "linked"}
     assert [f["enabled"] for f in flows] == [f["id"] not in off for f in flows]
 
 

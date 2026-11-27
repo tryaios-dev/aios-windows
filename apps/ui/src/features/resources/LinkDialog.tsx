@@ -13,8 +13,10 @@ import { DEFAULT_LIMIT, LIMIT_CHOICES, kindWords, placeOf } from './words'
  * happen each time it is used, with a small copy of the question AIOS will
  * ask. Linking itself sends nothing.
  */
-export function LinkDialog({ open, onOpenChange, resource, onLink }: { open: boolean; onOpenChange: (open: boolean) => void; resource: ResourceEntry | null; onLink: (resource: ResourceEntry, monthlyLimit: number | null) => void }) {
+export function LinkDialog({ open, onOpenChange, resource, onLink }: { open: boolean; onOpenChange: (open: boolean) => void; resource: ResourceEntry | null; onLink: (resource: ResourceEntry, monthlyLimit: number | null) => void | Promise<void> }) {
   const [limit, setLimit] = useState(DEFAULT_LIMIT)
+  // Linking asks the provider about the key and its models: a few seconds.
+  const [linking, setLinking] = useState(false)
   const limitLabel = useId()
   if (!resource) return null
   const amount = LIMIT_CHOICES.find((c) => c.value === limit)?.amount ?? null
@@ -28,11 +30,22 @@ export function LinkDialog({ open, onOpenChange, resource, onLink }: { open: boo
       description={resource.line}
       footer={
         <>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={linking}>
             Not now
           </Button>
-          <Button variant="primary" onClick={() => onLink(resource, amount)}>
-            Link
+          <Button
+            variant="primary"
+            loading={linking}
+            onClick={async () => {
+              setLinking(true)
+              try {
+                await onLink(resource, amount)
+              } finally {
+                setLinking(false)
+              }
+            }}
+          >
+            {linking ? 'Checking the key…' : 'Link'}
           </Button>
         </>
       }

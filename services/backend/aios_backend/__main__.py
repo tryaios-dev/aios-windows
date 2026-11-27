@@ -29,6 +29,7 @@ from aios_backend.gateway.app import create_gateway_app
 from aios_backend.linked import LinkedResources
 from aios_backend.main import configure_logging, create_app
 from aios_backend.media.company import CompanyMedia
+from aios_backend.media.fal import FalMedia, MediaSides
 from aios_backend.providers import ProviderRouter
 from aios_common.handshake import HandshakeError, read_handshake
 from aios_common.logging import get_logger, log_event
@@ -112,8 +113,11 @@ async def serve(
     engine_side = app.state.answers
     company_side = _company_side(settings)
     resource_side = LinkedResources()  # answers only while a resource is linked
-    # R-7: pictures and videos come from the same company server's media service.
-    media_side = CompanyMedia.from_settings(settings) if company_side is not None else None
+    # R-7: pictures and videos come from the same company server's media service, and videos also
+    # from a linked video resource (fal.ai), only while it is linked.
+    media_side = MediaSides(
+        CompanyMedia.from_settings(settings) if company_side is not None else None, FalMedia()
+    )
     if local and answers is None and engine_side is not None:
         gateway_sock = bind_loopback(0)
         gateway_port = gateway_sock.getsockname()[1]
@@ -144,7 +148,7 @@ async def serve(
         )
         app.state.answers = router
         # The media app asks the router too: every model request goes through the gateway.
-        app.state.media = router if media_side is not None else None
+        app.state.media = router
 
     if gateway_port is None:
         on_ready(sock.getsockname()[1])

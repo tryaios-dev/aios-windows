@@ -5,6 +5,7 @@ import { useStore } from '@/lib/store'
 import { useExtras } from '@/lib/extras'
 import { answerAllowOnce } from '@/lib/allowOnce'
 import { pluralise } from '@/lib/format'
+import { isChatResource, resourceForModel, resourceModels } from '@/lib/types'
 import { RESOURCES } from '@/data/resources'
 import { modelLabel, sizeBlurb } from '@/lib/words'
 import { catalogueEntry } from '@/data/catalogue'
@@ -114,9 +115,13 @@ function AllowOnceDialog() {
   const prompt = useStore((s) => s.allowOnce)
   const conv = useStore((s) => s.conversations.find((c) => c.id === prompt?.conversation_id))
   const count = useStore((s) => s.messages.filter((m) => m.conversation_id === prompt?.conversation_id).length)
-  const linked = useExtras((s) => s.linkedResources[0])
+  // The resource this conversation is on (its model): the one its history is sent to.
+  const all = useExtras((s) => s.linkedResources)
+  const linked = resourceForModel(all, conv?.model_id) ?? all.find(isChatResource)
   const entry = RESOURCES.find((r) => r.id === linked?.id)
-  const name = linked?.name ?? entry?.name ?? 'the linked AI model'
+  // A provider with several models names the one in use: each is charged at its own price.
+  const model = linked && resourceModels(linked).length > 1 ? resourceModels(linked).find((m) => m.id === conv?.model_id) : undefined
+  const name = model?.name ?? linked?.name ?? entry?.name ?? 'the linked AI model'
   const where = entry ? `, run by ${entry.provider} in ${entry.region.replace(/^Runs in /, '').replace(/\.$/, '')}` : ''
   const sent = prompt?.again ? count : count + 1
   const title = conv?.title ?? 'this conversation'

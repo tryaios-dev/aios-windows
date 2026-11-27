@@ -97,6 +97,94 @@
       "scheme": "https",
       "client": "backend-net",
       "when": "only after the user links DeepSeek V4 on the Resources page and allows each send"
+    },
+    {
+      "id": "linked-gemini-3-pro",
+      "host": "generativelanguage.googleapis.com",
+      "port": 443,
+      "scheme": "https",
+      "client": "backend-net",
+      "when": "only after the user links Gemini 3.1 Pro on the Resources page and allows each send"
+    },
+    {
+      "id": "linked-kimi-k2",
+      "host": "api.moonshot.ai",
+      "port": 443,
+      "scheme": "https",
+      "client": "backend-net",
+      "when": "only after the user links Kimi K3 on the Resources page and allows each send"
+    },
+    {
+      "id": "linked-claude",
+      "host": "api.anthropic.com",
+      "port": 443,
+      "scheme": "https",
+      "client": "backend-net",
+      "when": "only after the user links Claude on the Resources page and allows each send"
+    },
+    {
+      "id": "linked-chatgpt",
+      "host": "api.openai.com",
+      "port": 443,
+      "scheme": "https",
+      "client": "backend-net",
+      "when": "only after the user links ChatGPT on the Resources page and allows each send"
+    },
+    {
+      "id": "linked-mistral",
+      "host": "api.mistral.ai",
+      "port": 443,
+      "scheme": "https",
+      "client": "backend-net",
+      "when": "only after the user links Mistral on the Resources page and allows each send"
+    },
+    {
+      "id": "linked-perplexity",
+      "host": "api.perplexity.ai",
+      "port": 443,
+      "scheme": "https",
+      "client": "backend-net",
+      "when": "only after the user links Perplexity on the Resources page and allows each send"
+    },
+    {
+      "id": "linked-hunyuan-video",
+      "host": "queue.fal.run",
+      "port": 443,
+      "scheme": "https",
+      "client": "backend-net",
+      "when": "only after the user links Hunyuan Video on the Resources page and allows each video"
+    },
+    {
+      "id": "linked-hunyuan-video-files",
+      "host": "fal.media",
+      "port": 443,
+      "scheme": "https",
+      "client": "backend-net",
+      "when": "the finished file of a Hunyuan Video request the user allowed (fal.ai file storage)"
+    },
+    {
+      "id": "linked-hunyuan-video-files-v2",
+      "host": "v2.fal.media",
+      "port": 443,
+      "scheme": "https",
+      "client": "backend-net",
+      "when": "the finished file of a Hunyuan Video request the user allowed (fal.ai file storage)"
+    },
+    {
+      "id": "linked-hunyuan-video-files-v3",
+      "host": "v3.fal.media",
+      "port": 443,
+      "scheme": "https",
+      "client": "backend-net",
+      "when": "the finished file of a Hunyuan Video request the user allowed (fal.ai file storage)"
+    },
+    {
+      "id": "linked-hunyuan-video-files-v3b",
+      "host": "v3b.fal.media",
+      "port": 443,
+      "scheme": "https",
+      "client": "backend-net",
+      "when": "the finished file of a Hunyuan Video request the user allowed (fal.ai file storage)"
     }
   ],
   "x-status": "draft - B-06 records the real model-mirror and update-feed hostnames here (they must also pass the corporate proxy)"

@@ -79,12 +79,20 @@ def delete_conversation(conversation_id: str, session: DbSession) -> None:
 
 @router.post(
     "/conversations/{conversation_id}/provider",
-    summary="Move between Local and Company (Company needs confirmation)",
+    summary="Move between Local, Company and a linked resource (leaving Local needs confirmation)",
 )
 def change_provider(
     conversation_id: str, body: ProviderChange, session: DbSession, settings: AppSettings
 ) -> ConversationOut:
-    return service.change_provider(session, settings, conversation_id, body.to, body.confirmed)
+    return service.change_provider(
+        session,
+        settings,
+        conversation_id,
+        body.to,
+        body.confirmed,
+        body.resource_id,
+        body.model_id,
+    )
 
 
 @router.get("/conversations/{conversation_id}/messages", summary="Messages in order")

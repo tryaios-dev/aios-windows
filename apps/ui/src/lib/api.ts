@@ -259,10 +259,12 @@ export const api = {
       if (saved) s().answerModelChoice(modelId) // a failure shows its reason and the dialog stays
     },
     /** POST /conversations/{id}/provider, with the confirmation rules (M-09). */
-    setProvider: (id: string, to: ProviderType, confirmed: boolean) =>
+    /** ``resourceId``: which linked resource when moving to "resource" (default: the first linked);
+     * ``modelId``: which of its models (default: its first). */
+    setProvider: (id: string, to: ProviderType, confirmed: boolean, resourceId?: string, modelId?: string) =>
       void change(
         'Not moved',
-        () => bridge().conversations.setProvider(id, to, confirmed),
+        () => bridge().conversations.setProvider(id, to, confirmed, resourceId, modelId),
         async () => {
           await afterConversation(id)()
           await loadMessages(id)
