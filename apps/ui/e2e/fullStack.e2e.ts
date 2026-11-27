@@ -110,8 +110,11 @@ describe("desktop app against the real backend", () => {
     expect(store().settings.schema_version).toBeGreaterThanOrEqual(4);
     const ids = store().live?.allowlist.map((e) => e.id) ?? [];
     expect(ids.slice(0, 3)).toEqual(["model-mirror", "update-feed", "model-origin"]); // Hugging Face
-    // The Company server, then the linked resources (only reachable while linked).
-    expect(ids.slice(-2)).toEqual(["company-server", "linked-deepseek-v4"]);
+    // The Company server, then the linked resources (only reachable while linked), DeepSeek first.
+    const company = ids.indexOf("company-server");
+    expect(company).toBeGreaterThan(0);
+    expect(ids[company + 1]).toBe("linked-deepseek-v4");
+    expect(ids.slice(company + 1).every((id) => id.startsWith("linked-"))).toBe(true);
   });
 
   it("setup: creates the store, shows the recovery key once (a new one if asked again), finishes with the default project", async () => {
