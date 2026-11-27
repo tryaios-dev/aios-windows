@@ -88,6 +88,9 @@ export const ExternalLink = z
 /** Ids sent from the renderer: checked before they are put into a URL path. */
 export const Id = z.string().regex(/^[A-Za-z0-9._-]{1,64}$/);
 
+/** A cloud model's name as its provider writes it ("claude-opus-5-5", "perplexity/sonar"). */
+export const ModelName = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:/+-]{0,99}$/);
+
 /** A file or folder the user picked in a system dialog. */
 export const PickedFile = z.object({ path: z.string(), file_name: z.string(), size_bytes: z.number().int() });
 export type PickedFile = z.infer<typeof PickedFile>;
@@ -269,14 +272,43 @@ export type SettingsPatch = z.infer<typeof SettingsPatch>;
 
 /** A cloud AI model linked on the Resources page. Its API key never reaches the window: Electron
  * main reads it from the clipboard and hands it to the backend, which keeps it in the key store. */
+/** One model of a linked resource: the person picks it in a conversation; usage this month. */
+export const ResourceModel = z.object({
+  id: z.string(),
+  name: z.string(),
+  tokens_in: z.number().int(),
+  tokens_out: z.number().int(),
+  uses: z.number().int(),
+  /** The price per million tokens it is charged at (its own, else its resource's). */
+  price_in: z.number().nullable(),
+  price_out: z.number().nullable(),
+  spent: z.number(),
+});
+export type ResourceModel = z.infer<typeof ResourceModel>;
+
 export const LinkedResource = z.object({
   id: z.string(),
   name: z.string(),
   model_id: z.string(),
   linked_at: z.string(),
   monthly_limit: z.number().nullable(),
+  /** This month: tokens x the company's price per million tokens (0 while no price is set). */
   spent: z.number(),
   uses: z.number().int(),
+  /** This calendar month (UTC): tokens read and written, as the provider reported them. */
+  tokens_in: z.number().int().optional(),
+  tokens_out: z.number().int().optional(),
+  /** The company's price per million tokens; null: not set (only tokens are counted). */
+  price_in: z.number().nullable().optional(),
+  price_out: z.number().nullable().optional(),
+  /** "chat": a cloud AI model to talk to; "video": makes videos in Images & video (uses = videos
+   * made, price_in = price per second of video). Missing: chat. */
+  kind: z.enum(["chat", "video"]).optional(),
+  /** This calendar month, a video resource: videos made and their seconds. */
+  videos: z.number().int().optional(),
+  video_seconds: z.number().optional(),
+  /** A chat resource's models (the first is its default), with usage and price each. */
+  models: z.array(ResourceModel).optional(),
 });
 export type LinkedResource = z.infer<typeof LinkedResource>;
 
@@ -832,7 +864,9 @@ export interface AiosBridge {
     create(projectId: string, title?: string): Promise<Conversation>;
     update(id: string, patch: ConversationPatch): Promise<Conversation>;
     remove(id: string): Promise<void>;
-    setProvider(id: string, to: Provider, confirmed: boolean): Promise<Conversation>;
+    /** ``resourceId``: which linked resource (Resources page id) when ``to`` is "resource";
+     * ``modelId``: which of its models (default: its first). */
+    setProvider(id: string, to: Provider, confirmed: boolean, resourceId?: string, modelId?: string): Promise<Conversation>;
     messages(id: string): Promise<Message[]>;
     /** `knowledgeIds`: documents from My secure knowledge whose text goes with the question. */
     /** ``allowed``: the person pressed "Allow once" (a linked resource asks every time). */

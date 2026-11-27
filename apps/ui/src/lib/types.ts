@@ -485,6 +485,33 @@ export interface ResourceEntry {
   popular?: boolean
 }
 
+/** A linked resource a conversation can be moved to (not a video resource). */
+export const isChatResource = (r: { kind?: string }) => r.kind !== 'video'
+
+/** One model of a linked resource (Claude Opus, GPT-6.2 Sol, ...) with its usage this month. */
+export interface ResourceModel {
+  id: string
+  name: string
+  tokens_in: number
+  tokens_out: number
+  uses: number
+  price_in: number | null
+  price_out: number | null
+  spent: number
+}
+
+/** The models a person can pick at a linked resource: its list, or its one model. */
+export function resourceModels(r: { model_id?: string; name?: string; models?: ResourceModel[] }): { id: string; name: string }[] {
+  if (r.models?.length) return r.models
+  return r.model_id ? [{ id: r.model_id, name: r.name ?? r.model_id }] : []
+}
+
+/** The linked chat resource that answers with ``modelId``, if any. */
+export function resourceForModel<T extends { kind?: string; model_id?: string; name?: string; models?: ResourceModel[] }>(list: T[], modelId: string | null | undefined): T | undefined {
+  if (!modelId) return undefined
+  return list.find((r) => isChatResource(r) && resourceModels(r).some((m) => m.id === modelId))
+}
+
 export interface LinkedResource {
   id: string
   /** The resource's name and the model it answers with, from the backend. */
@@ -493,6 +520,20 @@ export interface LinkedResource {
   linked_at: string
   /** Monthly spending limit in euros; null means none was set. */
   monthly_limit: number | null
+  /** This month: tokens x the company's price per million tokens (0 while no price is set). */
   spent: number
   uses: number
+  /** This calendar month: tokens read and written, as the provider reported them. */
+  tokens_in?: number
+  tokens_out?: number
+  /** The company's price per million tokens; null: not set. */
+  price_in?: number | null
+  price_out?: number | null
+  /** "chat" (missing: chat) or "video": makes videos in Images & video. */
+  kind?: 'chat' | 'video'
+  /** This calendar month, a video resource: videos made and their seconds. */
+  videos?: number
+  video_seconds?: number
+  /** A chat resource's models (the first is its default), with usage and price each. */
+  models?: ResourceModel[]
 }

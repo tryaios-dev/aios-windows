@@ -40,7 +40,13 @@ const MODEL_NAMES: Record<string, { label: string; note: string }> = {
   'flux-schnell': { label: 'FLUX.1 schnell', note: 'Best quality, about 10 s' },
   'sdxl-lightning': { label: 'SDXL Lightning', note: 'Fast, about 10 s' },
   'wan2.1-t2v-1.3b': { label: 'Wan 2.1', note: 'Short clips, 480p' },
+  'hunyuan-video': { label: 'Hunyuan Video', note: 'Linked resource (fal.ai), about 3½ s, 480p' },
 }
+
+/** Video models of a resource linked on the Resources page (services/backend linked_config MEDIA):
+ * not the company server, and each video is allowed once. */
+export const RESOURCE_MODELS: ReadonlySet<string> = new Set(['hunyuan-video'])
+export const isResourceModel = (id: string | undefined) => !!id && RESOURCE_MODELS.has(id)
 
 export const modelLabel = (id: string) => MODEL_NAMES[id]?.label ?? id
 export const modelNote = (id: string) => MODEL_NAMES[id]?.note
@@ -62,10 +68,11 @@ export function sizeLabel(item: Pick<MediaItem, 'kind' | 'width' | 'height'>): s
 export const isPending = (item: Pick<MediaItem, 'status'>) => item.status === 'queued' || item.status === 'running'
 
 /** One short line for a job that is not finished, or that did not finish. */
-export function statusLine(item: Pick<MediaItem, 'status' | 'progress' | 'position' | 'error_code' | 'kind'>): string {
+export function statusLine(item: Pick<MediaItem, 'status' | 'progress' | 'position' | 'error_code' | 'kind'> & { model?: string }): string {
+  const where = isResourceModel(item.model) ? modelLabel(item.model!) : 'the company server'
   switch (item.status) {
     case 'queued':
-      return item.position ? `Waiting: ${item.position} ahead on the company server` : 'Waiting for the company server'
+      return item.position ? `Waiting: ${item.position} ahead on ${where}` : `Waiting for ${where}`
     case 'running':
       return `Making the ${item.kind === 'video' ? 'video' : 'picture'}… ${Math.round(item.progress * 100)}%`
     case 'cancelled':
@@ -84,6 +91,7 @@ const FAILURES: Record<string, string> = {
   media_no_output: 'The company server finished without a file. Try again.',
   media_bad_answer: 'The company server sent something AIOS doesn’t accept, so it was not kept.',
   media_output_too_large: 'The finished file was too large to keep.',
+  media_failed: 'It could not be made. Try again, or try a different description.',
 }
 
 export const failureText = (code: string | null | undefined) =>
@@ -96,6 +104,9 @@ const UNAVAILABLE: Record<string, string> = {
   company_key_rejected: 'The company server refused this computer’s key. Ask your administrator for the current key.',
   media_unreachable: 'The company server can’t be reached right now. Check the connection and try again.',
   media_unavailable: 'Pictures and videos can’t be made right now. Try again in a moment.',
+  resource_not_linked: 'Link Hunyuan Video on Add resources to my AI first.',
+  resource_key_rejected: 'The linked video resource refused its key. Link it again with the current key.',
+  resource_limit_reached: 'This month’s limit for the linked video resource is reached.',
 }
 
 export const unavailableText = (reason: string | null | undefined) =>

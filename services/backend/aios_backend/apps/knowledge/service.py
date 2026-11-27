@@ -182,7 +182,8 @@ def doc_text(session: Session, doc_id: str) -> DocTextOut:
 
 def remove(session: Session, doc_id: str) -> None:
     doc = _doc(session, doc_id)
-    kind = doc.kind
+    # Evidence takes plain codes only: "Web page" is recorded as "web-page".
+    kind = doc.kind.lower().replace(" ", "-")
     repo.delete(session, doc)
     repo.record_event(
         session, "knowledge_removed", actor="user", body={"doc_id": doc_id, "kind": kind}

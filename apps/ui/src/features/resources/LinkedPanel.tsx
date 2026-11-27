@@ -52,6 +52,7 @@ export function LinkedPanel({ linked, onUnlink }: { linked: LinkedResource[]; on
                     </Button>
                   </div>
                 </div>
+                {(item.models?.length ?? 0) > 1 && <ModelUsage item={item} />}
               </motion.li>
             )
           })}
@@ -78,7 +79,7 @@ function SpendMeter({ item, name }: { item: LinkedResource; name: string }) {
           )}{' '}
           this month
         </span>
-        <span className="shrink-0 text-ink-50">{item.uses === 0 ? 'Not used yet' : `Used ${pluralise(item.uses, 'time')}`}</span>
+        <span className="shrink-0 text-ink-50">{item.uses === 0 ? 'Not used yet' : item.kind === 'video' ? `${pluralise(item.uses, 'video')} made` : `Used ${pluralise(item.uses, 'time')}`}</span>
       </div>
       {limit !== null ? (
         <div role="meter" aria-label={`Spending on ${name} this month`} aria-valuemin={0} aria-valuemax={limit} aria-valuenow={item.spent} aria-valuetext={`${formatEuro(item.spent)} of ${formatEuro(limit)}`} className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-ink-6 shadow-[inset_0_0_0_1px_rgba(22,33,27,0.05)]">
@@ -87,6 +88,38 @@ function SpendMeter({ item, name }: { item: LinkedResource; name: string }) {
       ) : (
         <p className="mt-0.5 text-xs leading-4.5 text-ink-50">No monthly limit</p>
       )}
+      <p className="mt-1 font-mono text-2xs leading-4 tabular text-ink-50">
+        {item.kind === 'video'
+          ? `${pluralise(item.videos ?? 0, 'video')} · ${(item.video_seconds ?? 0).toLocaleString('en-GB')} seconds of video this month`
+          : `${tokenWords(item.tokens_in ?? 0)} read · ${tokenWords(item.tokens_out ?? 0)} written this month`}
+      </p>
     </div>
   )
+}
+
+/** A provider with several models: how many its key can use, and what each used this month. */
+function ModelUsage({ item }: { item: LinkedResource }) {
+  const all = item.models ?? []
+  const used = all.filter((m) => m.uses > 0)
+  return (
+    <ul className="mx-5 mb-4 divide-y divide-line-soft rounded-lg border border-line-soft bg-paper text-xs leading-5" aria-label={`Models of ${item.name ?? item.id}`}>
+      <li className="px-3 py-1.5 text-ink-50">
+        {pluralise(all.length, 'model')} to pick from in a conversation{used.length ? '. Used this month:' : '. None used yet.'}
+      </li>
+      {used.map((m) => (
+        <li key={m.id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 px-3 py-1.5">
+          <span className="font-medium text-ink">{m.name}</span>
+          <span className="font-mono text-2xs tabular text-ink-50">
+            {m.uses === 0 ? 'Not used yet' : `${tokenWords(m.tokens_in)} read · ${tokenWords(m.tokens_out)} written`}
+            {m.price_in !== null || m.price_out !== null ? ` · ${formatEuro(m.spent)}` : ''}
+          </span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** "12,400 tokens": the provider's own count, as the company is charged for it. */
+function tokenWords(n: number): string {
+  return `${n.toLocaleString('en-GB')} ${n === 1 ? 'token' : 'tokens'}`
 }

@@ -178,6 +178,17 @@ def test_remove_and_retry(client: TestClient, files: Path) -> None:
     assert (files / "notes.txt").exists()  # removing the copy never touches the original
 
 
+def test_a_web_page_can_be_removed(client: TestClient, tmp_path: Path) -> None:
+    """Its kind has a space ("Web page"): evidence records a plain code instead."""
+    page = tmp_path / "page.html"
+    page.write_text("<html><body><p>Hello there</p></body></html>", "utf-8")
+    doc = add(client, page)[0]
+    assert doc["kind"] == "Web page"
+    assert client.delete(f"/knowledge/{doc['id']}").status_code == 204
+    removed = [e for e in client.get("/evidence").json() if e["event_type"] == "knowledge_removed"]
+    assert removed[-1]["payload"]["kind"] == "web-page"
+
+
 def test_paths_must_be_absolute_existing_files(client: TestClient, tmp_path: Path) -> None:
     assert client.post("/knowledge", json={"paths": ["relative.txt"]}).json() == {
         "error": "invalid_path"

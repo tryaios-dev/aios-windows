@@ -262,19 +262,32 @@ def delete_conversation(session: Session, conversation_id: str) -> None:
 
 
 def change_provider(
-    session: Session, settings: Settings, conversation_id: str, to: str, confirmed: bool
+    session: Session,
+    settings: Settings,
+    conversation_id: str,
+    to: str,
+    confirmed: bool,
+    resource_id: str | None = None,
+    model_id: str | None = None,
 ) -> ConversationOut:
-    """Moving to Company (needs the operator flag) or to a linked resource (needs a resource
-    linked on the Resources page) asks first; moving back to Local never asks."""
+    """Moving to Company (needs the operator flag) or to a linked resource (needs that resource
+    linked on the Resources page; ``resource_id`` None: the first linked) asks first; moving back
+    to Local never asks. ``model_id`` picks one of the resource's models (None: its default);
+    picking another model of the resource a conversation is on asks again too."""
     conv = _conversation(session, conversation_id)
     current = conv.current_provider
-    if current == to:
+    rid = (resource_id or linked.linked_id()) if to == "resource" else None
+    if to == "resource" and (rid is None or not linked.is_linked(rid)):
+        raise AppError("resource_not_linked", 409)
+    models = linked.model_ids(rid) if rid is not None else []
+    if model_id is not None and model_id not in models:
+        raise AppError("resource_model_unknown", 400)
+    model = (model_id or models[0]) if rid is not None else None
+    if current == to and (to != "resource" or conv.model_id == model):
         return conversation_out(session, [conv])[0]
     leaves = to in LEAVES
     if to == "company" and not settings.company_ai:
         raise AppError("company_provider_disabled", 409)
-    if to == "resource" and linked.linked_id() is None:
-        raise AppError("resource_not_linked", 409)
     if leaves:
         if not confirmed:
             raise AppError("confirmation_required", 400)
@@ -291,7 +304,9 @@ def change_provider(
         )
     conv.current_provider = to
     conv.provider_mode = to
-    conv.model_id = None if leaves else repo.default_model_id(session)
+    conv.model_id = (
+        model if to == "resource" else None if leaves else repo.default_model_id(session)
+    )
     conv.updated_at = _now()
     repo.add(session, ProviderMove(conversation_id=conv.id, to_provider=to))
     repo.record_event(
@@ -319,7 +334,7 @@ def _ready_model(settings: Settings, answers: AnswerSource | None, conv: Convers
     provider = conv.current_provider
     if provider == "company" and not settings.company_ai:
         raise AppError("company_provider_disabled", 409)
-    if provider == "resource" and linked.linked_id() is None:
+    if provider == "resource" and linked.resource_for(conv.model_id) is None:
         raise AppError("resource_not_linked", 409)
     if answers is None:
         raise AppError("no_model" if provider == "local" else f"{provider}_unreachable", 409)
@@ -336,6 +351,17 @@ def _allow_once(session: Session, conv: Conversation, allowed: bool) -> None:
         return
     if not allowed:
         raise AppError("allow_once_required", 400)
+    rid = linked.resource_for(conv.model_id)
+    row = repo.linked_resource(session, rid) if rid is not None else None
+    if row is not None and row.monthly_limit is not None:
+        models = linked.model_ids(row.id)
+        spent = linked.spend(
+            repo.model_tokens(session, models, linked.month_start(_now())),
+            repo.model_prices(session, models),
+            (row.price_in, row.price_out),
+        )
+        if spent >= row.monthly_limit:
+            raise AppError("resource_limit_reached", 409)
     repo.record_event(
         session,
         "disclosure_confirmed",

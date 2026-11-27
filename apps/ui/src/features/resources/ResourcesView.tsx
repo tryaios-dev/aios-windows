@@ -21,10 +21,10 @@ const MODELS = RESOURCES.filter((r) => r.kind === 'model')
 const COMPUTE = RESOURCES.filter((r) => r.kind === 'compute')
 
 /** Resources the backend can link today (aios_backend/linked_config.py RESOURCES). */
-export const LINKABLE: ReadonlySet<string> = new Set(['deepseek-v4'])
+export const LINKABLE: ReadonlySet<string> = new Set(['deepseek-v4', 'gemini-3-pro', 'kimi-k2', 'claude', 'chatgpt', 'mistral', 'perplexity', 'hunyuan-video'])
 
 /**
- * Add resources to my AI. The list is the design's data (src/data/resources.ts). DeepSeek V4 can
+ * Add resources to my AI. The list is the design's data (src/data/resources.ts). DeepSeek V4, Gemini 3.1 Pro, Kimi K3, Claude, ChatGPT, Mistral, Perplexity and Hunyuan Video can
  * be linked with the person's own API key (LINKABLE); the others say linking is not in this build
  * yet. The page starts from the job: the guide works out
  * whether this computer can already do it and, only if it cannot, what to

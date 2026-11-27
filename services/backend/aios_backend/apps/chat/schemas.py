@@ -44,6 +44,10 @@ class ConversationPatch(BaseModel):
 class ProviderChange(BaseModel):
     to: Provider
     confirmed: bool = False  # moving to Company always asks first (M-09)
+    # Which linked resource (Resources page id) when ``to`` is "resource"; None: the first linked.
+    resource_id: str | None = Field(default=None, max_length=64)
+    # Which of the resource's models (Claude Opus, GPT-6.2 Sol, ...); None: its default.
+    model_id: str | None = Field(default=None, max_length=100)
 
 
 class MessageOut(BaseModel):

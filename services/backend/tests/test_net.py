@@ -3,6 +3,7 @@
 import httpx
 import pytest
 
+from aios_backend import linked_config
 from aios_backend.net import ALLOWLIST, Allowlist, HostNotAllowed, outbound_client
 
 
@@ -88,7 +89,15 @@ def test_the_allowlist_has_the_contract_flows() -> None:
     ids = [flow[0] for flow in ALLOWLIST]
     linked = [i for i in ids if i.startswith("linked-")]  # linked resources come last
     assert ids[:2] == ["model-mirror", "update-feed"] and ids[-1 - len(linked)] == "company-server"
-    assert ids[len(ids) - len(linked) :] == linked == ["linked-deepseek-v4"]
+    assert ids[len(ids) - len(linked) :] == linked
+    # One row per chat resource, then a video resource's queue host and its file hosts.
+    assert linked[: len(linked_config.RESOURCES)] == [
+        f"linked-{rid}" for rid in linked_config.RESOURCES
+    ]
+    assert {linked_config.resource_of_flow(i) for i in linked} == {
+        *linked_config.RESOURCES,
+        *linked_config.MEDIA,
+    }
     end = -1 - len(linked)
     assert all(i.startswith("model-origin") for i in ids[2:end])  # Hugging Face and its CDN hosts
     assert len(set(ids)) == len(ids)

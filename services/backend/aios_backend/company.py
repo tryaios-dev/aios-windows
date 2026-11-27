@@ -136,6 +136,8 @@ class CompanySource:
     provider = PROVIDER
     prefix = "company"
     system_prompt = SYSTEM_PROMPT
+    # Ask for the token counts at the end of the stream (``stream_options``).
+    stream_usage = True
 
     def __init__(
         self,
@@ -255,7 +257,8 @@ class CompanySource:
             raise
         except (net.HostNotAllowed, net.HTTPError, ValueError, AttributeError) as exc:
             raise self._failed("unreachable", found) from exc
-        names = {m.get("id") for m in listed if isinstance(m, dict)}
+        # Gemini's OpenAI-compatible list names its models "models/<name>".
+        names = {str(m.get("id")).removeprefix("models/") for m in listed if isinstance(m, dict)}
         if found.model_name not in names:
             raise self._failed("model_not_listed", found)
 
@@ -270,12 +273,13 @@ class CompanySource:
         key = self._key()
         if key is None:
             raise self._failed("key_missing", found)
-        body = {
+        body: dict[str, Any] = {
             "model": found.model_name,
             "messages": messages,
             "stream": True,
-            "stream_options": {"include_usage": True},  # a final chunk with the token counts
         }
+        if self.stream_usage:
+            body["stream_options"] = {"include_usage": True}  # a final chunk with the counts
         think = ThinkFilter()
         try:
             with (

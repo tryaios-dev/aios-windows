@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Response, status
 
 from aios_backend.apps.resources import service
-from aios_backend.apps.resources.deps import KeyCheck
+from aios_backend.apps.resources.deps import KeyCheck, Models
 from aios_backend.apps.resources.schemas import LinkedResourceOut, LinkIn
 from db.session import DbSession
 
@@ -16,8 +16,10 @@ def list_linked(session: DbSession) -> list[LinkedResourceOut]:
 
 
 @router.post("/resources/{resource_id}/link", summary="Check the API key, store it, link")
-def link(resource_id: str, body: LinkIn, session: DbSession, check: KeyCheck) -> LinkedResourceOut:
-    return service.link(session, resource_id, body.api_key, body.monthly_limit, check)
+def link(
+    resource_id: str, body: LinkIn, session: DbSession, check: KeyCheck, models: Models
+) -> LinkedResourceOut:
+    return service.link(session, resource_id, body.api_key, body.monthly_limit, check, models)
 
 
 @router.delete(

@@ -121,7 +121,7 @@ def _enabled(settings: Settings, kind: str, flow_id: str) -> bool:
     if kind == "configured":
         return settings.company_ai
     if kind == "linked":  # only while that resource is linked (its key is in the key store)
-        return linked.linked_id() == flow_id.removeprefix("linked-")
+        return linked.is_linked(linked.resource_of_flow(flow_id))
     return True
 
 

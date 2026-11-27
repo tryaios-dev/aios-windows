@@ -4,8 +4,9 @@ import { ArrowUp, Building2, ChevronDown, Cloud, Cpu, Lock, MonitorSmartphone, S
 import { api } from '@/lib/api'
 import { useExtras } from '@/lib/extras'
 import { selectCompanyModelName, useStore } from '@/lib/store'
-import type { Conversation } from '@/lib/types'
+import { isChatResource, resourceForModel, resourceModels, type Conversation, type LinkedResource } from '@/lib/types'
 import { cn } from '@/lib/cn'
+import { RESOURCE_LOGO } from '@/assets/icons'
 import { modelLabel, sizeBlurb } from '@/lib/words'
 import { STARTERS } from '@/data/stack'
 import { Button } from '@/components/ui/button'
@@ -32,7 +33,8 @@ export function Composer({ conversation, disabled }: { conversation: Conversatio
   const [text, setText] = useState('')
   const [tooLong, setTooLong] = useState(false)
   const [moveOpen, setMoveOpen] = useState(false)
-  const [resourceOpen, setResourceOpen] = useState(false)
+  // The linked resource the person picked to move to (asks first); null: no dialog.
+  const [moveTo, setMoveTo] = useState<LinkedResource | null>(null)
   /** The starter whose example is in the box. The "sample text" line shows while the text is still exactly that example. */
   const [sampleId, setSampleId] = useState<string | null>(null)
   /** The words in the box came from speaking. The note above the box shows until they are sent or cleared. */
@@ -55,16 +57,20 @@ export function Composer({ conversation, disabled }: { conversation: Conversatio
   const pendingText = useStore((s) => s.continueLocally?.pending_text ?? s.modelChoice?.pending_text)
   const busy = !!generation && generation.conversation_id === conversation.id
   const otherBusy = !!generation && generation.conversation_id !== conversation.id
-  // A cloud AI model linked on the Resources page (DeepSeek V4 first): offered next to the Company server.
-  const resource = useExtras((s) => s.linkedResources[0])
-  const resourceName = resource?.name ?? 'Linked AI model'
+  // Cloud AI models linked on the Resources page: offered next to the Company server.
+  const all = useExtras((s) => s.linkedResources)
+  const linked = useMemo(() => all.filter(isChatResource), [all])
   const isResource = conversation.current_provider === 'resource'
+  // The one this conversation is on (its model), else the first linked.
+  const resource = (isResource ? resourceForModel(linked, conversation.model_id) : undefined) ?? linked[0]
+  const resourceName = resource?.name ?? 'Linked AI model'
+  const resourceModel = resource ? resourceModels(resource).find((m) => m.id === conversation.model_id) : undefined
   // Company or a linked resource: the answer comes from outside this computer.
   const isCompany = conversation.current_provider === 'company' || isResource
   const currentModel = installed.find((m) => m.id === conversation.model_id)
   const companyModel = useStore(selectCompanyModelName)
   const currentLabel = isResource
-    ? `${resourceName} · ${resource?.model_id ?? 'cloud'}`
+    ? `${resourceName} · ${resourceModel?.name ?? conversation.model_id ?? 'cloud'}`
     : isCompany
       ? `Company server · ${companyModel}`
       : currentModel
@@ -336,7 +342,7 @@ export function Composer({ conversation, disabled }: { conversation: Conversatio
                     <Menu>
                       <MenuTrigger asChild>
                         <button className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-ink-soft transition-colors hover:bg-ink-6 hover:text-ink disabled:opacity-60" disabled={busy || disabled} aria-label={`Where this conversation runs: ${isResource ? resourceName : isCompany ? 'Company server' : 'This computer'}`}>
-                          {isResource ? <Cloud className="size-3.5" /> : isCompany ? <Building2 className="size-3.5" /> : <MonitorSmartphone className="size-3.5" />}
+                          {isResource ? <ResourceLogo id={resource?.id} /> : isCompany ? <Building2 className="size-3.5" /> : <MonitorSmartphone className="size-3.5" />}
                           <span>{isResource ? resourceName : isCompany ? 'Company server' : 'This computer'}</span>
                           <ChevronDown className="size-3 text-ink-50" />
                         </button>
@@ -359,14 +365,23 @@ export function Composer({ conversation, disabled }: { conversation: Conversatio
                             </span>
                           </MenuItem>
                         )}
-                        {resource && !isResource && (
-                          <MenuItem icon={<Cloud />} onSelect={() => setResourceOpen(true)}>
-                            <span className="flex flex-col">
-                              <span>Move to {resourceName}…</span>
-                              <span className="text-xs text-ink-50">Linked on Add resources to my AI. Asks first. The conversation so far is sent there.</span>
-                            </span>
-                          </MenuItem>
-                        )}
+                        {linked
+                          .filter((r) => !(isResource && r.id === resource?.id && resourceModels(r).length < 2))
+                          .map((r) => {
+                            const here = isResource && r.id === resource?.id
+                            const count = resourceModels(r).length
+                            return (
+                              <MenuItem key={r.id} icon={<ResourceLogo id={r.id} />} onSelect={() => setMoveTo(r)}>
+                                <span className="flex flex-col">
+                                  <span>{here ? `Use another ${r.name ?? r.id} model…` : `Move to ${r.name ?? r.id}…`}</span>
+                                  <span className="text-xs text-ink-50">
+                                    {count > 1 ? `Pick one of its ${count} models. ` : 'Linked on Add resources to my AI. '}
+                                    Asks first. The conversation so far is sent there.
+                                  </span>
+                                </span>
+                              </MenuItem>
+                            )
+                          })}
                       </MenuContent>
                     </Menu>
                   ) : (
@@ -432,7 +447,13 @@ export function Composer({ conversation, disabled }: { conversation: Conversatio
         </div>
       </div>
       <MoveToCompanyDialog open={moveOpen} onOpenChange={setMoveOpen} conversation={conversation} />
-      {resource && <MoveToResourceDialog open={resourceOpen} onOpenChange={setResourceOpen} conversation={conversation} name={resourceName} modelId={resource.model_id ?? ''} />}
+      {moveTo && <MoveToResourceDialog open onOpenChange={(o) => !o && setMoveTo(null)} conversation={conversation} resource={moveTo} />}
     </div>
   )
+}
+
+/** A linked resource's own logo (Claude, ChatGPT, ...), else a cloud. */
+function ResourceLogo({ id }: { id: string | undefined }) {
+  const src = id ? RESOURCE_LOGO[id] : undefined
+  return src ? <img src={src} alt="" aria-hidden className="size-3.5 shrink-0" /> : <Cloud className="size-3.5" />
 }

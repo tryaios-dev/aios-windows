@@ -53,7 +53,8 @@ const bridge: AiosBridge = {
     create: (projectId, title) => invoke("conversations.create", projectId, title),
     update: (id, patch) => invoke("conversations.update", id, patch),
     remove: (id) => invoke("conversations.remove", id),
-    setProvider: (id, to, confirmed) => invoke("conversations.setProvider", id, to, confirmed),
+    setProvider: (id, to, confirmed, resourceId, modelId) =>
+      invoke("conversations.setProvider", id, to, confirmed, resourceId, modelId),
     messages: (id) => invoke("conversations.messages", id),
     send: (id, text, knowledgeIds, allowed) => invoke("conversations.send", id, text, knowledgeIds, allowed),
     regenerate: (id, allowed) => invoke("conversations.regenerate", id, allowed),

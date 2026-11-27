@@ -19,3 +19,15 @@ def get_check(request: Request) -> Check:
 
 
 KeyCheck = Annotated[Check, Depends(get_check)]
+
+#: The chat models a key can use (``aios_backend.linked.chat_models``): a list, or an error code.
+ModelList = Callable[[str, str], list[str] | str]
+
+
+def get_model_list(request: Request) -> ModelList | None:
+    """None (tests): the resource's own models are offered."""
+    found: ModelList | None = getattr(request.app.state, "resource_models", None)
+    return found
+
+
+Models = Annotated[ModelList | None, Depends(get_model_list)]

@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRightLeft, Cpu, FileText, Pencil } from 'lucide-react'
 import { api } from '@/lib/api'
 import { STARTERS } from '@/data/stack'
 import { selectCompanyModelName, useStore, useStoreShallow } from '@/lib/store'
-import type { Conversation, Message, Project, ProviderType } from '@/lib/types'
+import { isChatResource, type Conversation, type Message, type Project, type ProviderType } from '@/lib/types'
 import { useExtras } from '@/lib/extras'
 import { cn } from '@/lib/cn'
 import { dayLabel, formatTime, pluralise, relativeTime } from '@/lib/format'
@@ -261,7 +261,8 @@ function SummaryDivider() {
 }
 
 function MoveDivider({ to, at }: { to: ProviderType; at: string }) {
-  const linkedName = useExtras((s) => s.linkedResources[0]?.name) ?? 'the linked AI model'
+  // With several linked models the line does not know which one; it names it only when there is one.
+  const linkedName = useExtras((s) => { const chat = s.linkedResources.filter(isChatResource); return chat.length === 1 ? chat[0]?.name : undefined }) ?? 'a linked cloud AI model'
   const away = to !== 'local'
   const where = to === 'resource' ? linkedName : 'the company server'
   return (

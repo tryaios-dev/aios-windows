@@ -1,6 +1,7 @@
 """chats.db access for conversations, messages and provider moves."""
 
 from collections.abc import Sequence
+from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -10,6 +11,8 @@ from db.models import (
     Conversation,
     EvidenceOutbox,
     KnowledgeDoc,
+    LinkedModelPrice,
+    LinkedResource,
     Message,
     Project,
     ProviderMove,
@@ -93,3 +96,37 @@ def delete(session: Session, row: object) -> None:
 
 
 default_model_id = lookups.default_model_id
+
+
+def linked_resource(session: Session, resource_id: str) -> LinkedResource | None:
+    return session.get(LinkedResource, resource_id)
+
+
+def model_tokens(
+    session: Session, model_ids: list[str], since: datetime
+) -> dict[str, tuple[int, int]]:
+    """Tokens each of a linked resource's models read and wrote since ``since``."""
+    query = (
+        select(
+            Message.model_id,
+            func.coalesce(func.sum(Message.prompt_tokens), 0),
+            func.coalesce(func.sum(Message.completion_tokens), 0),
+        )
+        .where(
+            Message.provider == "resource",
+            Message.model_id.in_(model_ids),
+            Message.role == "assistant",
+            Message.created_at >= since,
+        )
+        .group_by(Message.model_id)
+    )
+    return {str(m): (int(i), int(o)) for m, i, o in session.execute(query).all()}
+
+
+def model_prices(
+    session: Session, model_ids: list[str]
+) -> dict[str, tuple[float | None, float | None]]:
+    rows = session.scalars(
+        select(LinkedModelPrice).where(LinkedModelPrice.model_id.in_(model_ids))
+    ).all()
+    return {r.model_id: (r.price_in, r.price_out) for r in rows}

@@ -18,6 +18,7 @@ import {
   VIDEO_LENGTHS,
   VIDEO_SIZES,
   isPending,
+  isResourceModel,
   modelLabel,
   modelNote,
   pickModel,
@@ -71,6 +72,9 @@ export function MediaView() {
   const size = sizes.find((o) => o.id === draft.size) ?? sizes[0]!
   const seed = draft.seed.trim() === '' ? null : Number(draft.seed)
   const seedInvalid = seed !== null && (!Number.isInteger(seed) || seed < 0 || seed > 4294967295)
+  // A video resource linked on the Resources page: made by its provider, allowed every time.
+  const resourceModel = isResourceModel(draft.model)
+  const hasResource = models.some((m) => isResourceModel(m.id))
   const canSend = !!status?.available && !!draft.model && draft.prompt.trim().length > 0 && !seedInvalid && !sending && !project.archived
 
   const send = async (confirmed: boolean) => {
@@ -117,6 +121,7 @@ export function MediaView() {
           <h2 className="text-lg font-semibold leading-7 text-ink">Images & video</h2>
           <p className="mt-0.5 max-w-2xl text-sm leading-5 text-ink-soft">
             Made on your company’s AI server. Your description leaves this computer; the finished file is kept encrypted in this project.
+            {hasResource && ' Hunyuan Video, linked on Add resources to my AI, is made by fal.ai and asks before every video.'}
           </p>
         </div>
 
@@ -187,7 +192,11 @@ export function MediaView() {
                     id="media-length"
                     value={String(draft.frames)}
                     onValueChange={(v) => setDraft((d) => ({ ...d, frames: Number(v) }))}
-                    options={VIDEO_LENGTHS.map((l) => ({ value: String(l.frames), label: `${l.seconds} seconds`, description: l.note }))}
+                    options={
+                      resourceModel
+                        ? [{ value: String(draft.frames), label: 'About 3½ seconds', description: 'The length Hunyuan Video makes' }]
+                        : VIDEO_LENGTHS.map((l) => ({ value: String(l.frames), label: `${l.seconds} seconds`, description: l.note }))
+                    }
                   />
                 </Field>
               )}
@@ -228,9 +237,13 @@ export function MediaView() {
       <ConfirmDialog
         open={asking}
         onOpenChange={setAsking}
-        title="Send this description to the company server?"
-        description="To make it, your description goes to your company’s AI server and leaves this computer. The finished file comes back and is kept encrypted in this project. This is recorded in Activity."
-        confirmLabel={draft.kind === 'video' ? 'Send and make the video' : 'Send and make the picture'}
+        title={resourceModel ? `Allow this video once with ${modelLabel(draft.model!)}?` : 'Send this description to the company server?'}
+        description={
+          resourceModel
+            ? `To make it, your description goes to ${modelLabel(draft.model!)}, run by fal.ai, and leaves this computer. AIOS asks every time. The finished video comes back and is kept encrypted in this project. This is recorded in Activity and counts toward its monthly limit.`
+            : 'To make it, your description goes to your company’s AI server and leaves this computer. The finished file comes back and is kept encrypted in this project. This is recorded in Activity.'
+        }
+        confirmLabel={resourceModel ? 'Allow once and make the video' : draft.kind === 'video' ? 'Send and make the video' : 'Send and make the picture'}
         onConfirm={() => {
           setAsking(false)
           void send(true)

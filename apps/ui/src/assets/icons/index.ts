@@ -69,6 +69,10 @@ import gemini from '../brands/gemini.svg'
 import hunyuan from '../brands/hunyuan.svg'
 import kimi from '../brands/kimi.svg'
 import nvidia from '../brands/nvidia.svg'
+import claude from '../brands/claude.svg'
+import openai from '../brands/openai.svg'
+import mistral from '../brands/mistral.svg'
+import perplexity from '../brands/perplexity.svg'
 
 /** One icon per skill, by skill id. */
 export const SKILL_ICON: Record<string, string> = {
@@ -110,6 +114,10 @@ export const RESOURCE_LOGO: Record<string, string> = {
   'deepseek-v4': deepseek,
   'gemini-3-pro': gemini,
   'kimi-k2': kimi,
+  claude,
+  chatgpt: openai,
+  mistral,
+  perplexity,
   'hunyuan-video': hunyuan,
   'gpu-4090': nvidia,
   'gpu-h100': nvidia,

@@ -22,6 +22,7 @@ from aios_backend.apps.models.engine import LocalEngine
 from aios_backend.apps.models.mirror import ModelMirror
 from aios_backend.apps.models.router import router as models_router
 from aios_backend.apps.projects.router import router as projects_router
+from aios_backend.apps.resources import service as resources_service
 from aios_backend.apps.resources.router import router as resources_router
 from aios_backend.apps.search.router import router as search_router
 from aios_backend.apps.settings import service as settings_service
@@ -116,6 +117,15 @@ def choose_only_model(database: Database) -> None:
         log_event(log, "default_model_unreadable", error_code=type(exc).__name__)
 
 
+def remember_resource_models(database: Database) -> None:
+    """The chat models each linked resource's key can use, as listed when it was linked."""
+    try:
+        with database.session() as session:
+            resources_service.remember_models(session)
+    except Exception as exc:  # chats.db locked or unreadable: the resources' own models apply
+        log_event(log, "resource_models_unreadable", error_code=type(exc).__name__)
+
+
 def load_safe_mode(database: Database) -> bool:
     """Saved Safe mode; off if chats.db cannot be read (then nothing else works either)."""
     try:
@@ -182,6 +192,7 @@ def create_app(
             local_models.bind(asyncio.get_running_loop())
         await manager.set_safe_mode(load_safe_mode(database))  # before any engine can start
         await asyncio.to_thread(choose_only_model, database)
+        await asyncio.to_thread(remember_resource_models, database)
         await manager.startup()  # ends orphaned engines (IPC-52), starts the watcher
         await voice.startup()  # the same for whisper-server (IPC-38)
         # Memory, processor, disk: milliseconds, read before the app asks, so it shows them.
@@ -242,6 +253,7 @@ def create_app(
     app.state.voice_recordings = VoiceRecordings(voice)
     app.state.answers = answers
     app.state.resource_check = linked.check  # a key is checked before it is stored
+    app.state.resource_models = linked.chat_models  # and every chat model it can use offered
     app.state.media = media
     app.state.generations = Generations()
     app.state.local_engine = local_engine
